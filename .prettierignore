@@ -1,0 +1,27 @@
+# folders
+artifacts/
+build/
+cache/
+coverage/
+dist/
+lib/
+node_modules/
+typechain/
+contracts/exchange-proxy/
+contracts/balancer-core/
+contracts/bactions-proxy/
+contracts/lib/
+contracts/test/uniswapv2/
+contracts/test/MockUniswapV2Factory.sol
+contracts/test/MockUniswapV2Library.sol
+contracts/test/MockUniswapV2Library2.sol
+contracts/interfaces/IUniswapV2Router01.sol
+contracts/interfaces/IUniswapV2Router02.sol
+contracts/interfaces/aave/
+contracts/test/MockWETH.sol
+contracts/test/MockYearnGovernance.sol
+contracts/test/MockYearnVaultV1.sol
+contracts/test/AragonVoting.sol
+
+# files
+coverage.json
