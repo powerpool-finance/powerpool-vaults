@@ -24,10 +24,10 @@ const { web3 } = MockERC20;
 const REPORTER_ID = 42;
 
 describe('VenusRouter Tests', () => {
-  let bob, alice, charlie, venusOwner, piGov, stub, pvp, pool1, pool2;
+  let bob, alice, charlie, venusOwner, piGov, stub, pvp;
 
   before(async function () {
-    [, bob, alice, charlie, venusOwner, piGov, stub, pvp, pool1, pool2] = await web3.eth.getAccounts();
+    [, bob, alice, charlie, venusOwner, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
   let trollerV5, oracle, usdc, xvs, vUsdc, interestRateModel, poolRestrictions, piUsdc, venusRouter, poke, cake, vCake;
