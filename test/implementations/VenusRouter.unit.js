@@ -335,10 +335,7 @@ describe('VenusRouter Tests', () => {
         assert.equal(await venusRouter.getUnderlyingStaked(), ether(12800));
         assert.equal(await venusRouter.getTokenForVToken(ether(2000)), ether(3200));
         assert.equal(await venusRouter.getTokenForVToken(ether(1)), ether('1.6'));
-        assert.equal(
-          await venusRouter.getUnderlyingEquivalentForPi(ether(1), ether(10000)),
-          ether('1.48'),
-        );
+        assert.equal(await venusRouter.getUnderlyingEquivalentForPi(ether(1), ether(10000)), ether('1.48'));
       });
 
       it('should mint a smaller amount of vToken', async () => {
