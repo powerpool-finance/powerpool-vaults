@@ -78,7 +78,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
     _callStaking(PI_TOKEN, STAKING, IERC20.approve.selector, abi.encode(STAKING, uint256(-1)));
   }
 
-  function stake(uint256 _amount, DistributeData calldata) external override returns (bytes calldata) {
+  function stake(uint256 _amount, DistributeData memory) external override returns (bytes memory) {
     require(_amount > 0, "CANT_STAKE_0");
 
     PI_TOKEN.approveUnderlying(STAKING, _amount);
@@ -89,7 +89,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
     return "";
   }
 
-  function redeem(uint256 _amount, DistributeData calldata) external override returns (bytes calldata) {
+  function redeem(uint256 _amount, DistributeData memory) external override returns (bytes memory) {
     require(_amount > 0, "CANT_REDEEM_0");
 
     _callCompStaking(VBep20Interface.redeemUnderlying.selector, abi.encode(_amount));

@@ -78,10 +78,10 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
   function _redeemImpl(uint256 _amount) internal virtual;
 
-  function beforePoke(bytes calldata _pokeData, DistributeData memory _distributeData, bool _willClaimReward) external override {
+  function beforePoke(bytes memory _pokeData, DistributeData memory _distributeData, bool _willClaimReward) external override {
 
   }
-  function afterPoke(PowerIndexBasicRouterInterface.ReserveStatus reserveStatus, bool _rewardClaimDone) external override returns (bytes calldata) {
+  function afterPoke(PowerIndexBasicRouterInterface.ReserveStatus reserveStatus, bool _rewardClaimDone) override external returns (bytes memory) {
     return "";
   }
 }
