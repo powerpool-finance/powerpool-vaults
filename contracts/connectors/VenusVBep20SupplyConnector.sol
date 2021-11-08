@@ -3,9 +3,9 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
-import "../PowerIndexBasicRouter.sol";
 import "../interfaces/venus/VenusComptrollerInterface.sol";
 import "../interfaces/venus/VBep20Interface.sol";
+import "./AbstractConnector.sol";
 
 /**
  * @notice PowerIndex Router for Venus protocol.
@@ -15,64 +15,59 @@ import "../interfaces/venus/VBep20Interface.sol";
  *      claims them when a poker provides the corresponding flag when calling a poke* method.
  * @dev Venus interest rewards are calculated and claimed on each poke* operation.
  */
-contract VenusVBep20SupplyRouter is PowerIndexBasicRouter {
+contract VenusVBep20SupplyConnector is AbstractConnector {
   event Stake(address indexed sender, uint256 amount);
   event Redeem(address indexed sender, uint256 amount);
   event IgnoreDueMissingStaking();
   event ClaimRewards(address indexed sender, uint256 xvsEarned);
 
-  struct VenusConfig {
-    address troller;
-    address xvs;
-  }
-
   uint256 internal constant NO_ERROR_CODE = 0;
 
   address public immutable TROLLER;
+  address public immutable STAKING;
+  WrappedPiErc20Interface internal immutable PI_TOKEN;
   IERC20 internal immutable UNDERLYING;
   IERC20 internal immutable XVS;
-  uint256 internal lastStakedAmount;
 
-  constructor(
-    address _piToken,
-    BasicConfig memory _basicConfig,
-    VenusConfig memory _compConfig
-  ) public PowerIndexBasicRouter(_piToken, _basicConfig) {
-    TROLLER = _compConfig.troller;
-    UNDERLYING = IERC20(VBep20Interface(_basicConfig.staking).underlying());
-    XVS = IERC20(_compConfig.xvs);
+  constructor(address _piToken, address _troller, address _staking, address _xvs) AbstractConnector(46e12) public { // 6 hours with 13ms block
+    PI_TOKEN = WrappedPiErc20Interface(_piToken);
+    STAKING = _staking;
+    TROLLER = _troller;
+    UNDERLYING = IERC20(VBep20Interface(_staking).underlying());
+    XVS = IERC20(_xvs);
   }
 
   /*** THE PROXIED METHOD EXECUTORS FOR VOTING ***/
 
-  function _claimRewards(ReserveStatus) internal override {
+  function claimRewards(PowerIndexBasicRouterInterface.ReserveStatus, DistributeData memory _distributeData) public override returns (bytes memory) {
     // #1. Claim XVS
     address[] memory holders = new address[](1);
-    holders[0] = address(piToken);
+    holders[0] = address(PI_TOKEN);
     address[] memory tokens = new address[](1);
-    tokens[0] = staking;
+    tokens[0] = STAKING;
 
-    uint256 xvsBefore = XVS.balanceOf(address(piToken));
-    piToken.callExternal(
+    uint256 xvsBefore = XVS.balanceOf(address(PI_TOKEN));
+    PI_TOKEN.callExternal(
       TROLLER,
       VenusComptrollerInterface.claimVenus.selector,
       abi.encode(holders, tokens, false, true),
       0
     );
-    uint256 xvsEarned = XVS.balanceOf(address(piToken)).sub(xvsBefore);
+    uint256 xvsEarned = XVS.balanceOf(address(PI_TOKEN)).sub(xvsBefore);
     require(xvsEarned > 0, "NO_XVS_CLAIMED");
 
-    _distributeReward(XVS, xvsEarned);
+    _distributeReward(_distributeData, PI_TOKEN, XVS, xvsEarned);
 
     emit ClaimRewards(msg.sender, xvsEarned);
+    return "";
   }
 
   /*** OWNER METHODS ***/
 
-  function initRouter() external onlyOwner {
+  function initRouter() external {
     address[] memory tokens = new address[](1);
-    tokens[0] = staking;
-    bytes memory result = piToken.callExternal(
+    tokens[0] = STAKING;
+    bytes memory result = PI_TOKEN.callExternal(
       TROLLER,
       VenusComptrollerInterface.enterMarkets.selector,
       abi.encode(tokens),
@@ -80,47 +75,49 @@ contract VenusVBep20SupplyRouter is PowerIndexBasicRouter {
     );
     uint256[] memory err = abi.decode(result, (uint256[]));
     require(err[0] == NO_ERROR_CODE, "V_ERROR");
-    _callStaking(IERC20.approve.selector, abi.encode(staking, uint256(-1)));
+    _callStaking(PI_TOKEN, STAKING, IERC20.approve.selector, abi.encode(STAKING, uint256(-1)));
   }
 
-  function stake(uint256 _amount) external onlyOwner {
-    _stake(_amount);
+  function stake(uint256 _amount, DistributeData calldata) external override returns (bytes calldata) {
+    require(_amount > 0, "CANT_STAKE_0");
+
+    PI_TOKEN.approveUnderlying(STAKING, _amount);
+
+    _callCompStaking(VBep20Interface.mint.selector, abi.encode(_amount));
+
+    emit Stake(msg.sender, _amount);
+    return "";
   }
 
-  function redeem(uint256 _amount) external onlyOwner {
-    _redeem(_amount);
+  function redeem(uint256 _amount, DistributeData calldata) external override returns (bytes calldata) {
+    require(_amount > 0, "CANT_REDEEM_0");
+
+    _callCompStaking(VBep20Interface.redeemUnderlying.selector, abi.encode(_amount));
+
+    emit Redeem(msg.sender, _amount);
+    return "";
   }
 
   /*** POKE HOOKS ***/
 
-  function _beforePoke(bool _willClaimReward) internal override {
-    super._beforePoke(_willClaimReward);
-    require(VBep20Interface(staking).accrueInterest() == NO_ERROR_CODE, "V_ERROR");
+  function beforePoke(bytes memory _pokeData, DistributeData memory _distributeData, bool _willClaimReward) public override {
+    require(VBep20Interface(STAKING).accrueInterest() == NO_ERROR_CODE, "V_ERROR");
 
-    uint256 last = lastStakedAmount;
+    uint256 last = abi.decode(_pokeData, (uint256));
     if (last > 0) {
-      uint256 current = _getUnderlyingStaked();
+      uint256 current = getUnderlyingStaked();
       if (current > last) {
         uint256 diff = current - last;
         // ignore the dust
         if (diff > 100) {
-          _distributeReward(UNDERLYING, diff);
+          _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, diff);
         }
       }
     }
   }
 
-  function _afterPoke(ReserveStatus reserveStatus, bool _rewardClaimDone) internal override {
-    super._afterPoke(reserveStatus, _rewardClaimDone);
-    lastStakedAmount = _getUnderlyingStaked();
-  }
-
-  function _rebalancePoke(ReserveStatus reserveStatus, uint256 diff) internal override {
-    if (reserveStatus == ReserveStatus.SHORTAGE) {
-      _redeem(diff);
-    } else if (reserveStatus == ReserveStatus.EXCESS) {
-      _stake(diff);
-    }
+  function afterPoke(PowerIndexBasicRouterInterface.ReserveStatus reserveStatus, bool _rewardClaimDone) public override returns (bytes memory) {
+    return abi.encode(getUnderlyingStaked());
   }
 
   /*** VIEWERS ***/
@@ -132,7 +129,7 @@ contract VenusVBep20SupplyRouter is PowerIndexBasicRouter {
    */
   function getVTokenForToken(uint256 _tokenAmount) external view returns (uint256) {
     // token / exchangeRate
-    return _tokenAmount.mul(1e18) / VBep20Interface(staking).exchangeRateStored();
+    return _tokenAmount.mul(1e18) / VBep20Interface(STAKING).exchangeRateStored();
   }
 
   /**
@@ -142,15 +139,15 @@ contract VenusVBep20SupplyRouter is PowerIndexBasicRouter {
    */
   function getTokenForVToken(uint256 _vTokenAmount) public view returns (uint256) {
     // vToken * exchangeRate
-    return _vTokenAmount.mul(VBep20Interface(staking).exchangeRateStored()) / 1e18;
+    return _vTokenAmount.mul(VBep20Interface(STAKING).exchangeRateStored()) / 1e18;
   }
 
   /**
    * @notice Get the net interest reward accrued on vToken;
    */
-  function getPendingInterestReward() external view returns (uint256) {
-    uint256 last = lastStakedAmount;
-    uint256 current = _getUnderlyingStaked();
+  function getPendingInterestReward(bytes memory _pokeData) external view returns (uint256) {
+    uint256 last = abi.decode(_pokeData, (uint256));
+    uint256 current = getUnderlyingStaked();
     if (last > current) {
       return 0;
     }
@@ -160,12 +157,12 @@ contract VenusVBep20SupplyRouter is PowerIndexBasicRouter {
 
   /*** INTERNALS ***/
 
-  function _getUnderlyingStaked() internal view override returns (uint256) {
-    if (staking == address(0)) {
+  function getUnderlyingStaked() public view override returns (uint256) {
+    if (STAKING == address(0)) {
       return 0;
     }
 
-    uint256 vTokenAtPiToken = IERC20(staking).balanceOf(address(piToken));
+    uint256 vTokenAtPiToken = IERC20(STAKING).balanceOf(address(PI_TOKEN));
     if (vTokenAtPiToken == 0) {
       return 0;
     }
@@ -173,30 +170,8 @@ contract VenusVBep20SupplyRouter is PowerIndexBasicRouter {
     return getTokenForVToken(vTokenAtPiToken);
   }
 
-  function _getUnderlyingReserve() internal view override returns (uint256) {
-    return IERC20(UNDERLYING).balanceOf(address(piToken));
-  }
-
-  function _stake(uint256 _amount) internal {
-    require(_amount > 0, "CANT_STAKE_0");
-
-    piToken.approveUnderlying(staking, _amount);
-
-    _callCompStaking(VBep20Interface.mint.selector, abi.encode(_amount));
-
-    emit Stake(msg.sender, _amount);
-  }
-
-  function _redeem(uint256 _amount) internal {
-    require(_amount > 0, "CANT_REDEEM_0");
-
-    _callCompStaking(VBep20Interface.redeemUnderlying.selector, abi.encode(_amount));
-
-    emit Redeem(msg.sender, _amount);
-  }
-
   function _callCompStaking(bytes4 _sig, bytes memory _data) internal {
-    bytes memory result = _callStaking(_sig, _data);
+    bytes memory result = _callStaking(PI_TOKEN, STAKING, _sig, _data);
     uint256 err = abi.decode(result, (uint256));
     require(err == NO_ERROR_CODE, "V_ERROR");
   }

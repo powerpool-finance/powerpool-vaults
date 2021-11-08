@@ -5,7 +5,13 @@ pragma solidity 0.6.12;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface PowerIndexBasicRouterInterface {
-  function setVotingAndStaking(address _voting, address _staking) external;
+  enum ReserveStatus {
+    EQUILIBRIUM,
+    SHORTAGE,
+    EXCESS
+  }
+
+//  function setVotingAndStaking(address _voting, address _staking) external;
 
   function setReserveConfig(
     uint256 _reserveRatio,
