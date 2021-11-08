@@ -13,7 +13,7 @@ import "./AbstractMasterChefIndexConnector.sol";
  * @dev Notice that in deposit/withdraw/pendingBake method signatures Bakery uses the staking token addresses
  *      instead of numerical pool IDs like in the majority of masterChef forks.
  */
-contract BakeryChefPowerIndexRouter is AbstractMasterChefIndexConnector {
+contract BakeryChefPowerIndexConnector is AbstractMasterChefIndexConnector {
 
   constructor(address _staking, address _underlying, address _piToken) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {}
 

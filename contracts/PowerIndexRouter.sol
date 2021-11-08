@@ -10,6 +10,7 @@ import "./interfaces/IPoolRestrictions.sol";
 import "./interfaces/PowerIndexBasicRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
 import "./PowerIndexNaiveRouter.sol";
+import "hardhat/console.sol";
 
 contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRouter {
   using SafeERC20 for IERC20;
@@ -60,11 +61,10 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   struct Connector {
     IRouterConnector connector;
     uint256 share;
+    bool callBeforeAfterPoke;
     uint256 lastClaimRewardsAt;
     bytes rewardsData;
     bytes pokeData;
-    bool callBeforeAfterPoke;
-    IRouterConnector.DistributeData distributeData;
   }
   Connector[] public connectors;
 
@@ -160,6 +160,22 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     piToken.setEthFee(_ethFee);
   }
 
+  function addConnector(IRouterConnector _connector, uint256 _share, bool _callBeforeAfterPoke) external onlyOwner {
+    connectors.push(Connector(
+        _connector,
+        _share,
+        _callBeforeAfterPoke,
+        0,
+        "",
+        ""
+    ));
+  }
+
+  function setConnector(uint256 _connectorIndex, address _connectorAddress, bool _callBeforeAfterPoke) external onlyOwner {
+    connectors[_connectorIndex].connector = IRouterConnector(_connectorAddress);
+    connectors[_connectorIndex].callBeforeAfterPoke = _callBeforeAfterPoke;
+  }
+
   function setPiTokenNoFee(address _for, bool _noFee) external onlyOwner {
     piToken.setNoFee(_for, _noFee);
   }
@@ -200,6 +216,10 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     _pokeFrom(_claimAndDistributeRewards, true);
   }
 
+  function _getDistributeData(Connector storage c) internal returns (IRouterConnector.DistributeData memory) {
+    return IRouterConnector.DistributeData(c.rewardsData, performanceFee, performanceFeeReceiver);
+  }
+
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
 
 //    _beforePoke(shouldClaim);
@@ -208,12 +228,14 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
 
     for (uint256 i = 0; i < connectors.length; i++) {
       Connector storage c = connectors[i];
+      require(address(c.connector) != address(0), "CONNECTOR_IS_NULL");
       bool shouldClaim = _claimAndDistributeRewards && c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
 
       if (c.callBeforeAfterPoke) {
-        c.connector.beforePoke(c.pokeData, c.distributeData, shouldClaim);
+        c.connector.beforePoke(c.pokeData, _getDistributeData(c), shouldClaim);
       }
 
+      console.log("c.connector.getUnderlyingStaked()", c.connector.getUnderlyingStaked());
       (ReserveStatus status, uint256 diff, bool forceRebalance) = getReserveStatus(
         c.connector.getUnderlyingStaked(),
         c.share,
@@ -224,6 +246,8 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       } else {
         require(forceRebalance || lastRebalancedAt + minInterval < block.timestamp, "MIN_INTERVAL_NOT_REACHED");
       }
+      console.log("status", uint256(status));
+      console.log("diff", diff);
       if (status != ReserveStatus.EQUILIBRIUM) {
         _rebalancePoke(c, status, diff);
       }
@@ -241,20 +265,55 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     lastRebalancedAt = block.timestamp;
   }
 
+  function _redeem(Connector storage c, uint256 diff) internal {
+    (bool success, bytes memory result) = address(c.connector).delegatecall(
+      abi.encodeWithSignature("redeem(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
+    );
+    require(success, string(result));
+    //    require(success, "CONNECTOR_REDEEM_FAILED");
+    result = abi.decode(result, (bytes));
+    if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
+      console.log("rewardsData:");
+      console.logBytes(result);
+      c.rewardsData = result;
+    }
+  }
+
+  function _stake(Connector storage c, uint256 diff) internal {
+    (bool success, bytes memory result) = address(c.connector).delegatecall(
+      abi.encodeWithSignature("stake(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
+    );
+    require(success, string(result));
+    //    require(success, "CONNECTOR_REDEEM_FAILED");
+    result = abi.decode(result, (bytes));
+    if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
+      console.log("rewardsData:");
+      console.logBytes(result);
+      c.rewardsData = result;
+    }
+  }
+
   function _rebalancePoke(Connector storage c, ReserveStatus reserveStatus, uint256 diff) internal {
     if (reserveStatus == ReserveStatus.SHORTAGE) {
-      // delegate call
-      bytes memory result = c.connector.redeem(diff, c.distributeData);
-      if (result.length > 0) {
-        c.rewardsData = result;
-      }
+      _redeem(c, diff);
     } else if (reserveStatus == ReserveStatus.EXCESS) {
-      // delegate call
-      bytes memory result = c.connector.stake(diff, c.distributeData);
-      if (result.length > 0) {
-        c.rewardsData = result;
-      }
+      _stake(c, diff);
     }
+  }
+
+  function redeem(uint256 _connectorIndex, uint256 _diff) public onlyOwner {
+    _redeem(connectors[_connectorIndex], _diff);
+  }
+
+  function stake(uint256 _connectorIndex, uint256 _diff) public onlyOwner {
+    _stake(connectors[_connectorIndex], _diff);
+  }
+
+  function initRouterByConnector(uint256 _connectorIndex) public onlyOwner {
+    (bool success, bytes memory result) = address(connectors[_connectorIndex].connector).delegatecall(
+      abi.encodeWithSignature("initRouter(bytes)", new bytes(0))
+    );
+    require(success, string(result));
   }
 
   /**
@@ -266,7 +325,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
    *      and there is no use in calling `_claimRewards()` immediately after calling one of these methods.
    */
   function _claimRewards(Connector storage c, ReserveStatus _reserveStatus) internal {
-    c.connector.claimRewards(_reserveStatus, c.distributeData);
+    c.connector.claimRewards(_reserveStatus, _getDistributeData(c));
   }
 
 //  function _callVoting(bytes4 _sig, bytes memory _data) internal returns (bytes memory) {
@@ -306,6 +365,8 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   {
     uint256 expectedReserveAmount;
     uint256 underlyingBalance = piToken.getUnderlyingBalance().mul(_share).div(1 ether);
+    console.log("underlyingBalance", underlyingBalance);
+    console.log("piToken.getUnderlyingBalance()", piToken.getUnderlyingBalance());
     (status, diff, expectedReserveAmount) = getReserveStatusPure(
       reserveRatio,
       underlyingBalance,
@@ -334,6 +395,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   function _getUnderlyingStaked() internal view virtual returns (uint256) {
     uint256 underlyingStaked = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
       underlyingStaked += connectors[i].connector.getUnderlyingStaked();
     }
     return underlyingStaked;
@@ -351,6 +413,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   function calculateLockedProfit() public view returns (uint256) {
     uint256 lockedProfit = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
       lockedProfit += connectors[i].connector.calculateLockedProfit(connectors[i].rewardsData);
     }
     return lockedProfit;
@@ -445,7 +508,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     uint256 _withdrawAmount
   )
     public
-    pure
+    view
     returns (
       ReserveStatus status,
       uint256 diff,
@@ -455,6 +518,8 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     require(_reserveRatioPct <= HUNDRED_PCT, "RR_GREATER_THAN_100_PCT");
     expectedReserveAmount = getExpectedReserveAmount(_reserveRatioPct, _leftOnPiToken, _stakedBalance, _withdrawAmount);
 
+    console.log("expectedReserveAmount", expectedReserveAmount);
+    console.log("_leftOnPiToken       ", _leftOnPiToken);
     if (expectedReserveAmount > _leftOnPiToken) {
       status = ReserveStatus.SHORTAGE;
       diff = expectedReserveAmount.sub(_leftOnPiToken);

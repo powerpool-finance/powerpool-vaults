@@ -19,4 +19,6 @@ interface IRouterConnector {
   function calculateLockedProfit(bytes calldata _rewardsData) external view returns (uint256);
 
   function claimRewards(PowerIndexBasicRouterInterface.ReserveStatus _status, DistributeData memory _distributeData) external returns (bytes memory);
+
+  function initRouter(bytes memory) external;
 }

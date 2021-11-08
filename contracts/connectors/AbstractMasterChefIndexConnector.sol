@@ -35,7 +35,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
-    return "";
+    return new bytes(0);
   }
 
   /*** INTERNALS ***/
@@ -49,7 +49,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore.sub(_amount));
 
-    bytes memory result;
+    bytes memory result = new bytes(0);
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
     }
@@ -59,15 +59,21 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory) {
+    console.log("redeem 0");
     uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
+    console.log("redeem 1");
 
     _redeemImpl(_amount);
+    console.log("redeem 2");
 
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore).sub(_amount);
+    console.log("redeem 3");
+    console.log("receivedReward", receivedReward);
 
     bytes memory result;
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      console.log("redeem 4");
     }
 
     emit Redeem(msg.sender, _amount, receivedReward);
@@ -82,6 +88,6 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
   }
   function afterPoke(PowerIndexBasicRouterInterface.ReserveStatus reserveStatus, bool _rewardClaimDone) override external returns (bytes memory) {
-    return "";
+    return new bytes(0);
   }
 }

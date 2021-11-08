@@ -29,7 +29,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
   IERC20 internal immutable UNDERLYING;
   IERC20 internal immutable XVS;
 
-  constructor(address _piToken, address _troller, address _staking, address _xvs) AbstractConnector(46e12) public { // 6 hours with 13ms block
+  constructor(address _staking, address _xvs, address _piToken, address _troller) AbstractConnector(46e12) public { // 6 hours with 13ms block
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
     STAKING = _staking;
     TROLLER = _troller;
@@ -59,12 +59,12 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
     _distributeReward(_distributeData, PI_TOKEN, XVS, xvsEarned);
 
     emit ClaimRewards(msg.sender, xvsEarned);
-    return "";
+    return new bytes(0);
   }
 
   /*** OWNER METHODS ***/
 
-  function initRouter() external {
+  function initRouter(bytes memory) external override {
     address[] memory tokens = new address[](1);
     tokens[0] = STAKING;
     bytes memory result = PI_TOKEN.callExternal(
@@ -86,7 +86,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
     _callCompStaking(VBep20Interface.mint.selector, abi.encode(_amount));
 
     emit Stake(msg.sender, _amount);
-    return "";
+    return new bytes(0);
   }
 
   function redeem(uint256 _amount, DistributeData memory) external override returns (bytes memory) {
@@ -95,7 +95,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
     _callCompStaking(VBep20Interface.redeemUnderlying.selector, abi.encode(_amount));
 
     emit Redeem(msg.sender, _amount);
-    return "";
+    return new bytes(0);
   }
 
   /*** POKE HOOKS ***/

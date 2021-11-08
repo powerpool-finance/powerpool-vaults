@@ -3,14 +3,15 @@ const { ether, artifactFromBytecode, newCompContract, attachCompContract, fetchL
 const { buildBasicRouterConfig, buildVenusRouterConfig } = require('../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
-const VenusVBep20SupplyRouter = artifacts.require('VenusVBep20SupplyRouter');
+const VenusVBep20SupplyConnector = artifacts.require('VenusVBep20SupplyConnector');
+const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const PoolRestrictions = artifacts.require('PoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
 const MockOracle = artifacts.require('MockOracle');
 
 MockERC20.numberFormat = 'String';
-VenusVBep20SupplyRouter.numberFormat = 'String';
+VenusVBep20SupplyConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 
 const Unitroller = artifactFromBytecode('bsc/Unitroller');
@@ -30,7 +31,7 @@ describe('VenusRouter Tests', () => {
     [, bob, alice, charlie, venusOwner, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
-  let trollerV5, oracle, usdc, xvs, vUsdc, interestRateModel, poolRestrictions, piUsdc, venusRouter, poke, cake, vCake;
+  let trollerV5, oracle, usdc, xvs, vUsdc, interestRateModel, poolRestrictions, piUsdc, venusRouter, connector, poke, cake, vCake;
 
   beforeEach(async function () {
     // bsc: 0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63
@@ -118,7 +119,7 @@ describe('VenusRouter Tests', () => {
     poolRestrictions = await PoolRestrictions.new();
     piUsdc = await WrappedPiErc20.new(usdc.address, stub, 'Wrapped USDC', 'piUSDC');
     poke = await MockPoke.new(true);
-    venusRouter = await VenusVBep20SupplyRouter.new(
+    venusRouter = await PowerIndexRouter.new(
       piUsdc.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
@@ -131,9 +132,16 @@ describe('VenusRouter Tests', () => {
         '0',
         pvp,
         ether('0.15'),
-      ),
-      buildVenusRouterConfig(unitroller.address, xvs.address),
+      )
     );
+
+    connector = await VenusVBep20SupplyConnector.new(
+      vUsdc.address,
+      cake.address,
+      piUsdc.address,
+      unitroller.address,
+    );
+    await venusRouter.addConnector(connector.address, ether(1), false);
 
     await piUsdc.changeRouter(venusRouter.address, { from: stub });
 
@@ -159,7 +167,7 @@ describe('VenusRouter Tests', () => {
     await comptrollerV5._become(unitroller.address);
     await trollerV5._setVenusSpeed(vUsdc.address, ether(300000));
 
-    await venusRouter.initRouter();
+    await venusRouter.initRouterByConnector('0');
 
     await usdc.transfer(bob, ether(42000));
     await usdc.approve(vUsdc.address, ether(42000), { from: bob });
@@ -195,43 +203,42 @@ describe('VenusRouter Tests', () => {
 
       describe('stake()', () => {
         it('should allow the owner staking any amount of reserve tokens', async () => {
-          const res = await venusRouter.stake(ether(2000), { from: piGov });
-          expectEvent(res, 'Stake', {
-            sender: piGov,
-            amount: ether(2000),
-          });
+          const res = await venusRouter.stake('0', ether(2000), { from: piGov });
+
+          const stake = VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Stake')[0];
+          assert.equal(stake.args.sender, piGov);
+          assert.equal(stake.args.amount, ether(2000));
           assert.equal(await usdc.balanceOf(piUsdc.address), ether(0));
           assert.equal(await usdc.balanceOf(vUsdc.address), ether(52000));
           assert.equal(await vUsdc.balanceOf(piUsdc.address), ether(10000));
         });
 
         it('should deny staking 0', async () => {
-          await expectRevert(venusRouter.stake(ether(0), { from: piGov }), 'CANT_STAKE_0');
+          await expectRevert(venusRouter.stake('0', ether(0), { from: piGov }), 'CANT_STAKE_0');
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(venusRouter.stake(ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(venusRouter.stake('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
 
       describe('redeem()', () => {
         it('should allow the owner redeeming any amount of reserve tokens', async () => {
-          const res = await venusRouter.redeem(ether(3000), { from: piGov });
-          expectEvent(res, 'Redeem', {
-            sender: piGov,
-            amount: ether(3000),
-          });
+          const res = await venusRouter.redeem('0', ether(3000), { from: piGov });
+          const redeem = VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Redeem')[0];
+          assert.equal(redeem.args.sender, piGov);
+          assert.equal(redeem.args.amount, ether(3000));
           assert.equal(await usdc.balanceOf(piUsdc.address), ether(5000));
           assert.equal(await vUsdc.balanceOf(piUsdc.address), ether(5000));
           assert.equal(await usdc.balanceOf(vUsdc.address), ether(47000));
         });
 
         it('should deny redeeming 0', async () => {
-          await expectRevert(venusRouter.redeem(ether(0), { from: piGov }), 'CANT_REDEEM_0');
+          await expectRevert(venusRouter.redeem('0', ether(0), { from: piGov }), 'CANT_REDEEM_0');
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(venusRouter.redeem(ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(venusRouter.redeem('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
     });
@@ -279,7 +286,7 @@ describe('VenusRouter Tests', () => {
         await piUsdc.deposit(ether(1000), { from: alice });
 
         const res = await venusRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        await expectEvent.notEmitted.inTransaction(res.tx, VenusVBep20SupplyRouter, 'DistributePerformanceFee');
+        await expectEvent.notEmitted.inTransaction(res.tx, VenusVBep20SupplyConnector, 'DistributePerformanceFee');
 
         assert.equal(await piUsdc.balanceOf(alice), ether(11000));
         assert.equal(await usdc.balanceOf(vUsdc.address), ether(50800));
@@ -293,7 +300,7 @@ describe('VenusRouter Tests', () => {
         await piUsdc.withdraw(ether(1000), { from: alice });
 
         const res = await venusRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        await expectEvent.notEmitted.inTransaction(res.tx, VenusVBep20SupplyRouter, 'DistributePerformanceFee');
+        await expectEvent.notEmitted.inTransaction(res.tx, VenusVBep20SupplyConnector, 'DistributePerformanceFee');
 
         assert.equal(await piUsdc.balanceOf(alice), ether(9000));
         assert.equal(await usdc.balanceOf(vUsdc.address), ether(49200));
@@ -302,12 +309,10 @@ describe('VenusRouter Tests', () => {
       });
 
       it('should revert rebalancing if the staking address is 0', async () => {
-        await venusRouter.redeem(ether(8000), { from: piGov });
-        await venusRouter.setVotingAndStaking(vUsdc.address, constants.ZERO_ADDRESS, { from: piGov });
+        await venusRouter.redeem('0', ether(8000), { from: piGov });
+        await venusRouter.setConnector('0', constants.ZERO_ADDRESS, false, { from: piGov });
 
-        await piUsdc.withdraw(ether(1000), { from: alice });
-
-        await expectRevert(venusRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'STAKING_IS_NULL');
+        await expectRevert(piUsdc.withdraw(ether(1000), { from: alice }), 'CONNECTOR_IS_NULL');
       });
     });
 
@@ -317,7 +322,7 @@ describe('VenusRouter Tests', () => {
         assert.equal(await usdc.balanceOf(vUsdc.address), ether(50000));
         assert.equal(await vUsdc.balanceOf(piUsdc.address), ether(8000));
         assert.equal(await usdc.balanceOf(piUsdc.address), ether(2000));
-        assert.equal(await venusRouter.getTokenForVToken(ether(3160)), ether(3160));
+        assert.equal(await connector.getTokenForVToken(ether(3160)), ether(3160));
 
         // #4. USDC reserve increase 50K -> 80K (+60%)
         await time.advanceBlock(1000);
@@ -333,8 +338,8 @@ describe('VenusRouter Tests', () => {
         assert.equal(await vUsdc.balanceOf(piUsdc.address), ether(8000));
         assert.equal(await vUsdc.totalSupply(), ether(50000));
         assert.equal(await venusRouter.getUnderlyingStaked(), ether(12800));
-        assert.equal(await venusRouter.getTokenForVToken(ether(2000)), ether(3200));
-        assert.equal(await venusRouter.getTokenForVToken(ether(1)), ether('1.6'));
+        assert.equal(await connector.getTokenForVToken(ether(2000)), ether(3200));
+        assert.equal(await connector.getTokenForVToken(ether(1)), ether('1.6'));
         assert.equal(await venusRouter.getUnderlyingEquivalentForPi(ether(1), ether(10000)), ether('1.48'));
       });
 
@@ -356,15 +361,12 @@ describe('VenusRouter Tests', () => {
 
         // #6. Poke
         const res = await venusRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        expectEvent(res, 'DistributePerformanceFee', {
-          performanceFeeDebtBefore: '0',
-          performanceFeeDebtAfter: '0',
-          underlyingBalance: ether(3000),
-          performance: ether(720),
-        });
-        const routerLogs = await fetchLogs(VenusVBep20SupplyRouter, res);
-        assert.equal(routerLogs[2].event, 'Redeem');
-        assert.equal(routerLogs[2].args.amount, ether(736));
+        const distributePerformanceFee = VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'DistributePerformanceFee')[0];
+        console.log('VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs)', VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs));
+        assert.equal(distributePerformanceFee.args.performanceFeeDebtBefore, '0');
+        assert.equal(distributePerformanceFee.args.performanceFeeDebtAfter, '0');
+        assert.equal(distributePerformanceFee.args.underlyingBalance, ether(3000));
+        assert.equal(distributePerformanceFee.args.performance, ether(720));
 
         // Changed
         assert.equal(await usdc.balanceOf(piUsdc.address), ether(3016));
@@ -401,9 +403,8 @@ describe('VenusRouter Tests', () => {
 
         // #6. Poke
         const res = await venusRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        const logs = await fetchLogs(VenusVBep20SupplyRouter, res);
-        assert.equal(logs[2].event, 'Redeem');
-        assert.equal(logs[2].args.amount, ether(2336));
+        const redeem = VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Redeem')[0];
+        assert.equal(redeem.args.amount, ether(2336));
 
         // Changed
         assert.equal(await usdc.balanceOf(vUsdc.address), ether(77664));
@@ -464,7 +465,7 @@ describe('VenusRouter Tests', () => {
         await usdc.approve(piUsdc.address, ether(1000), { from: alice });
         await piUsdc.deposit(ether(1000), { from: alice });
 
-        assert.equal(await venusRouter.getReserveStatusForStakedBalance().then(s => s.forceRebalance), false);
+        assert.equal(await venusRouter.getReserveStatusForStakedBalance(ether(1)).then(s => s.forceRebalance), false);
         await expectRevert(venusRouter.pokeFromReporter('0', false, '0x', { from: bob }), 'MIN_INTERVAL_NOT_REACHED');
 
         await time.increase(60);
@@ -475,9 +476,9 @@ describe('VenusRouter Tests', () => {
       it('should rebalance if the rebalancing interval not passed but reserveRatioToForceRebalance has reached', async () => {
         await time.increase(time.duration.minutes(59));
 
-        assert.equal(await venusRouter.getReserveStatusForStakedBalance().then(s => s.forceRebalance), false);
+        assert.equal(await venusRouter.getReserveStatusForStakedBalance(ether(1)).then(s => s.forceRebalance), false);
         await piUsdc.withdraw(ether(2000), { from: alice });
-        assert.equal(await venusRouter.getReserveStatusForStakedBalance().then(s => s.forceRebalance), true);
+        assert.equal(await venusRouter.getReserveStatusForStakedBalance(ether(1)).then(s => s.forceRebalance), true);
         await venusRouter.pokeFromReporter('0', false, '0x', { from: bob });
 
         assert.equal(await usdc.balanceOf(vUsdc.address), ether(48400));

@@ -2,7 +2,8 @@ const { time, constants, expectEvent, expectRevert } = require('@openzeppelin/te
 const { ether, artifactFromBytecode, latestBlockNumber } = require('./../helpers');
 const { buildBasicRouterConfig, buildMasterChefRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
-const MDXChefPowerIndexRouter = artifacts.require('MasterChefPowerIndexRouter');
+const MDXChefPowerIndexConnector = artifacts.require('MasterChefPowerIndexConnector');
+const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const PoolRestrictions = artifacts.require('PoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
@@ -10,7 +11,7 @@ const MockPoke = artifacts.require('MockPoke');
 const BoardRoomMDX = artifactFromBytecode('bsc/BoardRoomMDX');
 const BakeryToken = artifactFromBytecode('bsc/MdxToken');
 
-MDXChefPowerIndexRouter.numberFormat = 'String';
+MDXChefPowerIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 
 const { web3 } = WrappedPiErc20;
@@ -24,7 +25,7 @@ describe('MDXMasterChefRouter Tests', () => {
     [deployer, bob, alice, piGov, stub, pvp, pool1, pool2] = await web3.eth.getAccounts();
   });
 
-  let mdx, boardRoomMDX, poolRestrictions, piMdx, myRouter, poke;
+  let mdx, boardRoomMDX, poolRestrictions, piMdx, myRouter, connector, poke;
 
   beforeEach(async function () {
     // bsc: 0x9c65ab58d8d978db963e63f2bfb7121627e3a739
@@ -39,7 +40,8 @@ describe('MDXMasterChefRouter Tests', () => {
     piMdx = await WrappedPiErc20.new(mdx.address, stub, 'Wrapped MDX', 'piMDX');
 
     poke = await MockPoke.new(true);
-    myRouter = await MDXChefPowerIndexRouter.new(
+
+    myRouter = await PowerIndexRouter.new(
       piMdx.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
@@ -52,10 +54,16 @@ describe('MDXMasterChefRouter Tests', () => {
         '0',
         pvp,
         ether('0.15'),
-        [pool1, pool2],
       ),
-      buildMasterChefRouterConfig(mdx.address, 0),
     );
+
+    connector = await MDXChefPowerIndexConnector.new(
+      boardRoomMDX.address,
+      mdx.address,
+      piMdx.address,
+      '0'
+    );
+    await myRouter.addConnector(connector.address, ether(1), false);
 
     await piMdx.changeRouter(myRouter.address, { from: stub });
     await boardRoomMDX.add(10000, mdx.address, true);
@@ -91,11 +99,10 @@ describe('MDXMasterChefRouter Tests', () => {
 
       describe('stake()', () => {
         it('should allow the owner staking any amount of reserve tokens', async () => {
-          const res = await myRouter.stake(ether(2000), { from: piGov });
-          expectEvent(res, 'Stake', {
-            sender: piGov,
-            amount: ether(2000),
-          });
+          const res = await myRouter.stake('0', ether(2000), { from: piGov });
+          const stake = MDXChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Stake')[0];
+          assert.equal(stake.args.sender, piGov);
+          assert.equal(stake.args.amount, ether(2000));
           assert.equal(await mdx.balanceOf(piMdx.address), ether('10.2'));
           assert.equal(await mdx.balanceOf(boardRoomMDX.address), ether(528388));
           const userInfo = await boardRoomMDX.userInfo(0, piMdx.address);
@@ -103,24 +110,23 @@ describe('MDXMasterChefRouter Tests', () => {
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(myRouter.stake(ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(myRouter.stake('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
 
       describe('redeem()', () => {
         it('should allow the owner redeeming any amount of reserve tokens', async () => {
-          const res = await myRouter.redeem(ether(3000), { from: piGov });
-          expectEvent(res, 'Redeem', {
-            sender: piGov,
-            amount: ether(3000),
-          });
+          const res = await myRouter.redeem('0', ether(3000), { from: piGov });
+          const redeem = MDXChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Redeem')[0];
+          assert.equal(redeem.args.sender, piGov);
+          assert.equal(redeem.args.amount, ether(3000));
           assert.equal(await mdx.balanceOf(piMdx.address), ether('5010.2'));
           const userInfo = await boardRoomMDX.userInfo(0, piMdx.address);
           assert.equal(userInfo.amount, ether(5000));
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(myRouter.redeem(ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(myRouter.redeem('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
     });
@@ -189,15 +195,14 @@ describe('MDXMasterChefRouter Tests', () => {
     });
 
     it('should ignore rebalancing if the staking address is 0', async () => {
-      await myRouter.redeem(ether(8000), { from: piGov });
-      await myRouter.setVotingAndStaking(boardRoomMDX.address, constants.ZERO_ADDRESS, { from: piGov });
+      await myRouter.redeem('0', ether(8000), { from: piGov });
+      await myRouter.setConnector('0', constants.ZERO_ADDRESS, false, { from: piGov });
 
       assert.equal(await mdx.balanceOf(boardRoomMDX.address), ether('560398.080000000000000000'));
       assert.equal(await mdx.balanceOf(piMdx.address), ether('10001.632'));
       assert.equal(await piMdx.balanceOf(alice), ether(10000));
       assert.equal(await piMdx.totalSupply(), ether(10000));
-      await piMdx.withdraw(ether(1000), { from: alice });
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'STAKING_IS_NULL');
+      await expectRevert(piMdx.withdraw(ether(1000), { from: alice }), 'CONNECTOR_IS_NULL');
     });
 
     describe('rebalancing intervals', () => {
@@ -274,9 +279,8 @@ describe('MDXMasterChefRouter Tests', () => {
         assert.equal(await mdx.balanceOf(piMdx.address), ether(3000));
 
         const res = await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        expectEvent(res, 'DistributeReward', {
-          totalReward: ether('3.84'),
-        });
+        const distributeRewards = MDXChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'DistributeReward')[0];
+        assert.equal(distributeRewards.args.totalReward, ether('3.84'));
 
         assert.equal(await mdx.balanceOf(boardRoomMDX.address), ether('569196.160000000000000000'));
         assert.equal((await boardRoomMDX.userInfo(0, piMdx.address)).amount, ether(8800));

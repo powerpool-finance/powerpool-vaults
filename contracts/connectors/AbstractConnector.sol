@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 
 import "../interfaces/WrappedPiErc20Interface.sol";
 import "../interfaces/IRouterConnector.sol";
+import "hardhat/console.sol";
 
 abstract contract AbstractConnector is IRouterConnector {
   using SafeMath for uint256;
@@ -47,28 +48,33 @@ abstract contract AbstractConnector is IRouterConnector {
    * @notice Distributes an underlying token reward received in the same tx earlier.
    */
   function _distributeReward(DistributeData memory _distributeData, WrappedPiErc20Interface _piToken, IERC20 _token, uint256 _totalReward) internal returns (bytes memory rewardsData) {
+    console.log("_distributeReward 0");
     (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackRewardsData(_distributeData.rewardsData);
     uint256 pvpReward;
     uint256 piTokenReward;
     // Step #1. Distribute pvpReward
+    console.log("_distributeReward 1");
     (pvpReward, piTokenReward, performanceFeeDebt) = _distributePerformanceFee(_distributeData.performanceFee, _distributeData.performanceFeeReceiver, performanceFeeDebt, _piToken, _token, _totalReward);
     require(piTokenReward > 0, "NO_POOL_REWARDS_UNDERLYING");
 
     // Step #2 Reset lockedProfit
+    console.log("_distributeReward 2");
     uint256 lockedProfitBefore = calculateLockedProfit(lockedProfit, lastRewardDistribution);
+    console.log("_distributeReward 3");
     uint256 lockedProfitAfter = lockedProfitBefore.add(piTokenReward);
     lockedProfit = lockedProfitAfter;
 
     lastRewardDistribution = block.timestamp;
+    console.log("_distributeReward 4");
 
     emit DistributeReward(msg.sender, _totalReward, pvpReward, piTokenReward, lockedProfitBefore, lockedProfitAfter);
 
-    return abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt);
+    return packRewardsData(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
   function _distributePerformanceFee(uint256 _performanceFee, address _performanceFeeReceiver, uint256 _performanceFeeDebt, WrappedPiErc20Interface _piToken, IERC20 _underlying, uint256 _totalReward)
   internal
-  returns (uint256 performance, uint256 resultPerformanceFeeDebt, uint256 remainder)
+  returns (uint256 performance, uint256 remainder, uint256 resultPerformanceFeeDebt)
   {
     performance = 0;
     remainder = 0;
@@ -95,7 +101,22 @@ abstract contract AbstractConnector is IRouterConnector {
     }
   }
 
-  function unpackRewardsData(bytes memory _rewardsData) public pure returns (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) {
+  function packRewardsData(uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) public view returns (bytes memory) {
+    console.log("lockedProfit", lockedProfit);
+    console.log("lastRewardDistribution", lastRewardDistribution);
+    console.log("performanceFeeDebt", performanceFeeDebt);
+    console.log(string(abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt)));
+    console.log("packRewardsData.length", abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt).length);
+    return abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt);
+  }
+
+  function unpackRewardsData(bytes memory _rewardsData) public view returns (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) {
+    console.log("_rewardsData.length", _rewardsData.length);
+    console.log("keccak256", keccak256(_rewardsData) == keccak256(""));
+    console.log(string(_rewardsData));
+    if (_rewardsData.length == 0 || keccak256(_rewardsData) == keccak256("")) {
+      return (0, 0, 0);
+    }
     (lockedProfit, lastRewardDistribution, performanceFeeDebt) = abi.decode(_rewardsData, (uint256, uint256, uint256));
   }
 
@@ -127,5 +148,9 @@ abstract contract AbstractConnector is IRouterConnector {
       // Return data is optional
       require(abi.decode(response, (bool)), "ERC20 operation did not succeed");
     }
+  }
+
+  function initRouter(bytes memory) external override virtual {
+
   }
 }
