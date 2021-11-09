@@ -24,7 +24,7 @@ const { web3 } = MockERC20;
 
 const REPORTER_ID = 42;
 
-describe('VenusRouter Tests', () => {
+describe.only('VenusRouter Tests', () => {
   let bob, alice, charlie, venusOwner, piGov, stub, pvp;
 
   before(async function () {
@@ -141,7 +141,7 @@ describe('VenusRouter Tests', () => {
       piUsdc.address,
       unitroller.address,
     );
-    await venusRouter.addConnector(connector.address, ether(1), false);
+    await venusRouter.addConnector(connector.address, ether(1), true);
 
     await piUsdc.changeRouter(venusRouter.address, { from: stub });
 

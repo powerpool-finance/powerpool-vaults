@@ -101,15 +101,19 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
   /*** POKE HOOKS ***/
 
   function beforePoke(bytes memory _pokeData, DistributeData memory _distributeData, bool _willClaimReward) public override {
+    console.log("beforePoke 1");
     require(VBep20Interface(STAKING).accrueInterest() == NO_ERROR_CODE, "V_ERROR");
+    console.log("beforePoke 2");
 
-    uint256 last = abi.decode(_pokeData, (uint256));
+    uint256 last = _unpackPokeData(_pokeData);
     if (last > 0) {
+      console.log("beforePoke 3");
       uint256 current = getUnderlyingStaked();
       if (current > last) {
         uint256 diff = current - last;
         // ignore the dust
         if (diff > 100) {
+          console.log("beforePoke 4");
           _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, diff);
         }
       }
@@ -117,7 +121,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
   }
 
   function afterPoke(PowerIndexBasicRouterInterface.ReserveStatus reserveStatus, bool _rewardClaimDone) public override returns (bytes memory) {
-    return abi.encode(getUnderlyingStaked());
+    return _packPokeData(getUnderlyingStaked());
   }
 
   /*** VIEWERS ***/
@@ -146,7 +150,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
    * @notice Get the net interest reward accrued on vToken;
    */
   function getPendingInterestReward(bytes memory _pokeData) external view returns (uint256) {
-    uint256 last = abi.decode(_pokeData, (uint256));
+    uint256 last = _unpackPokeData(_pokeData);
     uint256 current = getUnderlyingStaked();
     if (last > current) {
       return 0;
@@ -174,5 +178,13 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
     bytes memory result = _callStaking(PI_TOKEN, STAKING, _sig, _data);
     uint256 err = abi.decode(result, (uint256));
     require(err == NO_ERROR_CODE, "V_ERROR");
+  }
+
+  function _packPokeData(uint256 lastUnderlyingStaked) internal view returns (bytes memory) {
+    return abi.encode(lastUnderlyingStaked);
+  }
+
+  function _unpackPokeData(bytes memory _pokeData) internal view returns (uint256 lastUnderlyingStaked) {
+    return _pokeData.length > 0 ? abi.decode(_pokeData, (uint256)) : 0;
   }
 }

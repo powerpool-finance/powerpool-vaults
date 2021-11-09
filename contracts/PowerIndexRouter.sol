@@ -232,7 +232,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       bool shouldClaim = _claimAndDistributeRewards && c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
 
       if (c.callBeforeAfterPoke) {
-        c.connector.beforePoke(c.pokeData, _getDistributeData(c), shouldClaim);
+        _beforePoke(c, shouldClaim);
       }
 
       console.log("c.connector.getUnderlyingStaked()", c.connector.getUnderlyingStaked());
@@ -258,7 +258,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       }
 
       if (c.callBeforeAfterPoke) {
-        c.pokeData = c.connector.afterPoke(status, shouldClaim);
+        _afterPoke(c, status, shouldClaim);
       }
     }
 
@@ -273,8 +273,6 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     //    require(success, "CONNECTOR_REDEEM_FAILED");
     result = abi.decode(result, (bytes));
     if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
-      console.log("rewardsData:");
-      console.logBytes(result);
       c.rewardsData = result;
     }
   }
@@ -287,9 +285,26 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     //    require(success, "CONNECTOR_REDEEM_FAILED");
     result = abi.decode(result, (bytes));
     if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
-      console.log("rewardsData:");
-      console.logBytes(result);
       c.rewardsData = result;
+    }
+  }
+
+  function _beforePoke(Connector storage c, bool _willClaimReward) internal {
+    (bool success, bytes memory result) = address(c.connector).delegatecall(
+      abi.encodeWithSignature("beforePoke(bytes,(bytes,uint256,address),bool)", c.pokeData, _getDistributeData(c), _willClaimReward)
+    );
+    require(success, string(result));
+  }
+
+  function _afterPoke(Connector storage c, ReserveStatus reserveStatus, bool _rewardClaimDone) internal {
+    (bool success, bytes memory result) = address(c.connector).delegatecall(
+      abi.encodeWithSignature("afterPoke(uint8,bool)", uint8(reserveStatus), _rewardClaimDone)
+    );
+    require(success, string(result));
+    //    require(success, "CONNECTOR_REDEEM_FAILED");
+    result = abi.decode(result, (bytes));
+    if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
+      c.pokeData = result;
     }
   }
 
