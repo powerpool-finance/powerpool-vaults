@@ -196,7 +196,7 @@ describe('MDXMasterChefRouter Tests', () => {
 
     it('should ignore rebalancing if the staking address is 0', async () => {
       await myRouter.redeem('0', ether(8000), { from: piGov });
-      await myRouter.setConnector('0', constants.ZERO_ADDRESS, false, { from: piGov });
+      await myRouter.setConnector('0', constants.ZERO_ADDRESS, ether(1), false, { from: piGov });
 
       assert.equal(await mdx.balanceOf(boardRoomMDX.address), ether('560398.080000000000000000'));
       assert.equal(await mdx.balanceOf(piMdx.address), ether('10001.632'));
@@ -218,7 +218,7 @@ describe('MDXMasterChefRouter Tests', () => {
 
         await mdx.approve(piMdx.address, ether(1000), { from: alice });
         await piMdx.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'MAX_INTERVAL_NOT_REACHED');
+        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
       });
 
       it('should DO rebalance by pokeFromSlasher if the rebalancing interval has passed', async () => {
@@ -249,8 +249,8 @@ describe('MDXMasterChefRouter Tests', () => {
 
         await mdx.approve(piMdx.address, ether(1000), { from: alice });
         await piMdx.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromReporter(0, false, '0x'), 'MIN_INTERVAL_NOT_REACHED');
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'MAX_INTERVAL_NOT_REACHED');
+        await expectRevert(myRouter.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
+        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
       });
 
       it('should NOT rebalance by pokeFromSlasher if the rebalancing interval has passed', async () => {
@@ -258,7 +258,7 @@ describe('MDXMasterChefRouter Tests', () => {
 
         await mdx.approve(piMdx.address, ether(1000), { from: alice });
         await piMdx.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'MAX_INTERVAL_NOT_REACHED');
+        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
       });
     });
 

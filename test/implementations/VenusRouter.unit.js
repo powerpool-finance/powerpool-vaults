@@ -24,7 +24,7 @@ const { web3 } = MockERC20;
 
 const REPORTER_ID = 42;
 
-describe.only('VenusRouter Tests', () => {
+describe.skip('VenusRouter Tests', () => {
   let bob, alice, charlie, venusOwner, piGov, stub, pvp;
 
   before(async function () {
@@ -362,7 +362,7 @@ describe.only('VenusRouter Tests', () => {
         // #6. Poke
         const res = await venusRouter.pokeFromReporter(REPORTER_ID, false, '0x');
         const distributePerformanceFee = VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'DistributePerformanceFee')[0];
-        console.log('VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs)', VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs));
+        // console.log('VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs)', VenusVBep20SupplyConnector.decodeLogs(res.receipt.rawLogs));
         assert.equal(distributePerformanceFee.args.performanceFeeDebtBefore, '0');
         assert.equal(distributePerformanceFee.args.performanceFeeDebtAfter, '0');
         assert.equal(distributePerformanceFee.args.underlyingBalance, ether(3000));
@@ -466,7 +466,7 @@ describe.only('VenusRouter Tests', () => {
         await piUsdc.deposit(ether(1000), { from: alice });
 
         assert.equal(await venusRouter.getReserveStatusForStakedBalance(ether(1)).then(s => s.forceRebalance), false);
-        await expectRevert(venusRouter.pokeFromReporter('0', false, '0x', { from: bob }), 'MIN_INTERVAL_NOT_REACHED');
+        await expectRevert(venusRouter.pokeFromReporter('0', false, '0x', { from: bob }), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
 
         await time.increase(60);
 

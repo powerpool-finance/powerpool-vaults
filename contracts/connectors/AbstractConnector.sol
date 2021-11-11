@@ -48,24 +48,19 @@ abstract contract AbstractConnector is IRouterConnector {
    * @notice Distributes an underlying token reward received in the same tx earlier.
    */
   function _distributeReward(DistributeData memory _distributeData, WrappedPiErc20Interface _piToken, IERC20 _token, uint256 _totalReward) internal returns (bytes memory rewardsData) {
-    console.log("_distributeReward 0");
     (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackRewardsData(_distributeData.rewardsData);
     uint256 pvpReward;
     uint256 piTokenReward;
     // Step #1. Distribute pvpReward
-    console.log("_distributeReward 1");
     (pvpReward, piTokenReward, performanceFeeDebt) = _distributePerformanceFee(_distributeData.performanceFee, _distributeData.performanceFeeReceiver, performanceFeeDebt, _piToken, _token, _totalReward);
     require(piTokenReward > 0, "NO_POOL_REWARDS_UNDERLYING");
 
     // Step #2 Reset lockedProfit
-    console.log("_distributeReward 2");
     uint256 lockedProfitBefore = calculateLockedProfit(lockedProfit, lastRewardDistribution);
-    console.log("_distributeReward 3");
     uint256 lockedProfitAfter = lockedProfitBefore.add(piTokenReward);
     lockedProfit = lockedProfitAfter;
 
     lastRewardDistribution = block.timestamp;
-    console.log("_distributeReward 4");
 
     emit DistributeReward(msg.sender, _totalReward, pvpReward, piTokenReward, lockedProfitBefore, lockedProfitAfter);
 
@@ -127,6 +122,10 @@ abstract contract AbstractConnector is IRouterConnector {
 
   function calculateLockedProfit(uint256 lockedProfit, uint256 lastRewardDistribution) public view returns (uint256) {
     uint256 lockedFundsRatio = (block.timestamp.sub(lastRewardDistribution)).mul(LOCKED_PROFIT_DEGRADATION);
+    console.log("block.timestamp       ", block.timestamp);
+    console.log("lastRewardDistribution", lastRewardDistribution);
+    console.log("lockedFundsRatio       ", lockedFundsRatio);
+    console.log("DEGRADATION_COEFFICIENT", DEGRADATION_COEFFICIENT);
 
     if (lockedFundsRatio < DEGRADATION_COEFFICIENT) {
       uint256 currentLockedProfit = lockedProfit;

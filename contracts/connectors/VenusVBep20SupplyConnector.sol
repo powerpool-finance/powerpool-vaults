@@ -101,19 +101,15 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
   /*** POKE HOOKS ***/
 
   function beforePoke(bytes memory _pokeData, DistributeData memory _distributeData, bool _willClaimReward) public override {
-    console.log("beforePoke 1");
     require(VBep20Interface(STAKING).accrueInterest() == NO_ERROR_CODE, "V_ERROR");
-    console.log("beforePoke 2");
 
     uint256 last = _unpackPokeData(_pokeData);
     if (last > 0) {
-      console.log("beforePoke 3");
       uint256 current = getUnderlyingStaked();
       if (current > last) {
         uint256 diff = current - last;
         // ignore the dust
         if (diff > 100) {
-          console.log("beforePoke 4");
           _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, diff);
         }
       }

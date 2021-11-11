@@ -106,8 +106,6 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     underlying = IERC20(abi.decode(underlyingRes, (address)));
     poolRestrictions = IPoolRestrictions(_basicConfig.poolRestrictions);
     powerPoke = IPowerPoke(_basicConfig.powerPoke);
-//    voting = _basicConfig.voting;
-//    staking = _basicConfig.staking;
     reserveRatio = _basicConfig.reserveRatio;
     reserveRatioLowerBound = _basicConfig.reserveRatioLowerBound;
     reserveRatioUpperBound = _basicConfig.reserveRatioUpperBound;
@@ -121,16 +119,6 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   receive() external payable {}
 
   /*** OWNER METHODS ***/
-
-  /**
-   * @dev Changing the staking address with a positive underlying stake will break `getPiEquivalentForUnderlying`
-   *      formula. Consider moving all the reserves to the piToken contract before doing this.
-   */
-//  function setVotingAndStaking(address _voting, address _staking) external override onlyOwner {
-//    voting = _voting;
-//    staking = _staking;
-//    emit SetVotingAndStaking(_voting, _staking);
-//  }
 
   function setReserveConfig(
     uint256 _reserveRatio,
@@ -171,9 +159,10 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     ));
   }
 
-  function setConnector(uint256 _connectorIndex, address _connectorAddress, bool _callBeforeAfterPoke) external onlyOwner {
+  function setConnector(uint256 _connectorIndex, address _connectorAddress, uint256 _share, bool _callBeforeAfterPoke) external onlyOwner {
     connectors[_connectorIndex].connector = IRouterConnector(_connectorAddress);
     connectors[_connectorIndex].callBeforeAfterPoke = _callBeforeAfterPoke;
+    connectors[_connectorIndex].share = _share;
   }
 
   function setPiTokenNoFee(address _for, bool _noFee) external onlyOwner {
@@ -220,49 +209,101 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     return IRouterConnector.DistributeData(c.rewardsData, performanceFee, performanceFeeReceiver);
   }
 
-  function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
+  struct RebalanceConfig {
+    ReserveStatus status;
+    uint256 diff;
+    bool forceRebalance;
+    uint256 connectorIndex;
+  }
 
-//    _beforePoke(shouldClaim);
+  function _rebalancePokeByDiff(RebalanceConfig memory _conf, bool _shouldClaim) internal {
+    if (connectors[_conf.connectorIndex].callBeforeAfterPoke) {
+      _beforePoke(connectors[_conf.connectorIndex], _shouldClaim);
+    }
+
+    if (_conf.status != ReserveStatus.EQUILIBRIUM) {
+      _rebalancePoke(connectors[_conf.connectorIndex], _conf.status, _conf.diff);
+    }
+
+    if (_shouldClaim) {
+      _claimRewards(connectors[_conf.connectorIndex], _conf.status);
+      connectors[_conf.connectorIndex].lastClaimRewardsAt = block.timestamp;
+    }
+
+    if (connectors[_conf.connectorIndex].callBeforeAfterPoke) {
+      _afterPoke(connectors[_conf.connectorIndex], _conf.status, _shouldClaim);
+    }
+  }
+
+  function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
 
     (uint256 minInterval, uint256 maxInterval) = _getMinMaxReportInterval();
 
+    uint256 piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
+
+    bool atLeastOneForceRebalance = false;
+    uint256 totalShare = 0;
+
+    RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
+
     for (uint256 i = 0; i < connectors.length; i++) {
+      console.log("");
+      console.log("connector", i + 1);
       Connector storage c = connectors[i];
       require(address(c.connector) != address(0), "CONNECTOR_IS_NULL");
-      bool shouldClaim = _claimAndDistributeRewards && c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
-
-      if (c.callBeforeAfterPoke) {
-        _beforePoke(c, shouldClaim);
+      totalShare = c.share.add(totalShare);
+      if (i == connectors.length - 1) {
+        require(totalShare == 1 ether, "TOTAL_SHARE_DONT_EQUAL_1_ETHER");
       }
+      bool shouldClaim = _claimAndDistributeRewards && c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
 
       console.log("c.connector.getUnderlyingStaked()", c.connector.getUnderlyingStaked());
       (ReserveStatus status, uint256 diff, bool forceRebalance) = getReserveStatus(
+        piTokenUnderlyingBalance,
         c.connector.getUnderlyingStaked(),
         c.share,
         0
       );
-      if (_isSlasher) {
-        require(forceRebalance || lastRebalancedAt + maxInterval < block.timestamp, "MAX_INTERVAL_NOT_REACHED");
-      } else {
-        require(forceRebalance || lastRebalancedAt + minInterval < block.timestamp, "MIN_INTERVAL_NOT_REACHED");
+      if (forceRebalance) {
+        atLeastOneForceRebalance = true;
       }
       console.log("status", uint256(status));
       console.log("diff", diff);
-      if (status != ReserveStatus.EQUILIBRIUM) {
-        _rebalancePoke(c, status, diff);
-      }
 
-      if (shouldClaim) {
-        _claimRewards(c, status);
-        c.lastClaimRewardsAt = block.timestamp;
+      if (status == ReserveStatus.EXCESS) {
+        if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
+          _rebalancePokeByDiff(RebalanceConfig(status, diff, forceRebalance, i), shouldClaim);
+        }
+      } else {
+        configs[i] = RebalanceConfig(status, diff, forceRebalance, i);
       }
+    }
 
-      if (c.callBeforeAfterPoke) {
-        _afterPoke(c, status, shouldClaim);
+    require(_canPoke(_isSlasher, atLeastOneForceRebalance, minInterval, maxInterval), "INTERVAL_NOT_REACHED_OR_NOT_FORCE");
+
+    for (uint256 i = 0; i < connectors.length; i++) {
+      RebalanceConfig memory conf = configs[i];
+      if (conf.diff == 0) {
+        continue;
+      }
+      Connector storage c = connectors[i];
+      bool shouldClaim = _claimAndDistributeRewards && c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
+
+      if (conf.status == ReserveStatus.SHORTAGE) {
+        if (_canPoke(_isSlasher, conf.forceRebalance, minInterval, maxInterval)) {
+          _rebalancePokeByDiff(conf, shouldClaim);
+        }
       }
     }
 
     lastRebalancedAt = block.timestamp;
+  }
+
+  function _canPoke(bool _isSlasher, bool _forceRebalance, uint256 _minInterval, uint256 _maxInterval) internal returns (bool) {
+    if (_forceRebalance) {
+      return true;
+    }
+    return _isSlasher ? (lastRebalancedAt + _maxInterval < block.timestamp) : (lastRebalancedAt + _minInterval < block.timestamp);
   }
 
   function _redeem(Connector storage c, uint256 diff) internal {
@@ -363,13 +404,13 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       bool forceRebalance
     )
   {
-    return getReserveStatus(_getUnderlyingStaked(), _share, 0);
+    return getReserveStatus(piToken.getUnderlyingBalance(), _getUnderlyingStaked(), _share, 0);
   }
 
   /*
    * @dev Getting status and diff of provided staked balance and target reserve balance.
    */
-  function getReserveStatus(uint256 _stakedBalance, uint256 _share, uint256 _withdrawAmount)
+  function getReserveStatus(uint256 _piTokenUnderlyingBalance, uint256 _stakedBalance, uint256 _share, uint256 _withdrawAmount)
     public
     view
     returns (
@@ -379,9 +420,9 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     )
   {
     uint256 expectedReserveAmount;
-    uint256 underlyingBalance = piToken.getUnderlyingBalance().mul(_share).div(1 ether);
-    console.log("underlyingBalance", underlyingBalance);
-    console.log("piToken.getUnderlyingBalance()", piToken.getUnderlyingBalance());
+    uint256 underlyingBalance = _piTokenUnderlyingBalance.mul(_share).div(1 ether);
+    console.log("underlyingBalance             ", underlyingBalance);
+    console.log("piToken.getUnderlyingBalance()", _piTokenUnderlyingBalance);
     (status, diff, expectedReserveAmount) = getReserveStatusPure(
       reserveRatio,
       underlyingBalance,
