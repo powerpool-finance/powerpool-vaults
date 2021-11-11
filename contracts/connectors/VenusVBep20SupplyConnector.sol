@@ -16,8 +16,6 @@ import "./AbstractConnector.sol";
  * @dev Venus interest rewards are calculated and claimed on each poke* operation.
  */
 contract VenusVBep20SupplyConnector is AbstractConnector {
-  event Stake(address indexed sender, uint256 amount);
-  event Redeem(address indexed sender, uint256 amount);
   event IgnoreDueMissingStaking();
   event ClaimRewards(address indexed sender, uint256 xvsEarned);
 
@@ -85,7 +83,8 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
 
     _callCompStaking(VBep20Interface.mint.selector, abi.encode(_amount));
 
-    emit Stake(msg.sender, _amount);
+    emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
+
     return new bytes(0);
   }
 
@@ -94,7 +93,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
 
     _callCompStaking(VBep20Interface.redeemUnderlying.selector, abi.encode(_amount));
 
-    emit Redeem(msg.sender, _amount);
+    emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
     return new bytes(0);
   }
 

@@ -54,7 +54,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
     }
 
-    emit Stake(msg.sender, _amount, receivedReward);
+    emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
     return result;
   }
 
@@ -76,7 +76,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
       console.log("redeem 4");
     }
 
-    emit Redeem(msg.sender, _amount, receivedReward);
+    emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
     return result;
   }
 

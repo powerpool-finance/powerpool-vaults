@@ -15,6 +15,9 @@ abstract contract AbstractConnector is IRouterConnector {
   uint256 public constant HUNDRED_PCT = 1 ether;
   uint256 public immutable LOCKED_PROFIT_DEGRADATION;
 
+  event Stake(address indexed sender, address indexed staking, address indexed underlying, uint256 amount);
+  event Redeem(address indexed sender, address indexed staking, address indexed underlying, uint256 amount);
+
   event DistributeReward(
     address indexed sender,
     uint256 totalReward,

@@ -63,7 +63,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     uint256 share;
     bool callBeforeAfterPoke;
     uint256 lastClaimRewardsAt;
-    bytes rewardsData;
+    bytes stakeData;
     bytes pokeData;
   }
   Connector[] public connectors;
@@ -206,7 +206,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   }
 
   function _getDistributeData(Connector storage c) internal returns (IRouterConnector.DistributeData memory) {
-    return IRouterConnector.DistributeData(c.rewardsData, performanceFee, performanceFeeReceiver);
+    return IRouterConnector.DistributeData(c.stakeData, performanceFee, performanceFeeReceiver);
   }
 
   struct RebalanceConfig {
@@ -236,33 +236,31 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   }
 
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
+    console.log("");
+    console.log("_pokeFrom");
 
     (uint256 minInterval, uint256 maxInterval) = _getMinMaxReportInterval();
 
     uint256 piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
+    (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
+    console.log("piTokenUnderlyingBalance", piTokenUnderlyingBalance);
+    console.log("totalStakedBalance      ", totalStakedBalance);
 
     bool atLeastOneForceRebalance = false;
-    uint256 totalShare = 0;
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
     for (uint256 i = 0; i < connectors.length; i++) {
       console.log("");
       console.log("connector", i + 1);
-      Connector storage c = connectors[i];
-      require(address(c.connector) != address(0), "CONNECTOR_IS_NULL");
-      totalShare = c.share.add(totalShare);
-      if (i == connectors.length - 1) {
-        require(totalShare == 1 ether, "TOTAL_SHARE_DONT_EQUAL_1_ETHER");
-      }
-      bool shouldClaim = _claimAndDistributeRewards && c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
+      bool shouldClaim = _claimAndDistributeRewards && connectors[i].lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
 
-      console.log("c.connector.getUnderlyingStaked()", c.connector.getUnderlyingStaked());
       (ReserveStatus status, uint256 diff, bool forceRebalance) = getReserveStatus(
         piTokenUnderlyingBalance,
-        c.connector.getUnderlyingStaked(),
-        c.share,
-        0
+        totalStakedBalance,
+        stakedBalanceList[i],
+        connectors[i].share
       );
       if (forceRebalance) {
         atLeastOneForceRebalance = true;
@@ -270,7 +268,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       console.log("status", uint256(status));
       console.log("diff", diff);
 
-      if (status == ReserveStatus.EXCESS) {
+      if (status == ReserveStatus.SHORTAGE) {
         if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
           _rebalancePokeByDiff(RebalanceConfig(status, diff, forceRebalance, i), shouldClaim);
         }
@@ -279,20 +277,19 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       }
     }
 
+    console.log("piToken.getUnderlyingBalance()", piToken.getUnderlyingBalance());
+
     require(_canPoke(_isSlasher, atLeastOneForceRebalance, minInterval, maxInterval), "INTERVAL_NOT_REACHED_OR_NOT_FORCE");
 
     for (uint256 i = 0; i < connectors.length; i++) {
-      RebalanceConfig memory conf = configs[i];
-      if (conf.diff == 0) {
+      if (configs[i].diff == 0) {
         continue;
       }
       Connector storage c = connectors[i];
       bool shouldClaim = _claimAndDistributeRewards && c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
 
-      if (conf.status == ReserveStatus.SHORTAGE) {
-        if (_canPoke(_isSlasher, conf.forceRebalance, minInterval, maxInterval)) {
-          _rebalancePokeByDiff(conf, shouldClaim);
-        }
+      if (_canPoke(_isSlasher, configs[i].forceRebalance, minInterval, maxInterval)) {
+        _rebalancePokeByDiff(configs[i], shouldClaim);
       }
     }
 
@@ -311,10 +308,9 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       abi.encodeWithSignature("redeem(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
     );
     require(success, string(result));
-    //    require(success, "CONNECTOR_REDEEM_FAILED");
     result = abi.decode(result, (bytes));
     if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
-      c.rewardsData = result;
+      c.stakeData = result;
     }
   }
 
@@ -323,10 +319,9 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       abi.encodeWithSignature("stake(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
     );
     require(success, string(result));
-    //    require(success, "CONNECTOR_REDEEM_FAILED");
     result = abi.decode(result, (bytes));
     if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
-      c.rewardsData = result;
+      c.stakeData = result;
     }
   }
 
@@ -395,7 +390,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   /*
    * @dev Getting status and diff of actual staked balance and target reserve balance.
    */
-  function getReserveStatusForStakedBalance(uint256 _share)
+  function getReserveStatusForStakedBalance(uint256 _stakedBalance, uint256 _share)
     external
     view
     returns (
@@ -404,13 +399,13 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       bool forceRebalance
     )
   {
-    return getReserveStatus(piToken.getUnderlyingBalance(), _getUnderlyingStaked(), _share, 0);
+    return getReserveStatus(piToken.getUnderlyingBalance(), _getUnderlyingStaked(), _stakedBalance, _share);
   }
 
   /*
    * @dev Getting status and diff of provided staked balance and target reserve balance.
    */
-  function getReserveStatus(uint256 _piTokenUnderlyingBalance, uint256 _stakedBalance, uint256 _share, uint256 _withdrawAmount)
+  function getReserveStatus(uint256 _leftOnPiTokenBalance, uint256 _totalStakedBalance, uint256 _stakedBalance, uint256 _share)
     public
     view
     returns (
@@ -419,35 +414,35 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       bool forceRebalance
     )
   {
-    uint256 expectedReserveAmount;
-    uint256 underlyingBalance = _piTokenUnderlyingBalance.mul(_share).div(1 ether);
-    console.log("underlyingBalance             ", underlyingBalance);
-    console.log("piToken.getUnderlyingBalance()", _piTokenUnderlyingBalance);
-    (status, diff, expectedReserveAmount) = getReserveStatusPure(
+    uint256 expectedStakeAmount;
+    (status, diff, expectedStakeAmount) = getReserveStatusPure(
       reserveRatio,
-      underlyingBalance,
+      _leftOnPiTokenBalance,
+      _totalStakedBalance,
       _stakedBalance,
-      _withdrawAmount
+      _share
     );
 
-    if (status == ReserveStatus.EQUILIBRIUM) {
+    if (status == ReserveStatus.EQUILIBRIUM || _stakedBalance == 0) {
       return (status, diff, forceRebalance);
     }
 
-    uint256 denominator = underlyingBalance.add(_stakedBalance).sub(_withdrawAmount);
+    uint256 denominator = _leftOnPiTokenBalance.add(_totalStakedBalance);
+    console.log("denominator          ", denominator);
+    console.log("_leftOnPiTokenBalance", _leftOnPiTokenBalance);
+    console.log("diff                 ", diff);
 
     if (status == ReserveStatus.SHORTAGE) {
-      uint256 numerator = expectedReserveAmount.sub(diff).mul(HUNDRED_PCT);
+      uint256 numerator = _leftOnPiTokenBalance.add(diff).mul(HUNDRED_PCT);
       uint256 currentRatio = numerator.div(denominator);
       forceRebalance = reserveRatioLowerBound >= currentRatio;
     } else if (status == ReserveStatus.EXCESS) {
-      uint256 numerator = expectedReserveAmount.add(diff).mul(HUNDRED_PCT);
+      uint256 numerator = _leftOnPiTokenBalance.sub(diff).mul(HUNDRED_PCT);
       uint256 currentRatio = numerator.div(denominator);
       forceRebalance = reserveRatioUpperBound <= currentRatio;
     }
   }
 
-  // NOTICE: could/should be changed depending on implementation
   function _getUnderlyingStaked() internal view virtual returns (uint256) {
     uint256 underlyingStaked = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
@@ -455,6 +450,17 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
       underlyingStaked += connectors[i].connector.getUnderlyingStaked();
     }
     return underlyingStaked;
+  }
+
+  function _getUnderlyingStakedList() internal view virtual returns (uint256[] memory list, uint256 total) {
+    uint256[] memory underlyingStakedList = new uint256[](connectors.length);
+    uint256 total = 0;
+    for (uint256 i = 0; i < connectors.length; i++) {
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
+      underlyingStakedList[i] = connectors[i].connector.getUnderlyingStaked();
+      total += underlyingStakedList[i];
+    }
+    return (underlyingStakedList, total);
   }
 
 
@@ -470,7 +476,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
     uint256 lockedProfit = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
-      lockedProfit += connectors[i].connector.calculateLockedProfit(connectors[i].rewardsData);
+      lockedProfit += connectors[i].connector.calculateLockedProfit(connectors[i].stakeData);
     }
     return lockedProfit;
   }
@@ -545,8 +551,7 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
    * @notice Calculates the desired reserve status
    * @param _reserveRatioPct The reserve ratio in %, 1 ether == 100 ether
    * @param _leftOnPiToken The amount of origin tokens left on the piToken (WrappedPiErc20) contract
-   * @param _stakedBalance The amount of original tokens staked on the staking contract
-   * @param _withdrawAmount The amount to be withdrawn within the current transaction. Deprecated, pass in 0.
+   * @param _totalStakedBalance The amount of original tokens staked on the staking contract
    * @return status The reserve status:
    * * SHORTAGE - There is not enough underlying funds on the wrapper contract to satisfy the reserve ratio,
    *           the diff amount should be redeemed from the staking contract
@@ -555,33 +560,36 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
    * * EQUILIBRIUM - the reserve ratio hasn't changed,
    *           the diff amount is 0 and there are no additional stake/redeem actions expected
    * @return diff The difference between `adjustedReserveAmount` and `_leftOnWrapper`
-   * @return expectedReserveAmount The calculated expected reserve amount
+   * @return expectedStakeAmount The calculated expected reserve amount
    */
   function getReserveStatusPure(
     uint256 _reserveRatioPct,
     uint256 _leftOnPiToken,
+    uint256 _totalStakedBalance,
     uint256 _stakedBalance,
-    uint256 _withdrawAmount
+    uint256 _share
   )
     public
     view
     returns (
       ReserveStatus status,
       uint256 diff,
-      uint256 expectedReserveAmount
+      uint256 expectedStakeAmount
     )
   {
     require(_reserveRatioPct <= HUNDRED_PCT, "RR_GREATER_THAN_100_PCT");
-    expectedReserveAmount = getExpectedReserveAmount(_reserveRatioPct, _leftOnPiToken, _stakedBalance, _withdrawAmount);
+    expectedStakeAmount = getExpectedStakeAmount(_reserveRatioPct, _leftOnPiToken, _totalStakedBalance, _share);
 
-    console.log("expectedReserveAmount", expectedReserveAmount);
+    console.log("_share               ", _share);
+    console.log("_stakedBalance       ", _stakedBalance);
+    console.log("expectedStakeAmount  ", expectedStakeAmount);
     console.log("_leftOnPiToken       ", _leftOnPiToken);
-    if (expectedReserveAmount > _leftOnPiToken) {
-      status = ReserveStatus.SHORTAGE;
-      diff = expectedReserveAmount.sub(_leftOnPiToken);
-    } else if (expectedReserveAmount < _leftOnPiToken) {
+    if (expectedStakeAmount > _stakedBalance) {
       status = ReserveStatus.EXCESS;
-      diff = _leftOnPiToken.sub(expectedReserveAmount);
+      diff = expectedStakeAmount.sub(_stakedBalance);
+    } else if (expectedStakeAmount < _stakedBalance) {
+      status = ReserveStatus.SHORTAGE;
+      diff = _stakedBalance.sub(expectedStakeAmount);
     } else {
       status = ReserveStatus.EQUILIBRIUM;
       diff = 0;
@@ -589,29 +597,26 @@ contract PowerIndexRouter is PowerIndexBasicRouterInterface, PowerIndexNaiveRout
   }
 
   /**
-   * @notice Calculates an expected reserve amount after the transaction taking into an account the withdrawAmount
+   * @notice Calculates an expected reserve amount
    * @param _reserveRatioPct % of a reserve ratio, 1 ether == 100%
    * @param _leftOnPiToken The amount of origin tokens left on the piToken (WrappedPiErc20) contract
    * @param _stakedBalance The amount of original tokens staked on the staking contract
-   * @param _withdrawAmount The amount to be withdrawn within the current transaction. Deprecated, now it is always 0.
-   *        Introduced when the rebalancing logic was triggered by deposit/withdraw actions of piToken. Now this logic
-   *        is triggered by the poke*() methods only.
+   * @param _share % of a total connectors share, 1 ether == 100%
    * @return expectedReserveAmount The expected reserve amount
    *
-   *                           / %reserveRatio * (staked + _leftOnPiToken - withdrawAmount) \
-   * expectedReserveAmount =  | ------------------------------------------------------------| + withdrawAmount
-   *                           \                         100%                              /
+   *                           / (100% - %reserveRatio) * (_leftOnPiToken + _stakedBalance) * %share \
+   * expectedReserveAmount =  | ----------------------------------------------------------------------|
+   *                           \                                    100%                             /
    */
-  function getExpectedReserveAmount(
+  function getExpectedStakeAmount(
     uint256 _reserveRatioPct,
     uint256 _leftOnPiToken,
     uint256 _stakedBalance,
-    uint256 _withdrawAmount
+    uint256 _share
   ) public pure returns (uint256) {
-    return
-      _reserveRatioPct.mul(_stakedBalance.add(_leftOnPiToken).sub(_withdrawAmount)).div(HUNDRED_PCT).add(
-        _withdrawAmount
-      );
+    return uint256(1 ether).sub(_reserveRatioPct).mul(
+      _stakedBalance.add(_leftOnPiToken).mul(_share).div(HUNDRED_PCT)
+    ).div(HUNDRED_PCT);
   }
 
   function _reward(
