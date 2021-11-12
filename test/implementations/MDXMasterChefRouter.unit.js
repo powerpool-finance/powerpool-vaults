@@ -1,6 +1,6 @@
 const { time, constants, expectEvent, expectRevert } = require('@openzeppelin/test-helpers');
 const { ether, artifactFromBytecode, latestBlockNumber } = require('./../helpers');
-const { buildBasicRouterConfig, buildMasterChefRouterConfig } = require('./../helpers/builders');
+const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MDXChefPowerIndexConnector = artifacts.require('MasterChefPowerIndexConnector');
 const PowerIndexRouter = artifacts.require('PowerIndexRouter');
@@ -19,10 +19,10 @@ const { web3 } = WrappedPiErc20;
 const REPORTER_ID = 42;
 
 describe('MDXMasterChefRouter Tests', () => {
-  let deployer, bob, alice, piGov, stub, pvp, pool1, pool2;
+  let deployer, bob, alice, piGov, stub, pvp;
 
   before(async function () {
-    [deployer, bob, alice, piGov, stub, pvp, pool1, pool2] = await web3.eth.getAccounts();
+    [deployer, bob, alice, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
   let mdx, boardRoomMDX, poolRestrictions, piMdx, myRouter, connector, poke;

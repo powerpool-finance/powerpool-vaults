@@ -1,6 +1,6 @@
 const { time, constants, expectEvent, expectRevert } = require('@openzeppelin/test-helpers');
 const { ether, artifactFromBytecode, latestBlockNumber } = require('./../helpers');
-const { buildBasicRouterConfig, buildPancakeMasterChefRouterConfig } = require('./../helpers/builders');
+const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
 const PancakeMasterChefIndexConnector = artifacts.require('PancakeMasterChefIndexConnector');
