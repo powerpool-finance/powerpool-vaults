@@ -33,7 +33,7 @@ abstract contract AbstractConnector is IRouterConnector {
     uint256 performance
   );
 
-  constructor (uint256 _lockedProfitDegradation) public {
+  constructor(uint256 _lockedProfitDegradation) public {
     LOCKED_PROFIT_DEGRADATION = _lockedProfitDegradation;
   }
 
@@ -49,12 +49,26 @@ abstract contract AbstractConnector is IRouterConnector {
   /**
    * @notice Distributes an underlying token reward received in the same tx earlier.
    */
-  function _distributeReward(DistributeData memory _distributeData, WrappedPiErc20Interface _piToken, IERC20 _token, uint256 _totalReward) internal returns (bytes memory rewardsData) {
-    (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackRewardsData(_distributeData.rewardsData);
+  function _distributeReward(
+    DistributeData memory _distributeData,
+    WrappedPiErc20Interface _piToken,
+    IERC20 _token,
+    uint256 _totalReward
+  ) internal returns (bytes memory rewardsData) {
+    (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackRewardsData(
+      _distributeData.rewardsData
+    );
     uint256 pvpReward;
     uint256 piTokenReward;
     // Step #1. Distribute pvpReward
-    (pvpReward, piTokenReward, performanceFeeDebt) = _distributePerformanceFee(_distributeData.performanceFee, _distributeData.performanceFeeReceiver, performanceFeeDebt, _piToken, _token, _totalReward);
+    (pvpReward, piTokenReward, performanceFeeDebt) = _distributePerformanceFee(
+      _distributeData.performanceFee,
+      _distributeData.performanceFeeReceiver,
+      performanceFeeDebt,
+      _piToken,
+      _token,
+      _totalReward
+    );
     require(piTokenReward > 0, "NO_POOL_REWARDS_UNDERLYING");
 
     // Step #2 Reset lockedProfit
@@ -69,9 +83,20 @@ abstract contract AbstractConnector is IRouterConnector {
     return packRewardsData(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
-  function _distributePerformanceFee(uint256 _performanceFee, address _performanceFeeReceiver, uint256 _performanceFeeDebt, WrappedPiErc20Interface _piToken, IERC20 _underlying, uint256 _totalReward)
-  internal
-  returns (uint256 performance, uint256 remainder, uint256 resultPerformanceFeeDebt)
+  function _distributePerformanceFee(
+    uint256 _performanceFee,
+    address _performanceFeeReceiver,
+    uint256 _performanceFeeDebt,
+    WrappedPiErc20Interface _piToken,
+    IERC20 _underlying,
+    uint256 _totalReward
+  )
+    internal
+    returns (
+      uint256 performance,
+      uint256 remainder,
+      uint256 resultPerformanceFeeDebt
+    )
   {
     performance = 0;
     remainder = 0;
@@ -98,11 +123,23 @@ abstract contract AbstractConnector is IRouterConnector {
     }
   }
 
-  function packRewardsData(uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) public view returns (bytes memory) {
+  function packRewardsData(
+    uint256 lockedProfit,
+    uint256 lastRewardDistribution,
+    uint256 performanceFeeDebt
+  ) public view returns (bytes memory) {
     return abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
-  function unpackRewardsData(bytes memory _rewardsData) public view returns (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) {
+  function unpackRewardsData(bytes memory _rewardsData)
+    public
+    view
+    returns (
+      uint256 lockedProfit,
+      uint256 lastRewardDistribution,
+      uint256 performanceFeeDebt
+    )
+  {
     if (_rewardsData.length == 0 || keccak256(_rewardsData) == keccak256("")) {
       return (0, 0, 0);
     }
@@ -131,7 +168,12 @@ abstract contract AbstractConnector is IRouterConnector {
     address _to,
     uint256 _value
   ) internal {
-    bytes memory response = _piToken.callExternal(address(_token), IERC20.transfer.selector, abi.encode(_to, _value), 0);
+    bytes memory response = _piToken.callExternal(
+      address(_token),
+      IERC20.transfer.selector,
+      abi.encode(_to, _value),
+      0
+    );
 
     if (response.length > 0) {
       // Return data is optional
@@ -139,7 +181,5 @@ abstract contract AbstractConnector is IRouterConnector {
     }
   }
 
-  function initRouter(bytes memory) external override virtual {
-
-  }
+  function initRouter(bytes memory) external virtual override {}
 }

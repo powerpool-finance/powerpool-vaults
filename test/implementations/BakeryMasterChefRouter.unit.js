@@ -71,13 +71,17 @@ describe('BakeryMasterChefRouter Tests', () => {
       ),
     );
 
-    connector = await BakeryChefPowerIndexConnector.new(
-      bakeryChef.address,
-      bake.address,
-      piBake.address,
-    );
+    connector = await BakeryChefPowerIndexConnector.new(bakeryChef.address, bake.address, piBake.address);
 
-    await myRouter.setConnectorList([{connector: connector.address, share: ether(1), callBeforeAfterPoke: false, newConnector: true, connectorIndex: 0}]);
+    await myRouter.setConnectorList([
+      {
+        connector: connector.address,
+        share: ether(1),
+        callBeforeAfterPoke: false,
+        newConnector: true,
+        connectorIndex: 0,
+      },
+    ]);
 
     await piBake.changeRouter(myRouter.address, { from: stub });
     await bakeryChef.add(20306, bake.address, false);
@@ -108,7 +112,9 @@ describe('BakeryMasterChefRouter Tests', () => {
       describe('stake()', () => {
         it('should allow the owner staking any amount of reserve tokens', async () => {
           const res = await myRouter.stake('0', ether(2000), { from: piGov });
-          const stake = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Stake')[0];
+          const stake = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+            l => l.event === 'Stake',
+          )[0];
           assert.equal(stake.args.sender, piGov);
           assert.equal(stake.args.amount, ether(2000));
           assert.equal(await bake.balanceOf(piBake.address), ether('340'));
@@ -125,7 +131,9 @@ describe('BakeryMasterChefRouter Tests', () => {
       describe('redeem()', () => {
         it('should allow the owner redeeming any amount of reserve tokens', async () => {
           const res = await myRouter.redeem('0', ether(3000), { from: piGov });
-          const redeem = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Redeem')[0];
+          const redeem = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+            l => l.event === 'Redeem',
+          )[0];
           assert.equal(redeem.args.sender, piGov);
           assert.equal(redeem.args.amount, ether(3000));
           assert.equal(await bake.balanceOf(piBake.address), ether(5340));
@@ -177,7 +185,21 @@ describe('BakeryMasterChefRouter Tests', () => {
 
     it('should ignore rebalancing if the connector address is 0', async () => {
       await myRouter.redeem('0', ether(8000), { from: piGov });
-      await expectRevert(myRouter.setConnectorList([{connector: constants.ZERO_ADDRESS, share: ether(1), callBeforeAfterPoke: false, newConnector: false, connectorIndex: 0}], { from: piGov }), 'CONNECTOR_IS_NULL');
+      await expectRevert(
+        myRouter.setConnectorList(
+          [
+            {
+              connector: constants.ZERO_ADDRESS,
+              share: ether(1),
+              callBeforeAfterPoke: false,
+              newConnector: false,
+              connectorIndex: 0,
+            },
+          ],
+          { from: piGov },
+        ),
+        'CONNECTOR_IS_NULL',
+      );
     });
 
     describe('rebalancing intervals', () => {
@@ -254,7 +276,9 @@ describe('BakeryMasterChefRouter Tests', () => {
         assert.equal(await bake.balanceOf(piBake.address), ether(3000));
 
         const res = await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        const distributeRewards = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'DistributeReward')[0];
+        const distributeRewards = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+          l => l.event === 'DistributeReward',
+        )[0];
         assert.equal(distributeRewards.args.totalReward, ether('126.984126984'));
 
         assert.equal(await bake.balanceOf(bakeryChef.address), ether('51873.015873016000000000'));

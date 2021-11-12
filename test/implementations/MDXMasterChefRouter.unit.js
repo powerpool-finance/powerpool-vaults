@@ -57,13 +57,16 @@ describe('MDXMasterChefRouter Tests', () => {
       ),
     );
 
-    connector = await MDXChefPowerIndexConnector.new(
-      boardRoomMDX.address,
-      mdx.address,
-      piMdx.address,
-      '0'
-    );
-    await myRouter.setConnectorList([{connector: connector.address, share: ether(1), callBeforeAfterPoke: false, newConnector: true, connectorIndex: 0}]);
+    connector = await MDXChefPowerIndexConnector.new(boardRoomMDX.address, mdx.address, piMdx.address, '0');
+    await myRouter.setConnectorList([
+      {
+        connector: connector.address,
+        share: ether(1),
+        callBeforeAfterPoke: false,
+        newConnector: true,
+        connectorIndex: 0,
+      },
+    ]);
 
     await piMdx.changeRouter(myRouter.address, { from: stub });
     await boardRoomMDX.add(10000, mdx.address, true);
@@ -117,7 +120,9 @@ describe('MDXMasterChefRouter Tests', () => {
       describe('redeem()', () => {
         it('should allow the owner redeeming any amount of reserve tokens', async () => {
           const res = await myRouter.redeem('0', ether(3000), { from: piGov });
-          const redeem = MDXChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Redeem')[0];
+          const redeem = MDXChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+            l => l.event === 'Redeem',
+          )[0];
           assert.equal(redeem.args.sender, piGov);
           assert.equal(redeem.args.amount, ether(3000));
           assert.equal(await mdx.balanceOf(piMdx.address), ether('5010.2'));
@@ -196,7 +201,21 @@ describe('MDXMasterChefRouter Tests', () => {
 
     it('should ignore rebalancing if the staking address is 0', async () => {
       await myRouter.redeem('0', ether(8000), { from: piGov });
-      await expectRevert(myRouter.setConnectorList([{connector: constants.ZERO_ADDRESS, share: ether(1), callBeforeAfterPoke: false, newConnector: false, connectorIndex: 0}], { from: piGov }), 'CONNECTOR_IS_NULL');
+      await expectRevert(
+        myRouter.setConnectorList(
+          [
+            {
+              connector: constants.ZERO_ADDRESS,
+              share: ether(1),
+              callBeforeAfterPoke: false,
+              newConnector: false,
+              connectorIndex: 0,
+            },
+          ],
+          { from: piGov },
+        ),
+        'CONNECTOR_IS_NULL',
+      );
     });
 
     describe('rebalancing intervals', () => {
@@ -273,7 +292,9 @@ describe('MDXMasterChefRouter Tests', () => {
         assert.equal(await mdx.balanceOf(piMdx.address), ether(3000));
 
         const res = await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        const distributeRewards = MDXChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'DistributeReward')[0];
+        const distributeRewards = MDXChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+          l => l.event === 'DistributeReward',
+        )[0];
         assert.equal(distributeRewards.args.totalReward, ether('3.84'));
 
         assert.equal(await mdx.balanceOf(boardRoomMDX.address), ether('569196.160000000000000000'));

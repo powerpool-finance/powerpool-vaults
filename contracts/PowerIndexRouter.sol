@@ -22,7 +22,13 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   event IgnoreRebalancing(uint256 blockTimestamp, uint256 lastRebalancedAt, uint256 rebalancingInterval);
   event RewardPool(address indexed pool, uint256 amount);
   event SetPerformanceFee(uint256 performanceFee);
-  event SetConnector(IRouterConnector indexed connector, uint256 share, bool callBeforeAfterPoke, uint256 indexed connectorIndex, bool indexed isNewConnector);
+  event SetConnector(
+    IRouterConnector indexed connector,
+    uint256 share,
+    bool callBeforeAfterPoke,
+    uint256 indexed connectorIndex,
+    bool indexed isNewConnector
+  );
 
   struct BasicConfig {
     address poolRestrictions;
@@ -170,14 +176,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       ConnectorInput memory c = _connectorList[i];
 
       if (c.newConnector) {
-        connectors.push(Connector(
-          c.connector,
-          c.share,
-          c.callBeforeAfterPoke,
-          0,
-          new bytes(0),
-          new bytes(0)
-        ));
+        connectors.push(Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, new bytes(0), new bytes(0)));
         c.connectorIndex = connectors.length - 1;
       } else {
         connectors[c.connectorIndex].connector = c.connector;
@@ -238,7 +237,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function _rebalancePokeByConf(RebalanceConfig memory _conf, bool _claimAndDistributeRewards) internal {
-    bool shouldClaim = _claimAndDistributeRewards && connectors[_conf.connectorIndex].lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
+    bool shouldClaim = _claimAndDistributeRewards &&
+      connectors[_conf.connectorIndex].lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
 
     if (connectors[_conf.connectorIndex].callBeforeAfterPoke) {
       _beforePoke(connectors[_conf.connectorIndex], shouldClaim);
@@ -292,7 +292,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
     }
 
-    require(_canPoke(_isSlasher, atLeastOneForceRebalance, minInterval, maxInterval), "INTERVAL_NOT_REACHED_OR_NOT_FORCE");
+    require(
+      _canPoke(_isSlasher, atLeastOneForceRebalance, minInterval, maxInterval),
+      "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
+    );
 
     for (uint256 i = 0; i < connectors.length; i++) {
       if (configs[i].diff == 0) {
@@ -306,11 +309,19 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     lastRebalancedAt = block.timestamp;
   }
 
-  function _canPoke(bool _isSlasher, bool _forceRebalance, uint256 _minInterval, uint256 _maxInterval) internal returns (bool) {
+  function _canPoke(
+    bool _isSlasher,
+    bool _forceRebalance,
+    uint256 _minInterval,
+    uint256 _maxInterval
+  ) internal returns (bool) {
     if (_forceRebalance) {
       return true;
     }
-    return _isSlasher ? (lastRebalancedAt + _maxInterval < block.timestamp) : (lastRebalancedAt + _minInterval < block.timestamp);
+    return
+      _isSlasher
+        ? (lastRebalancedAt + _maxInterval < block.timestamp)
+        : (lastRebalancedAt + _minInterval < block.timestamp);
   }
 
   function _redeem(Connector storage c, uint256 diff) internal {
@@ -337,12 +348,21 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
   function _beforePoke(Connector storage c, bool _willClaimReward) internal {
     (bool success, bytes memory result) = address(c.connector).delegatecall(
-      abi.encodeWithSignature("beforePoke(bytes,(bytes,uint256,address),bool)", c.pokeData, _getDistributeData(c), _willClaimReward)
+      abi.encodeWithSignature(
+        "beforePoke(bytes,(bytes,uint256,address),bool)",
+        c.pokeData,
+        _getDistributeData(c),
+        _willClaimReward
+      )
     );
     require(success, string(result));
   }
 
-  function _afterPoke(Connector storage _c, StakeStatus _stakeStatus, bool _rewardClaimDone) internal {
+  function _afterPoke(
+    Connector storage _c,
+    StakeStatus _stakeStatus,
+    bool _rewardClaimDone
+  ) internal {
     (bool success, bytes memory result) = address(_c.connector).delegatecall(
       abi.encodeWithSignature("afterPoke(uint8,bool)", uint8(_stakeStatus), _rewardClaimDone)
     );
@@ -354,7 +374,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
   }
 
-  function _rebalancePoke(Connector storage _c, StakeStatus _stakeStatus, uint256 _diff) internal {
+  function _rebalancePoke(
+    Connector storage _c,
+    StakeStatus _stakeStatus,
+    uint256 _diff
+  ) internal {
     if (_stakeStatus == StakeStatus.EXCESS) {
       _redeem(_c, _diff);
     } else if (_stakeStatus == StakeStatus.SHORTAGE) {
@@ -409,7 +433,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   /*
    * @dev Getting status and diff of current staked balance and target stake balance.
    */
-  function getStakeStatus(uint256 _leftOnPiTokenBalance, uint256 _totalStakedBalance, uint256 _stakedBalance, uint256 _share)
+  function getStakeStatus(
+    uint256 _leftOnPiTokenBalance,
+    uint256 _totalStakedBalance,
+    uint256 _stakedBalance,
+    uint256 _share
+  )
     public
     view
     returns (
@@ -599,9 +628,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 _stakedBalance,
     uint256 _share
   ) public pure returns (uint256) {
-    return uint256(1 ether).sub(_reserveRatioPct).mul(
-      _stakedBalance.add(_leftOnPiToken).mul(_share).div(HUNDRED_PCT)
-    ).div(HUNDRED_PCT);
+    return
+      uint256(1 ether).sub(_reserveRatioPct).mul(_stakedBalance.add(_leftOnPiToken).mul(_share).div(HUNDRED_PCT)).div(
+        HUNDRED_PCT
+      );
   }
 
   function _getMinMaxReportInterval() internal view returns (uint256 min, uint256 max) {

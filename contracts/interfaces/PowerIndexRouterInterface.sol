@@ -11,7 +11,7 @@ interface PowerIndexRouterInterface {
     SHORTAGE
   }
 
-//  function setVotingAndStaking(address _voting, address _staking) external;
+  //  function setVotingAndStaking(address _voting, address _staking) external;
 
   function setReserveConfig(
     uint256 _reserveRatio,

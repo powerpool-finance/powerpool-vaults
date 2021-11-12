@@ -14,8 +14,11 @@ import "./AbstractMasterChefIndexConnector.sol";
 contract PancakeMasterChefIndexConnector is AbstractMasterChefIndexConnector {
   uint256 internal constant PANCAKE_POOL_ID = 0;
 
-  constructor(address _staking, address _underlying, address _piToken) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {
-  }
+  constructor(
+    address _staking,
+    address _underlying,
+    address _piToken
+  ) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {}
 
   /*** VIEWERS ***/
 

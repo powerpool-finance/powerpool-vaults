@@ -14,7 +14,12 @@ import "./AbstractMasterChefIndexConnector.sol";
 contract MasterChefPowerIndexConnector is AbstractMasterChefIndexConnector {
   uint256 public immutable MASTER_CHEF_PID;
 
-  constructor(address _staking, address _underlying, address _piToken, uint256 _masterChefPid) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {
+  constructor(
+    address _staking,
+    address _underlying,
+    address _piToken,
+    uint256 _masterChefPid
+  ) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {
     MASTER_CHEF_PID = _masterChefPid;
   }
 

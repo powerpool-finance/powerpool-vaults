@@ -14,8 +14,11 @@ import "./AbstractMasterChefIndexConnector.sol";
  *      instead of numerical pool IDs like in the majority of masterChef forks.
  */
 contract BakeryChefPowerIndexConnector is AbstractMasterChefIndexConnector {
-
-  constructor(address _staking, address _underlying, address _piToken) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {}
+  constructor(
+    address _staking,
+    address _underlying,
+    address _piToken
+  ) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {}
 
   /*** VIEWERS ***/
 

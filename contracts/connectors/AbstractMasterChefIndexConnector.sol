@@ -16,7 +16,12 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
   IERC20 public immutable UNDERLYING;
   WrappedPiErc20Interface public immutable PI_TOKEN;
 
-  constructor(address _staking, address _underlying, address _piToken) AbstractConnector(46e12) public { // 6 hours with 13ms block
+  constructor(
+    address _staking,
+    address _underlying,
+    address _piToken
+  ) public AbstractConnector(46e12) {
+    // 6 hours with 13ms block
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
@@ -24,7 +29,11 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
   /*** PERMISSIONLESS REWARD CLAIMING AND DISTRIBUTION ***/
 
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData) public override returns (bytes memory) {
+  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
+    public
+    override
+    returns (bytes memory)
+  {
     if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
       uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
       stake(0, _distributeData);
@@ -78,10 +87,17 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
   function _redeemImpl(uint256 _amount) internal virtual;
 
-  function beforePoke(bytes memory _pokeData, DistributeData memory _distributeData, bool _willClaimReward) external override {
+  function beforePoke(
+    bytes memory _pokeData,
+    DistributeData memory _distributeData,
+    bool _willClaimReward
+  ) external override {}
 
-  }
-  function afterPoke(PowerIndexRouterInterface.StakeStatus reserveStatus, bool _rewardClaimDone) override external returns (bytes memory) {
+  function afterPoke(PowerIndexRouterInterface.StakeStatus reserveStatus, bool _rewardClaimDone)
+    external
+    override
+    returns (bytes memory)
+  {
     return new bytes(0);
   }
 }
