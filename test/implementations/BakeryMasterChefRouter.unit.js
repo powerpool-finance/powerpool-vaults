@@ -1,8 +1,9 @@
 const { time, constants, expectEvent, expectRevert } = require('@openzeppelin/test-helpers');
 const { ether, artifactFromBytecode, latestBlockNumber } = require('./../helpers');
-const { buildBasicRouterConfig, buildBakeryChefRouterConfig } = require('./../helpers/builders');
+const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
-const BakeryChefPowerIndexRouter = artifacts.require('BakeryChefPowerIndexRouter');
+const BakeryChefPowerIndexConnector = artifacts.require('BakeryChefPowerIndexConnector');
+const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const PoolRestrictions = artifacts.require('PoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
@@ -10,7 +11,7 @@ const MockPoke = artifacts.require('MockPoke');
 const BakeryMasterChef = artifactFromBytecode('bsc/BakeryMasterChef');
 const BakeryToken = artifactFromBytecode('bsc/BakeryToken');
 
-BakeryChefPowerIndexRouter.numberFormat = 'String';
+BakeryChefPowerIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 
 const { web3 } = WrappedPiErc20;
@@ -18,13 +19,13 @@ const { web3 } = WrappedPiErc20;
 const REPORTER_ID = 42;
 
 describe('BakeryMasterChefRouter Tests', () => {
-  let deployer, bob, alice, piGov, stub, pvp, pool1, pool2;
+  let deployer, bob, alice, piGov, stub, pvp;
 
   before(async function () {
-    [deployer, bob, alice, piGov, stub, pvp, pool1, pool2] = await web3.eth.getAccounts();
+    [deployer, bob, alice, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
-  let bake, bakeryChef, poolRestrictions, piBake, myRouter, poke;
+  let bake, bakeryChef, poolRestrictions, piBake, myRouter, connector, poke;
 
   beforeEach(async function () {
     // bsc: 0xe02df9e3e622debdd69fb838bb799e3f168902c5
@@ -54,7 +55,7 @@ describe('BakeryMasterChefRouter Tests', () => {
     piBake = await WrappedPiErc20.new(bake.address, stub, 'Wrapped BAKE', 'piBAKE');
 
     poke = await MockPoke.new(true);
-    myRouter = await BakeryChefPowerIndexRouter.new(
+    myRouter = await PowerIndexRouter.new(
       piBake.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
@@ -67,10 +68,20 @@ describe('BakeryMasterChefRouter Tests', () => {
         '0',
         pvp,
         ether('0.15'),
-        [pool1, pool2],
       ),
-      buildBakeryChefRouterConfig(bake.address),
     );
+
+    connector = await BakeryChefPowerIndexConnector.new(bakeryChef.address, bake.address, piBake.address);
+
+    await myRouter.setConnectorList([
+      {
+        connector: connector.address,
+        share: ether(1),
+        callBeforeAfterPoke: false,
+        newConnector: true,
+        connectorIndex: 0,
+      },
+    ]);
 
     await piBake.changeRouter(myRouter.address, { from: stub });
     await bakeryChef.add(20306, bake.address, false);
@@ -100,11 +111,12 @@ describe('BakeryMasterChefRouter Tests', () => {
 
       describe('stake()', () => {
         it('should allow the owner staking any amount of reserve tokens', async () => {
-          const res = await myRouter.stake(ether(2000), { from: piGov });
-          expectEvent(res, 'Stake', {
-            sender: piGov,
-            amount: ether(2000),
-          });
+          const res = await myRouter.stake('0', ether(2000), { from: piGov });
+          const stake = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+            l => l.event === 'Stake',
+          )[0];
+          assert.equal(stake.args.sender, piGov);
+          assert.equal(stake.args.amount, ether(2000));
           assert.equal(await bake.balanceOf(piBake.address), ether('340'));
           assert.equal(await bake.balanceOf(bakeryChef.address), ether(10000));
           const userInfo = await bakeryChef.poolUserInfoMap(bake.address, piBake.address);
@@ -112,24 +124,25 @@ describe('BakeryMasterChefRouter Tests', () => {
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(myRouter.stake(ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(myRouter.stake('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
 
       describe('redeem()', () => {
         it('should allow the owner redeeming any amount of reserve tokens', async () => {
-          const res = await myRouter.redeem(ether(3000), { from: piGov });
-          expectEvent(res, 'Redeem', {
-            sender: piGov,
-            amount: ether(3000),
-          });
+          const res = await myRouter.redeem('0', ether(3000), { from: piGov });
+          const redeem = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+            l => l.event === 'Redeem',
+          )[0];
+          assert.equal(redeem.args.sender, piGov);
+          assert.equal(redeem.args.amount, ether(3000));
           assert.equal(await bake.balanceOf(piBake.address), ether(5340));
           const userInfo = await bakeryChef.poolUserInfoMap(bake.address, piBake.address);
           assert.equal(userInfo.amount, ether(5000));
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(myRouter.redeem(ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(myRouter.redeem('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
     });
@@ -170,16 +183,23 @@ describe('BakeryMasterChefRouter Tests', () => {
       assert.equal(await bake.balanceOf(piBake.address), ether(2000));
     });
 
-    it('should ignore rebalancing if the staking address is 0', async () => {
-      await myRouter.redeem(ether(8000), { from: piGov });
-      await myRouter.setVotingAndStaking(bakeryChef.address, constants.ZERO_ADDRESS, { from: piGov });
-
-      assert.equal(await bake.balanceOf(bakeryChef.address), ether('42736.507936512000000000'));
-      assert.equal(await bake.balanceOf(piBake.address), ether('10053.9682539648'));
-      assert.equal(await piBake.balanceOf(alice), ether(10000));
-      assert.equal(await piBake.totalSupply(), ether(10000));
-      await piBake.withdraw(ether(1000), { from: alice });
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'STAKING_IS_NULL');
+    it('should ignore rebalancing if the connector address is 0', async () => {
+      await myRouter.redeem('0', ether(8000), { from: piGov });
+      await expectRevert(
+        myRouter.setConnectorList(
+          [
+            {
+              connector: constants.ZERO_ADDRESS,
+              share: ether(1),
+              callBeforeAfterPoke: false,
+              newConnector: false,
+              connectorIndex: 0,
+            },
+          ],
+          { from: piGov },
+        ),
+        'CONNECTOR_IS_NULL',
+      );
     });
 
     describe('rebalancing intervals', () => {
@@ -195,7 +215,7 @@ describe('BakeryMasterChefRouter Tests', () => {
 
         await bake.approve(piBake.address, ether(1000), { from: alice });
         await piBake.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'MAX_INTERVAL_NOT_REACHED');
+        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
       });
 
       it('should DO rebalance by pokeFromSlasher if the rebalancing interval has passed', async () => {
@@ -226,8 +246,8 @@ describe('BakeryMasterChefRouter Tests', () => {
 
         await bake.approve(piBake.address, ether(1000), { from: alice });
         await piBake.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromReporter(0, false, '0x'), 'MIN_INTERVAL_NOT_REACHED');
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'MAX_INTERVAL_NOT_REACHED');
+        await expectRevert(myRouter.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
+        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
       });
 
       it('should NOT rebalance by pokeFromSlasher if the rebalancing interval has passed', async () => {
@@ -235,7 +255,7 @@ describe('BakeryMasterChefRouter Tests', () => {
 
         await bake.approve(piBake.address, ether(1000), { from: alice });
         await piBake.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'MAX_INTERVAL_NOT_REACHED');
+        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
       });
     });
 
@@ -256,9 +276,10 @@ describe('BakeryMasterChefRouter Tests', () => {
         assert.equal(await bake.balanceOf(piBake.address), ether(3000));
 
         const res = await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        expectEvent(res, 'DistributeReward', {
-          totalReward: ether('126.984126984'),
-        });
+        const distributeRewards = BakeryChefPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+          l => l.event === 'DistributeReward',
+        )[0];
+        assert.equal(distributeRewards.args.totalReward, ether('126.984126984'));
 
         assert.equal(await bake.balanceOf(bakeryChef.address), ether('51873.015873016000000000'));
         assert.equal((await bakeryChef.poolUserInfoMap(bake.address, piBake.address)).amount, ether(8800));

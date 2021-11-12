@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/PowerIndexNaiveRouterInterface.sol";
-import "./interfaces/PowerIndexBasicRouterInterface.sol";
+import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/WrappedPiErc20Interface.sol";
 
 contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
@@ -97,11 +97,11 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   }
 
   function getPiEquivalentForUnderlying(uint256 _underlyingAmount) public view override returns (uint256) {
-    return PowerIndexBasicRouterInterface(router).getPiEquivalentForUnderlying(_underlyingAmount, totalSupply());
+    return PowerIndexRouterInterface(router).getPiEquivalentForUnderlying(_underlyingAmount, totalSupply());
   }
 
   function getUnderlyingEquivalentForPi(uint256 _piAmount) public view override returns (uint256) {
-    return PowerIndexBasicRouterInterface(router).getUnderlyingEquivalentForPi(_piAmount, totalSupply());
+    return PowerIndexRouterInterface(router).getUnderlyingEquivalentForPi(_piAmount, totalSupply());
   }
 
   function balanceOfUnderlying(address account) external view override returns (uint256) {
