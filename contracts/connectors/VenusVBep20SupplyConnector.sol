@@ -37,7 +37,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
 
   /*** THE PROXIED METHOD EXECUTORS FOR VOTING ***/
 
-  function claimRewards(PowerIndexBasicRouterInterface.ReserveStatus, DistributeData memory _distributeData) public override returns (bytes memory) {
+  function claimRewards(PowerIndexRouterInterface.StakeStatus, DistributeData memory _distributeData) public override returns (bytes memory) {
     // #1. Claim XVS
     address[] memory holders = new address[](1);
     holders[0] = address(PI_TOKEN);
@@ -115,7 +115,7 @@ contract VenusVBep20SupplyConnector is AbstractConnector {
     }
   }
 
-  function afterPoke(PowerIndexBasicRouterInterface.ReserveStatus reserveStatus, bool _rewardClaimDone) public override returns (bytes memory) {
+  function afterPoke(PowerIndexRouterInterface.StakeStatus reserveStatus, bool _rewardClaimDone) public override returns (bytes memory) {
     return _packPokeData(getUnderlyingStaked());
   }
 

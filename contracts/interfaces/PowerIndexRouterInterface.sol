@@ -4,11 +4,11 @@ pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-interface PowerIndexBasicRouterInterface {
-  enum ReserveStatus {
+interface PowerIndexRouterInterface {
+  enum StakeStatus {
     EQUILIBRIUM,
-    SHORTAGE,
-    EXCESS
+    EXCESS,
+    SHORTAGE
   }
 
 //  function setVotingAndStaking(address _voting, address _staking) external;

@@ -290,7 +290,7 @@ describe('PancakeMasterChefRouter Tests', () => {
     });
   });
 
-  describe.only('two connectors', () => {
+  describe('two connectors', () => {
     let secondConnector, secondMasterChef;
 
     async function addSecondConnector() {
@@ -380,6 +380,55 @@ describe('PancakeMasterChefRouter Tests', () => {
       assert.equal(stakes[0].args.staking, secondMasterChef.address);
       assert.equal(stakes[0].args.underlying, cake.address);
       assert.equal(stakes[0].args.amount, ether(4800));
+
+      await myRouter.setConnector('0', connector.address, ether(0.9), false, {from: piGov});
+      await myRouter.setConnector('1', secondConnector.address, ether(0.1), false, {from: piGov});
+
+      res = await myRouter.pokeFromReporter(REPORTER_ID, false, '0x', {from: bob});
+
+      assert.equal(await cake.balanceOf(piCake.address), ether(2139.39723719944));
+      assert.equal(await cake.balanceOf(masterChef.address), ether(7242.836835338208));
+      assert.equal(await cake.balanceOf(secondMasterChef.address), ether(804.759648370912));
+      assert.equal((await masterChef.userInfo(0, piCake.address)).amount, ether(7242.836835338208));
+      assert.equal((await secondMasterChef.userInfo(0, piCake.address)).amount, ether(804.759648370912));
+
+      redeems = PancakeMasterChefIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Redeem');
+      assert.equal(redeems.length, 1);
+      assert.equal(redeems[0].args.sender, bob);
+      assert.equal(redeems[0].args.staking, secondMasterChef.address);
+      assert.equal(redeems[0].args.underlying, cake.address);
+      assert.equal(redeems[0].args.amount, ether(3995.240351629088));
+
+      stakes = PancakeMasterChefIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Stake');
+      assert.equal(stakes.length, 1);
+      assert.equal(stakes[0].args.sender, bob);
+      assert.equal(stakes[0].args.staking, masterChef.address);
+      assert.equal(stakes[0].args.underlying, cake.address);
+      assert.equal(stakes[0].args.amount, ether(4042.836835338208));
+
+      await cake.transfer(alice, ether('10000'));
+      await cake.approve(piCake.address, ether('10000'), {from: alice});
+      await piCake.deposit(ether('10000'), {from: alice});
+
+      res = await myRouter.pokeFromReporter(REPORTER_ID, false, '0x', {from: bob});
+
+      assert.equal(await cake.balanceOf(piCake.address), ether('4207.39623254213669644'));
+      assert.equal(await cake.balanceOf(masterChef.address), ether('14534.6354790541632'));
+      assert.equal(await cake.balanceOf(secondMasterChef.address), ether('1614.9594976726848'));
+      assert.equal((await masterChef.userInfo(0, piCake.address)).amount, ether('14534.6354790541632'));
+      assert.equal((await secondMasterChef.userInfo(0, piCake.address)).amount, ether('1614.9594976726848'));
+
+      stakes = PancakeMasterChefIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'Stake');
+      assert.equal(stakes.length, 2);
+      assert.equal(stakes[0].args.sender, bob);
+      assert.equal(stakes[0].args.staking, masterChef.address);
+      assert.equal(stakes[0].args.underlying, cake.address);
+      assert.equal(stakes[0].args.amount, ether('7291.7986437159552'));
+
+      assert.equal(stakes[1].args.sender, bob);
+      assert.equal(stakes[1].args.staking, secondMasterChef.address);
+      assert.equal(stakes[1].args.underlying, cake.address);
+      assert.equal(stakes[1].args.amount, ether('810.1998493017728'));
     });
   });
 });

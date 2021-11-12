@@ -24,7 +24,7 @@ const { web3 } = MockERC20;
 
 const REPORTER_ID = 42;
 
-describe.skip('VenusRouter Tests', () => {
+describe('VenusRouter Tests', () => {
   let bob, alice, charlie, venusOwner, piGov, stub, pvp;
 
   before(async function () {
@@ -310,7 +310,7 @@ describe.skip('VenusRouter Tests', () => {
 
       it('should revert rebalancing if the staking address is 0', async () => {
         await venusRouter.redeem('0', ether(8000), { from: piGov });
-        await venusRouter.setConnector('0', constants.ZERO_ADDRESS, false, { from: piGov });
+        await venusRouter.setConnector('0', constants.ZERO_ADDRESS, ether(1), false, { from: piGov });
 
         await expectRevert(piUsdc.withdraw(ether(1000), { from: alice }), 'CONNECTOR_IS_NULL');
       });
@@ -465,7 +465,7 @@ describe.skip('VenusRouter Tests', () => {
         await usdc.approve(piUsdc.address, ether(1000), { from: alice });
         await piUsdc.deposit(ether(1000), { from: alice });
 
-        assert.equal(await venusRouter.getReserveStatusForStakedBalance(ether(1)).then(s => s.forceRebalance), false);
+        assert.equal(await venusRouter.getStakeStatusForBalance(ether(8000), ether(1)).then(s => s.forceRebalance), false);
         await expectRevert(venusRouter.pokeFromReporter('0', false, '0x', { from: bob }), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
 
         await time.increase(60);
@@ -474,11 +474,11 @@ describe.skip('VenusRouter Tests', () => {
       });
 
       it('should rebalance if the rebalancing interval not passed but reserveRatioToForceRebalance has reached', async () => {
-        await time.increase(time.duration.minutes(59));
+        await time.increase(time.duration.minutes(60));
 
-        assert.equal(await venusRouter.getReserveStatusForStakedBalance(ether(1)).then(s => s.forceRebalance), false);
+        assert.equal(await venusRouter.getStakeStatusForBalance(ether('8000'), ether(1)).then(s => s.forceRebalance), false);
+        assert.equal(await venusRouter.getStakeStatusForBalance(ether('3000'), ether(1)).then(s => s.forceRebalance), true);
         await piUsdc.withdraw(ether(2000), { from: alice });
-        assert.equal(await venusRouter.getReserveStatusForStakedBalance(ether(1)).then(s => s.forceRebalance), true);
         await venusRouter.pokeFromReporter('0', false, '0x', { from: bob });
 
         assert.equal(await usdc.balanceOf(vUsdc.address), ether(48400));

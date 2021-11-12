@@ -24,8 +24,8 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
   /*** PERMISSIONLESS REWARD CLAIMING AND DISTRIBUTION ***/
 
-  function claimRewards(PowerIndexBasicRouterInterface.ReserveStatus _status, DistributeData memory _distributeData) public override returns (bytes memory) {
-    if (_status == PowerIndexBasicRouterInterface.ReserveStatus.EQUILIBRIUM) {
+  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData) public override returns (bytes memory) {
+    if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
       uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
       stake(0, _distributeData);
       uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
@@ -87,7 +87,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
   function beforePoke(bytes memory _pokeData, DistributeData memory _distributeData, bool _willClaimReward) external override {
 
   }
-  function afterPoke(PowerIndexBasicRouterInterface.ReserveStatus reserveStatus, bool _rewardClaimDone) override external returns (bytes memory) {
+  function afterPoke(PowerIndexRouterInterface.StakeStatus reserveStatus, bool _rewardClaimDone) override external returns (bytes memory) {
     return new bytes(0);
   }
 }
