@@ -10,7 +10,6 @@ import "./interfaces/IPoolRestrictions.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
 import "./PowerIndexNaiveRouter.sol";
-import "hardhat/console.sol";
 
 contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   using SafeERC20 for IERC20;
@@ -241,23 +240,16 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
-    console.log("");
-    console.log("_pokeFrom");
-
     (uint256 minInterval, uint256 maxInterval) = _getMinMaxReportInterval();
 
     uint256 piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
     (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
-    console.log("piTokenUnderlyingBalance", piTokenUnderlyingBalance);
-    console.log("totalStakedBalance      ", totalStakedBalance);
 
     bool atLeastOneForceRebalance = false;
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
     for (uint256 i = 0; i < connectors.length; i++) {
-      console.log("");
-      console.log("connector", i + 1);
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
 
       (StakeStatus status, uint256 diff, bool forceRebalance) = getStakeStatus(
@@ -269,8 +261,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       if (forceRebalance) {
         atLeastOneForceRebalance = true;
       }
-      console.log("status", uint256(status));
-      console.log("diff", diff);
 
       if (status == StakeStatus.EXCESS) {
         if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
@@ -280,8 +270,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         configs[i] = RebalanceConfig(status, diff, forceRebalance, i);
       }
     }
-
-    console.log("piToken.getUnderlyingBalance()", piToken.getUnderlyingBalance());
 
     require(_canPoke(_isSlasher, atLeastOneForceRebalance, minInterval, maxInterval), "INTERVAL_NOT_REACHED_OR_NOT_FORCE");
 
@@ -310,7 +298,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     );
     require(success, string(result));
     result = abi.decode(result, (bytes));
-    if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
+    if (result.length > 0) {
       c.stakeData = result;
     }
   }
@@ -321,7 +309,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     );
     require(success, string(result));
     result = abi.decode(result, (bytes));
-    if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
+    if (result.length > 0) {
       c.stakeData = result;
     }
   }
@@ -333,10 +321,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     require(success, string(result));
   }
 
-  function _getDistributeData(Connector storage c) internal returns (IRouterConnector.DistributeData memory) {
-    return IRouterConnector.DistributeData(c.stakeData, performanceFee, performanceFeeReceiver);
-  }
-
   function _afterPoke(Connector storage _c, StakeStatus _stakeStatus, bool _rewardClaimDone) internal {
     (bool success, bytes memory result) = address(_c.connector).delegatecall(
       abi.encodeWithSignature("afterPoke(uint8,bool)", uint8(_stakeStatus), _rewardClaimDone)
@@ -344,7 +328,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     require(success, string(result));
     //    require(success, "CONNECTOR_REDEEM_FAILED");
     result = abi.decode(result, (bytes));
-    if (result.length > 0 && keccak256(result) != keccak256(new bytes(0))) {
+    if (result.length > 0) {
       _c.pokeData = result;
     }
   }
@@ -373,8 +357,17 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    *      interacting with a protocol. For ex. MasterChef distributes rewards on each `deposit()/withdraw()` action
    *      and there is no use in calling `_claimRewards()` immediately after calling one of these methods.
    */
-  function _claimRewards(Connector storage c, StakeStatus _reserveStatus) internal {
-    c.connector.claimRewards(_reserveStatus, _getDistributeData(c));
+  function _claimRewards(Connector storage c, StakeStatus _stakeStatus) internal {
+    c.connector.claimRewards(_stakeStatus, _getDistributeData(c));
+  }
+
+  function _reward(
+    uint256 _reporterId,
+    uint256 _gasStart,
+    uint256 _compensationPlan,
+    bytes calldata _rewardOpts
+  ) internal {
+    powerPoke.reward(_reporterId, _gasStart.sub(gasleft()), _compensationPlan, _rewardOpts);
   }
 
   /*
@@ -418,9 +411,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
 
     uint256 denominator = _leftOnPiTokenBalance.add(_totalStakedBalance);
-    console.log("denominator          ", denominator);
-    console.log("_leftOnPiTokenBalance", _leftOnPiTokenBalance);
-    console.log("diff                 ", diff);
 
     if (status == StakeStatus.EXCESS) {
       uint256 numerator = _leftOnPiTokenBalance.add(diff).mul(HUNDRED_PCT);
@@ -456,7 +446,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     return (underlyingStakedList, total);
   }
 
-
   function getUnderlyingReserve() public view returns (uint256) {
     return underlying.balanceOf(address(piToken));
   }
@@ -487,13 +476,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     override
     returns (uint256)
   {
-    return
-      getPiEquivalentForUnderlyingPure(
-        _underlyingAmount,
-        // underlyingOnPiToken + underlyingOnStaking - lockedProfit,
-        getUnderlyingAvailable(),
-        _piTotalSupply
-      );
+    return getPiEquivalentForUnderlyingPure(_underlyingAmount, getUnderlyingAvailable(), _piTotalSupply);
   }
 
   function getPiEquivalentForUnderlyingPure(
@@ -515,13 +498,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     override
     returns (uint256)
   {
-    return
-      getUnderlyingEquivalentForPiPure(
-        _piAmount,
-        // underlyingOnPiToken + underlyingOnStaking - lockedProfit,
-        getUnderlyingAvailable(),
-        _piTotalSupply
-      );
+    return getUnderlyingEquivalentForPiPure(_piAmount, getUnderlyingAvailable(), _piTotalSupply);
   }
 
   function getUnderlyingEquivalentForPiPure(
@@ -606,16 +583,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     ).div(HUNDRED_PCT);
   }
 
-  function _reward(
-    uint256 _reporterId,
-    uint256 _gasStart,
-    uint256 _compensationPlan,
-    bytes calldata _rewardOpts
-  ) internal {
-    powerPoke.reward(_reporterId, _gasStart.sub(gasleft()), _compensationPlan, _rewardOpts);
-  }
-
   function _getMinMaxReportInterval() internal view returns (uint256 min, uint256 max) {
     return powerPoke.getMinMaxReportIntervals(address(this));
+  }
+
+  function _getDistributeData(Connector storage c) internal view returns (IRouterConnector.DistributeData memory) {
+    return IRouterConnector.DistributeData(c.stakeData, performanceFee, performanceFeeReceiver);
   }
 }

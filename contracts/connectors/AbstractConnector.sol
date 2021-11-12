@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 
 import "../interfaces/WrappedPiErc20Interface.sol";
 import "../interfaces/IRouterConnector.sol";
-import "hardhat/console.sol";
 
 abstract contract AbstractConnector is IRouterConnector {
   using SafeMath for uint256;
@@ -100,18 +99,10 @@ abstract contract AbstractConnector is IRouterConnector {
   }
 
   function packRewardsData(uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) public view returns (bytes memory) {
-    console.log("lockedProfit", lockedProfit);
-    console.log("lastRewardDistribution", lastRewardDistribution);
-    console.log("performanceFeeDebt", performanceFeeDebt);
-    console.log(string(abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt)));
-    console.log("packRewardsData.length", abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt).length);
     return abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
   function unpackRewardsData(bytes memory _rewardsData) public view returns (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) {
-    console.log("_rewardsData.length", _rewardsData.length);
-    console.log("keccak256", keccak256(_rewardsData) == keccak256(""));
-    console.log(string(_rewardsData));
     if (_rewardsData.length == 0 || keccak256(_rewardsData) == keccak256("")) {
       return (0, 0, 0);
     }
@@ -125,10 +116,6 @@ abstract contract AbstractConnector is IRouterConnector {
 
   function calculateLockedProfit(uint256 lockedProfit, uint256 lastRewardDistribution) public view returns (uint256) {
     uint256 lockedFundsRatio = (block.timestamp.sub(lastRewardDistribution)).mul(LOCKED_PROFIT_DEGRADATION);
-    console.log("block.timestamp       ", block.timestamp);
-    console.log("lastRewardDistribution", lastRewardDistribution);
-    console.log("lockedFundsRatio       ", lockedFundsRatio);
-    console.log("DEGRADATION_COEFFICIENT", DEGRADATION_COEFFICIENT);
 
     if (lockedFundsRatio < DEGRADATION_COEFFICIENT) {
       uint256 currentLockedProfit = lockedProfit;
