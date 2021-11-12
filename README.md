@@ -1,9 +1,9 @@
-# PowerIndex Routers
+# PowerIndex Vaults
 
 ![CI](https://github.com/powerpool-finance/powerindex-routers/workflows/CI/badge.svg)
 [![codecov](https://codecov.io/gh/powerpool-finance/powerindex-routers/branch/master/graph/badge.svg)](https://codecov.io/gh/powerpool-finance/powerindex-routers)
 
-This repository contains PowerIndex router smart contracts.
+Smart vaults for DeFI protocols in different ecosystems with automatic rewards claim and compounding
 
 ## Testing and Development
 
