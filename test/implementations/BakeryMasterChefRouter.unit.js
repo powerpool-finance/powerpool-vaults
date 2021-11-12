@@ -77,7 +77,7 @@ describe('BakeryMasterChefRouter Tests', () => {
       piBake.address,
     );
 
-    await myRouter.addConnector(connector.address, ether(1), false);
+    await myRouter.setConnectorList([{connector: connector.address, share: ether(1), callBeforeAfterPoke: false, newConnector: true, connectorIndex: 0}]);
 
     await piBake.changeRouter(myRouter.address, { from: stub });
     await bakeryChef.add(20306, bake.address, false);
@@ -177,13 +177,7 @@ describe('BakeryMasterChefRouter Tests', () => {
 
     it('should ignore rebalancing if the connector address is 0', async () => {
       await myRouter.redeem('0', ether(8000), { from: piGov });
-      await myRouter.setConnector('0', constants.ZERO_ADDRESS, ether(1), false, { from: piGov });
-
-      assert.equal(await bake.balanceOf(bakeryChef.address), ether('42736.507936512000000000'));
-      assert.equal(await bake.balanceOf(piBake.address), ether('10053.9682539648'));
-      assert.equal(await piBake.balanceOf(alice), ether(10000));
-      assert.equal(await piBake.totalSupply(), ether(10000));
-      await expectRevert(piBake.withdraw(ether(1000), { from: alice }), 'CONNECTOR_IS_NULL');
+      await expectRevert(myRouter.setConnectorList([{connector: constants.ZERO_ADDRESS, share: ether(1), callBeforeAfterPoke: false, newConnector: false, connectorIndex: 0}], { from: piGov }), 'CONNECTOR_IS_NULL');
     });
 
     describe('rebalancing intervals', () => {

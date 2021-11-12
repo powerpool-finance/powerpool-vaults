@@ -22,6 +22,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   event IgnoreRebalancing(uint256 blockTimestamp, uint256 lastRebalancedAt, uint256 rebalancingInterval);
   event RewardPool(address indexed pool, uint256 amount);
   event SetPerformanceFee(uint256 performanceFee);
+  event SetConnector(IRouterConnector indexed connector, uint256 share, bool callBeforeAfterPoke, uint256 indexed connectorIndex, bool indexed isNewConnector);
 
   struct BasicConfig {
     address poolRestrictions;
@@ -73,6 +74,14 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     bytes pokeData;
   }
   Connector[] public connectors;
+
+  struct ConnectorInput {
+    bool newConnector;
+    uint256 connectorIndex;
+    IRouterConnector connector;
+    uint256 share;
+    bool callBeforeAfterPoke;
+  }
 
   modifier onlyPiToken() {
     require(msg.sender == address(piToken), "ONLY_PI_TOKEN_ALLOWED");
@@ -154,21 +163,31 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     piToken.setEthFee(_ethFee);
   }
 
-  function addConnector(IRouterConnector _connector, uint256 _share, bool _callBeforeAfterPoke) external onlyOwner {
-    connectors.push(Connector(
-        _connector,
-        _share,
-        _callBeforeAfterPoke,
-        0,
-        new bytes(0),
-        new bytes(0)
-    ));
-  }
+  function setConnectorList(ConnectorInput[] memory _connectorList) external onlyOwner {
+    require(_connectorList.length != 0, "CONNECTORS_LENGTH_CANT_BE_NULL");
 
-  function setConnector(uint256 _connectorIndex, address _connectorAddress, uint256 _share, bool _callBeforeAfterPoke) external onlyOwner {
-    connectors[_connectorIndex].connector = IRouterConnector(_connectorAddress);
-    connectors[_connectorIndex].callBeforeAfterPoke = _callBeforeAfterPoke;
-    connectors[_connectorIndex].share = _share;
+    for (uint256 i = 0; i < _connectorList.length; i++) {
+      ConnectorInput memory c = _connectorList[i];
+
+      if (c.newConnector) {
+        connectors.push(Connector(
+          c.connector,
+          c.share,
+          c.callBeforeAfterPoke,
+          0,
+          new bytes(0),
+          new bytes(0)
+        ));
+        c.connectorIndex = connectors.length - 1;
+      } else {
+        connectors[c.connectorIndex].connector = c.connector;
+        connectors[c.connectorIndex].share = c.share;
+        connectors[c.connectorIndex].callBeforeAfterPoke = c.callBeforeAfterPoke;
+      }
+
+      emit SetConnector(c.connector, c.share, c.callBeforeAfterPoke, c.connectorIndex, c.newConnector);
+    }
+    _checkConnectorsTotalShare();
   }
 
   function setPiTokenNoFee(address _for, bool _noFee) external onlyOwner {
@@ -250,7 +269,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
     for (uint256 i = 0; i < connectors.length; i++) {
-      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
+      if (connectors[i].share == 0) {
+        continue;
+      }
 
       (StakeStatus status, uint256 diff, bool forceRebalance) = getStakeStatus(
         piTokenUnderlyingBalance,
@@ -589,5 +610,14 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
   function _getDistributeData(Connector storage c) internal view returns (IRouterConnector.DistributeData memory) {
     return IRouterConnector.DistributeData(c.stakeData, performanceFee, performanceFeeReceiver);
+  }
+
+  function _checkConnectorsTotalShare() internal view {
+    uint256 totalShare = 0;
+    for (uint256 i = 0; i < connectors.length; i++) {
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
+      totalShare = totalShare.add(connectors[i].share);
+    }
+    require(totalShare == HUNDRED_PCT, "TOTAL_SHARE_IS_NOT_HUNDRED_PCT");
   }
 }

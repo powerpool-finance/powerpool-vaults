@@ -63,7 +63,7 @@ describe('MDXMasterChefRouter Tests', () => {
       piMdx.address,
       '0'
     );
-    await myRouter.addConnector(connector.address, ether(1), false);
+    await myRouter.setConnectorList([{connector: connector.address, share: ether(1), callBeforeAfterPoke: false, newConnector: true, connectorIndex: 0}]);
 
     await piMdx.changeRouter(myRouter.address, { from: stub });
     await boardRoomMDX.add(10000, mdx.address, true);
@@ -196,13 +196,7 @@ describe('MDXMasterChefRouter Tests', () => {
 
     it('should ignore rebalancing if the staking address is 0', async () => {
       await myRouter.redeem('0', ether(8000), { from: piGov });
-      await myRouter.setConnector('0', constants.ZERO_ADDRESS, ether(1), false, { from: piGov });
-
-      assert.equal(await mdx.balanceOf(boardRoomMDX.address), ether('560398.080000000000000000'));
-      assert.equal(await mdx.balanceOf(piMdx.address), ether('10001.632'));
-      assert.equal(await piMdx.balanceOf(alice), ether(10000));
-      assert.equal(await piMdx.totalSupply(), ether(10000));
-      await expectRevert(piMdx.withdraw(ether(1000), { from: alice }), 'CONNECTOR_IS_NULL');
+      await expectRevert(myRouter.setConnectorList([{connector: constants.ZERO_ADDRESS, share: ether(1), callBeforeAfterPoke: false, newConnector: false, connectorIndex: 0}], { from: piGov }), 'CONNECTOR_IS_NULL');
     });
 
     describe('rebalancing intervals', () => {

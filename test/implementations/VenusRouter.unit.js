@@ -141,7 +141,7 @@ describe('VenusRouter Tests', () => {
       piUsdc.address,
       unitroller.address,
     );
-    await venusRouter.addConnector(connector.address, ether(1), true);
+    await venusRouter.setConnectorList([{connector: connector.address, share: ether(1), callBeforeAfterPoke: true, newConnector: true, connectorIndex: 0}]);
 
     await piUsdc.changeRouter(venusRouter.address, { from: stub });
 
@@ -310,9 +310,7 @@ describe('VenusRouter Tests', () => {
 
       it('should revert rebalancing if the staking address is 0', async () => {
         await venusRouter.redeem('0', ether(8000), { from: piGov });
-        await venusRouter.setConnector('0', constants.ZERO_ADDRESS, ether(1), false, { from: piGov });
-
-        await expectRevert(piUsdc.withdraw(ether(1000), { from: alice }), 'CONNECTOR_IS_NULL');
+        await expectRevert(venusRouter.setConnectorList([{connector: constants.ZERO_ADDRESS, share: ether(1), callBeforeAfterPoke: false, newConnector: false, connectorIndex: 0}], { from: piGov }), 'CONNECTOR_IS_NULL');
       });
     });
 
