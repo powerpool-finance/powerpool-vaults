@@ -343,7 +343,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function _beforePoke(Connector storage c, bool _willClaimReward) internal {
-    (bool success,) = address(c.connector).delegatecall(
+    (bool success, ) = address(c.connector).delegatecall(
       abi.encodeWithSignature(
         "beforePoke(bytes,(bytes,uint256,address),bool)",
         c.pokeData,

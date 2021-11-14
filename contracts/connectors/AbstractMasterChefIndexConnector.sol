@@ -93,11 +93,10 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
     bool _willClaimReward
   ) external override {}
 
-  function afterPoke(PowerIndexRouterInterface.StakeStatus /*reserveStatus*/, bool /*_rewardClaimDone*/)
-    external
-    override
-    returns (bytes memory)
-  {
+  function afterPoke(
+    PowerIndexRouterInterface.StakeStatus, /*reserveStatus*/
+    bool /*_rewardClaimDone*/
+  ) external override returns (bytes memory) {
     return new bytes(0);
   }
 }
