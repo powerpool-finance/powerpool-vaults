@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.6.12;
 
 pragma experimental ABIEncoderV2;
@@ -127,13 +129,13 @@ abstract contract AbstractConnector is IRouterConnector {
     uint256 lockedProfit,
     uint256 lastRewardDistribution,
     uint256 performanceFeeDebt
-  ) public view returns (bytes memory) {
+  ) public pure returns (bytes memory) {
     return abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
   function unpackRewardsData(bytes memory _rewardsData)
     public
-    view
+    pure
     returns (
       uint256 lockedProfit,
       uint256 lastRewardDistribution,
@@ -180,6 +182,4 @@ abstract contract AbstractConnector is IRouterConnector {
       require(abi.decode(response, (bool)), "ERC20 operation did not succeed");
     }
   }
-
-  function initRouter(bytes memory) external virtual override {}
 }

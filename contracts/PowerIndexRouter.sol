@@ -51,16 +51,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   IPowerPoke public powerPoke;
   uint256 public reserveRatio;
   uint256 public claimRewardsInterval;
-  uint256 public lastClaimRewardsAt;
   uint256 public lastRebalancedAt;
   uint256 public reserveRatioLowerBound;
   uint256 public reserveRatioUpperBound;
   // 1 ether == 100%
   uint256 public performanceFee;
   uint256 public lastRewardDistribution;
-  uint256 public lockedProfitDegradation;
-  uint256 public lockedProfit;
-  uint256 public performanceFeeDebt;
 
   uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
 
@@ -314,7 +310,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     bool _forceRebalance,
     uint256 _minInterval,
     uint256 _maxInterval
-  ) internal returns (bool) {
+  ) internal view returns (bool) {
     if (_forceRebalance) {
       return true;
     }
@@ -347,7 +343,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function _beforePoke(Connector storage c, bool _willClaimReward) internal {
-    (bool success, bytes memory result) = address(c.connector).delegatecall(
+    (bool success, ) = address(c.connector).delegatecall(
       abi.encodeWithSignature(
         "beforePoke(bytes,(bytes,uint256,address),bool)",
         c.pokeData,
@@ -355,7 +351,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         _willClaimReward
       )
     );
-    require(success, string(result));
+    require(success, "_beforePoke call error");
   }
 
   function _afterPoke(
@@ -367,7 +363,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       abi.encodeWithSignature("afterPoke(uint8,bool)", uint8(_stakeStatus), _rewardClaimDone)
     );
     require(success, string(result));
-    //    require(success, "CONNECTOR_REDEEM_FAILED");
     result = abi.decode(result, (bytes));
     if (result.length > 0) {
       _c.pokeData = result;
@@ -487,7 +482,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
   function _getUnderlyingStakedList() internal view virtual returns (uint256[] memory list, uint256 total) {
     uint256[] memory underlyingStakedList = new uint256[](connectors.length);
-    uint256 total = 0;
+    total = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
       underlyingStakedList[i] = connectors[i].connector.getUnderlyingStaked();
@@ -588,7 +583,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 _share
   )
     public
-    view
+    pure
     returns (
       StakeStatus status,
       uint256 diff,

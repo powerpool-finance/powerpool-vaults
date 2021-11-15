@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.6.12;
 
 pragma experimental ABIEncoderV2;
@@ -32,6 +34,4 @@ interface IRouterConnector {
   function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
     external
     returns (bytes memory);
-
-  function initRouter(bytes memory) external;
 }

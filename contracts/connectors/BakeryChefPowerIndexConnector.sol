@@ -28,7 +28,7 @@ contract BakeryChefPowerIndexConnector is AbstractMasterChefIndexConnector {
 
   /*** OVERRIDES ***/
 
-  function getUnderlyingStaked() public view override returns (uint256) {
+  function getUnderlyingStaked() external view override returns (uint256) {
     if (STAKING == address(0)) {
       return 0;
     }
