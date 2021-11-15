@@ -60,10 +60,10 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     uint256 mintAmount = getPiEquivalentForUnderlying(_depositAmount);
     require(mintAmount > 0, "ZERO_PI_FOR_MINT");
 
-    underlying.safeTransferFrom(_msgSender(), address(this), _depositAmount);
-    _mint(_msgSender(), mintAmount);
+    underlying.safeTransferFrom(msg.sender, address(this), _depositAmount);
+    _mint(msg.sender, mintAmount);
 
-    emit Deposit(_msgSender(), _depositAmount, mintAmount);
+    emit Deposit(msg.sender, _depositAmount, mintAmount);
 
     PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, 0);
 
@@ -73,6 +73,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   /**
    * @notice Withdraws underlying token from the piToken
    * @param _withdrawAmount The amount to withdraw in underlying tokens
+   * @return The amount of the burned shares
    */
   function withdraw(uint256 _withdrawAmount) external payable override nonReentrant returns (uint256) {
     if (noFeeWhitelist[msg.sender]) {
@@ -88,12 +89,38 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     uint256 burnAmount = getPiEquivalentForUnderlying(_withdrawAmount);
     require(burnAmount > 0, "ZERO_PI_FOR_BURN");
 
-    _burn(_msgSender(), burnAmount);
-    underlying.safeTransfer(_msgSender(), _withdrawAmount);
+    _burn(msg.sender, burnAmount);
+    underlying.safeTransfer(msg.sender, _withdrawAmount);
 
-    emit Withdraw(_msgSender(), _withdrawAmount, burnAmount);
+    emit Withdraw(msg.sender, _withdrawAmount, burnAmount);
 
     return burnAmount;
+  }
+
+  /**
+   * @notice Withdraws underlying token from the piToken
+   * @param _burnAmount The amount of shares to burn
+   * @return The amount of the withdrawn underlying
+   */
+  function withdrawShares(uint256 _burnAmount) external payable override nonReentrant returns (uint256) {
+    if (noFeeWhitelist[msg.sender]) {
+      require(msg.value == 0, "NO_FEE_FOR_WL");
+    } else {
+      require(msg.value >= ethFee, "FEE");
+    }
+
+    require(_burnAmount > 0, "ZERO_WITHDRAWAL");
+
+    uint256 withdrawAmount = getUnderlyingEquivalentForPi(_burnAmount);
+    require(withdrawAmount > 0, "ZERO_UNDERLYING_TO_WITHDRAW");
+    PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, withdrawAmount);
+
+    _burn(msg.sender, _burnAmount);
+    underlying.safeTransfer(msg.sender, withdrawAmount);
+
+    emit Withdraw(msg.sender, withdrawAmount, _burnAmount);
+
+    return withdrawAmount;
   }
 
   function getPiEquivalentForUnderlying(uint256 _underlyingAmount) public view override returns (uint256) {
