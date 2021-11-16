@@ -6,49 +6,25 @@ pragma experimental ABIEncoderV2;
 import "../PowerIndexRouter.sol";
 import "../WrappedPiErc20.sol";
 
-abstract contract MockRouter is PowerIndexRouter {
+contract MockRouter is PowerIndexRouter {
   event MockWrapperCallback(uint256 withdrawAmount);
 
-  //  address public underlying;
-  //  address public mockStaking;
+    constructor(address _piToken, BasicConfig memory _basicConfig) public PowerIndexRouter(_piToken, _basicConfig) {}
 
-  //  constructor(address _piToken, BasicConfig memory _basicConfig) public PowerIndexBasicRouter(_piToken, _basicConfig) {}
+    function piTokenCallback(address, uint256 _withdrawAmount) external payable virtual override {
+      emit MockWrapperCallback(_withdrawAmount);
+    }
 
-  //  function _claimRewards(ReserveStatus _reserveStatus) internal override {
-  //    // do nothing
-  //  }
-  //
-  //  function _rebalancePoke(ReserveStatus reserveStatus, uint256 sushiDiff) internal override {
-  //    // do nothing
-  //  }
-  //
-  //  function _getUnderlyingReserve() internal view override returns (uint256) {
-  //    return 0;
-  //  }
-  //
-  //  function setMockStaking(address _underlying, address _mockStaking) external {
-  //    underlying = _underlying;
-  //    mockStaking = _mockStaking;
-  //  }
-  //
-  //  function _getUnderlyingStaked() internal view override returns (uint256) {
-  //    return 0;
-  //  }
-  //
-  //  function piTokenCallback(address, uint256 _withdrawAmount) external payable virtual override {
-  //    emit MockWrapperCallback(_withdrawAmount);
-  //  }
-  //
-  //  function execute(address destination, bytes calldata data) external {
-  //    destination.call(data);
-  //  }
-  //
-  //  function drip(address _to, uint256 _amount) external {
-  //    piToken.callExternal(
-  //      address(WrappedPiErc20(address(piToken)).underlying()),
-  //      IERC20(0).transfer.selector,
-  //      abi.encode(_to, _amount),
-  //      0
-  //    );
-  //  }
+    function execute(address destination, bytes calldata data) external {
+      destination.call(data);
+    }
+
+    function drip(address _to, uint256 _amount) external {
+      piToken.callExternal(
+        address(WrappedPiErc20(address(piToken)).underlying()),
+        IERC20(0).transfer.selector,
+        abi.encode(_to, _amount),
+        0
+      );
+    }
 }
