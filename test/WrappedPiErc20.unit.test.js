@@ -24,11 +24,11 @@ function signatureAndArgs(payload) {
 }
 
 describe('WrappedPiErc20 Unit Tests', () => {
-  let deployer, owner, alice, bob, stub, mockStaking;
-  let cake, router, piCake, myContract, defaultBasicConfig, connector, masterChef, syrupPool;
+  let deployer, alice, bob, stub, mockStaking;
+  let cake, router, piCake, myContract, defaultBasicConfig;
 
   beforeEach(async function () {
-    [deployer, owner, alice, bob, stub, mockStaking] = await web3.eth.getAccounts();
+    [deployer, alice, bob, stub, mockStaking] = await web3.eth.getAccounts();
     myContract = await MyContract.new();
     const poke = await MockPoke.new(true);
     defaultBasicConfig = buildBasicRouterConfig(
