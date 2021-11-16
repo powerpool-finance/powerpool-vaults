@@ -5,7 +5,7 @@ const assert = require('chai').assert;
 const BakeryChefPowerIndexConnector = artifacts.require('BakeryChefPowerIndexConnector');
 const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
-const PoolRestrictions = artifacts.require('PoolRestrictions');
+const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
 
 const BakeryMasterChef = artifactFromBytecode('bsc/BakeryMasterChef');
@@ -51,7 +51,7 @@ describe('BakeryMasterChefRouter Tests', () => {
     );
     await bake.mintTo(deployer, ether('10000000'));
 
-    poolRestrictions = await PoolRestrictions.new();
+    poolRestrictions = await MockPoolRestrictions.new();
     piBake = await WrappedPiErc20.new(bake.address, stub, 'Wrapped BAKE', 'piBAKE');
 
     poke = await MockPoke.new(true);
