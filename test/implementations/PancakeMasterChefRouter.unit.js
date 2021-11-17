@@ -6,7 +6,7 @@ const MockERC20 = artifacts.require('MockERC20');
 const PancakeMasterChefIndexConnector = artifacts.require('PancakeMasterChefIndexConnector');
 const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
-const PoolRestrictions = artifacts.require('PoolRestrictions');
+const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
 
 const PancakeMasterChef = artifactFromBytecode('bsc/PancakeMasterChef');
@@ -43,7 +43,7 @@ describe('PancakeMasterChefRouter Tests', () => {
       await latestBlockNumber(),
     );
 
-    poolRestrictions = await PoolRestrictions.new();
+    poolRestrictions = await MockPoolRestrictions.new();
     piCake = await WrappedPiErc20.new(cake.address, stub, 'Wrapped CAKE', 'piCAKE');
 
     poke = await MockPoke.new(true);

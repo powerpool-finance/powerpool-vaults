@@ -10,6 +10,8 @@ interface WrappedPiErc20Interface is IERC20 {
 
   function withdraw(uint256 _amount) external payable returns (uint256);
 
+  function withdrawShares(uint256 _burnAmount) external payable returns (uint256);
+
   function changeRouter(address _newRouter) external;
 
   function setNoFee(address _for, bool _noFee) external;

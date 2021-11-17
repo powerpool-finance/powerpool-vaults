@@ -5,7 +5,7 @@ const assert = require('chai').assert;
 const MDXChefPowerIndexConnector = artifacts.require('MasterChefPowerIndexConnector');
 const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
-const PoolRestrictions = artifacts.require('PoolRestrictions');
+const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
 
 const BoardRoomMDX = artifactFromBytecode('bsc/BoardRoomMDX');
@@ -36,7 +36,7 @@ describe('MDXMasterChefRouter Tests', () => {
     await mdx.addMinter(deployer);
     await mdx.mint(deployer, ether('10000000'));
 
-    poolRestrictions = await PoolRestrictions.new();
+    poolRestrictions = await MockPoolRestrictions.new();
     piMdx = await WrappedPiErc20.new(mdx.address, stub, 'Wrapped MDX', 'piMDX');
 
     poke = await MockPoke.new(true);

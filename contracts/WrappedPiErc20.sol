@@ -15,10 +15,18 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
+  bytes32 public constant PERMIT_TYPEHASH =
+    keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+  bytes public constant EIP712_REVISION = bytes("1");
+  bytes32 internal constant EIP712_DOMAIN =
+    keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
   IERC20 public immutable underlying;
+  bytes32 public immutable DOMAIN_SEPARATOR;
   address public router;
   uint256 public ethFee;
   mapping(address => bool) public noFeeWhitelist;
+  mapping(address => uint256) public _nonces;
 
   event Deposit(address indexed account, uint256 undelyingDeposited, uint256 piMinted);
   event Withdraw(address indexed account, uint256 underlyingWithdrawn, uint256 piBurned);
@@ -42,6 +50,16 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   ) public ERC20(_name, _symbol) {
     underlying = IERC20(_token);
     router = _router;
+
+    uint256 chainId;
+
+    assembly {
+      chainId := chainid()
+    }
+
+    DOMAIN_SEPARATOR = keccak256(
+      abi.encode(EIP712_DOMAIN, keccak256(bytes(_name)), keccak256(EIP712_REVISION), chainId, address(this))
+    );
   }
 
   /**
@@ -60,10 +78,10 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     uint256 mintAmount = getPiEquivalentForUnderlying(_depositAmount);
     require(mintAmount > 0, "ZERO_PI_FOR_MINT");
 
-    underlying.safeTransferFrom(_msgSender(), address(this), _depositAmount);
-    _mint(_msgSender(), mintAmount);
+    underlying.safeTransferFrom(msg.sender, address(this), _depositAmount);
+    _mint(msg.sender, mintAmount);
 
-    emit Deposit(_msgSender(), _depositAmount, mintAmount);
+    emit Deposit(msg.sender, _depositAmount, mintAmount);
 
     PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, 0);
 
@@ -73,6 +91,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   /**
    * @notice Withdraws underlying token from the piToken
    * @param _withdrawAmount The amount to withdraw in underlying tokens
+   * @return The amount of the burned shares
    */
   function withdraw(uint256 _withdrawAmount) external payable override nonReentrant returns (uint256) {
     if (noFeeWhitelist[msg.sender]) {
@@ -88,12 +107,38 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     uint256 burnAmount = getPiEquivalentForUnderlying(_withdrawAmount);
     require(burnAmount > 0, "ZERO_PI_FOR_BURN");
 
-    _burn(_msgSender(), burnAmount);
-    underlying.safeTransfer(_msgSender(), _withdrawAmount);
+    _burn(msg.sender, burnAmount);
+    underlying.safeTransfer(msg.sender, _withdrawAmount);
 
-    emit Withdraw(_msgSender(), _withdrawAmount, burnAmount);
+    emit Withdraw(msg.sender, _withdrawAmount, burnAmount);
 
     return burnAmount;
+  }
+
+  /**
+   * @notice Withdraws underlying token from the piToken
+   * @param _burnAmount The amount of shares to burn
+   * @return The amount of the withdrawn underlying
+   */
+  function withdrawShares(uint256 _burnAmount) external payable override nonReentrant returns (uint256) {
+    if (noFeeWhitelist[msg.sender]) {
+      require(msg.value == 0, "NO_FEE_FOR_WL");
+    } else {
+      require(msg.value >= ethFee, "FEE");
+    }
+
+    require(_burnAmount > 0, "ZERO_WITHDRAWAL");
+
+    uint256 withdrawAmount = getUnderlyingEquivalentForPi(_burnAmount);
+    require(withdrawAmount > 0, "ZERO_UNDERLYING_TO_WITHDRAW");
+    PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, withdrawAmount);
+
+    _burn(msg.sender, _burnAmount);
+    underlying.safeTransfer(msg.sender, withdrawAmount);
+
+    emit Withdraw(msg.sender, withdrawAmount, _burnAmount);
+
+    return withdrawAmount;
   }
 
   function getPiEquivalentForUnderlying(uint256 _underlyingAmount) public view override returns (uint256) {
@@ -161,6 +206,42 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
 
   function getUnderlyingBalance() external view override returns (uint256) {
     return underlying.balanceOf(address(this));
+  }
+
+  /**
+   * @dev implements the permit function as for
+   *      https://github.com/ethereum/EIPs/blob/8a34d644aacf0f9f8f00815307fd7dd5da07655f/EIPS/eip-2612.md
+   * @param owner the owner of the funds
+   * @param spender the spender
+   * @param value the amount
+   * @param deadline the deadline timestamp, type(uint256).max for no deadline
+   * @param v signature param
+   * @param s signature param
+   * @param r signature param
+   */
+  function permit(
+    address owner,
+    address spender,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) external {
+    require(owner != address(0), "INVALID_OWNER");
+    require(block.timestamp <= deadline, "INVALID_EXPIRATION");
+    uint256 currentValidNonce = _nonces[owner];
+    bytes32 digest = keccak256(
+      abi.encodePacked(
+        "\x19\x01",
+        DOMAIN_SEPARATOR,
+        keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, currentValidNonce, deadline))
+      )
+    );
+
+    require(owner == ecrecover(digest, v, r, s), "INVALID_SIGNATURE");
+    _nonces[owner] = currentValidNonce.add(1);
+    _approve(owner, spender, value);
   }
 
   function _callExternal(

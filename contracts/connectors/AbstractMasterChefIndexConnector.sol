@@ -9,8 +9,6 @@ import "./AbstractConnector.sol";
 abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
-  event IgnoreDueMissingStaking();
-  event ClaimRewards(address indexed sender, uint256 earned);
 
   address public immutable STAKING;
   IERC20 public immutable UNDERLYING;
