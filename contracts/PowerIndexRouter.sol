@@ -14,13 +14,10 @@ import "./PowerIndexNaiveRouter.sol";
 contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   using SafeERC20 for IERC20;
 
+  uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
   uint256 public constant HUNDRED_PCT = 1 ether;
 
-  event SetVotingAndStaking(address indexed voting, address indexed staking);
   event SetReserveConfig(uint256 ratio, uint256 ratioLowerBound, uint256 ratioUpperBound, uint256 claimRewardsInterval);
-  event SetRebalancingInterval(uint256 rebalancingInterval);
-  event IgnoreRebalancing(uint256 blockTimestamp, uint256 lastRebalancedAt, uint256 rebalancingInterval);
-  event RewardPool(address indexed pool, uint256 amount);
   event SetPerformanceFee(uint256 performanceFee);
   event SetConnector(
     IRouterConnector indexed connector,
@@ -33,8 +30,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   struct BasicConfig {
     address poolRestrictions;
     address powerPoke;
-    address voting;
-    address staking;
     uint256 reserveRatio;
     uint256 reserveRatioLowerBound;
     uint256 reserveRatioUpperBound;
@@ -56,9 +51,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   uint256 public reserveRatioUpperBound;
   // 1 ether == 100%
   uint256 public performanceFee;
-  uint256 public lastRewardDistribution;
-
-  uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
+  Connector[] public connectors;
 
   struct RebalanceConfig {
     StakeStatus status;
@@ -75,7 +68,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     bytes stakeData;
     bytes pokeData;
   }
-  Connector[] public connectors;
 
   struct ConnectorInput {
     bool newConnector;
@@ -129,8 +121,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     claimRewardsInterval = _basicConfig.claimRewardsInterval;
     performanceFeeReceiver = _basicConfig.performanceFeeReceiver;
     performanceFee = _basicConfig.performanceFee;
-
-    lastRewardDistribution = block.timestamp;
   }
 
   receive() external payable {}
