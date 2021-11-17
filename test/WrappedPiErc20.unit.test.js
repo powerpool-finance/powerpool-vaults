@@ -1,17 +1,24 @@
 const { expectEvent, expectRevert, constants } = require('@openzeppelin/test-helpers');
 const { buildBasicRouterConfig } = require('./helpers/builders');
-const { ether, expectExactRevert, splitPayload, toEvmBytes32  } = require('./helpers');
+const { ether, expectExactRevert, splitPayload, toEvmBytes32, latestBlockTimestamp } = require('./helpers');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockRouter = artifacts.require('MockRouter');
 const MyContract = artifacts.require('MyContract');
 const MockPoke = artifacts.require('MockPoke');
+const MockPermitUser = artifacts.require('MockPermitUser');
+const {
+    Eip2612PermitUtils,
+    Web3ProviderConnector, fromRpcSig,
+} = require('@1inch/permit-signed-approvals-utils');
 
 MyContract.numberFormat = 'String';
 MockERC20.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 MockRouter.numberFormat = 'String';
+
+const chainId = 31337;
 
 const { web3 } = MockERC20;
 
@@ -155,6 +162,47 @@ describe('WrappedPiErc20 Unit Tests', () => {
         'REVERTED_WITH_NO_REASON_STRING',
       );
     });
+  });
+
+  describe('permit', async () => {
+    beforeEach(async() => {
+      await cake.transfer(alice, ether(100));
+      await cake.approve(piCake.address, ether(100), { from: alice });
+      await piCake.deposit(ether(100), { from: alice });
+    });
+
+    it('should allow transfers by signature within a limit', async () => {
+      const permitUser = await MockPermitUser.new(piCake.address);
+      const deadline = (await latestBlockTimestamp()) + 10;
+      const permitParams = {
+        owner: alice,
+        spender: permitUser.address,
+        value: ether(100),
+        deadline,
+      };
+      const connector = new Web3ProviderConnector(web3);
+      const eip2612PermitUtils = new Eip2612PermitUtils(connector);
+      const signature = await eip2612PermitUtils.buildPermitSignature(
+        {
+          ...permitParams,
+          nonce: await eip2612PermitUtils.getTokenNonce(piCake.address, alice),
+        },
+        chainId,
+        'WrappedPiCAKE',
+        piCake.address,
+      );
+
+      const vrs = fromRpcSig(signature);
+      await permitUser.acceptTokens(alice, ether(100), deadline, vrs.v, vrs.r, vrs.s);
+
+      assert.equal(await piCake.balanceOf(alice), 0);
+      assert.equal(await piCake.balanceOf(permitUser.address), ether(100));
+
+      await expectRevert(
+        permitUser.acceptTokens(alice, ether(100), deadline, vrs.v, vrs.r, vrs.s),
+        'INVALID_SIGNATURE',
+      );
+    })
   });
 
   describe('deposit', async () => {

@@ -6,6 +6,16 @@ pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface WrappedPiErc20Interface is IERC20 {
+  function permit(
+    address owner,
+    address spender,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) external;
+
   function deposit(uint256 _amount) external payable returns (uint256);
 
   function withdraw(uint256 _amount) external payable returns (uint256);
