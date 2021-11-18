@@ -1,17 +1,24 @@
 const { expectEvent, expectRevert, constants } = require('@openzeppelin/test-helpers');
 const { buildBasicRouterConfig } = require('./helpers/builders');
-const { ether, expectExactRevert, splitPayload, toEvmBytes32  } = require('./helpers');
+const { ether, expectExactRevert, splitPayload, toEvmBytes32, latestBlockTimestamp } = require('./helpers');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockRouter = artifacts.require('MockRouter');
 const MyContract = artifacts.require('MyContract');
 const MockPoke = artifacts.require('MockPoke');
+const MockPermitUser = artifacts.require('MockPermitUser');
+const {
+    Eip2612PermitUtils,
+    Web3ProviderConnector, fromRpcSig,
+} = require('@1inch/permit-signed-approvals-utils');
 
 MyContract.numberFormat = 'String';
 MockERC20.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 MockRouter.numberFormat = 'String';
+
+const chainId = 31337;
 
 const { web3 } = MockERC20;
 
@@ -155,6 +162,47 @@ describe('WrappedPiErc20 Unit Tests', () => {
         'REVERTED_WITH_NO_REASON_STRING',
       );
     });
+  });
+
+  describe('permit', async () => {
+    beforeEach(async() => {
+      await cake.transfer(alice, ether(100));
+      await cake.approve(piCake.address, ether(100), { from: alice });
+      await piCake.deposit(ether(100), { from: alice });
+    });
+
+    it('should allow transfers by signature within a limit', async () => {
+      const permitUser = await MockPermitUser.new(piCake.address);
+      const deadline = (await latestBlockTimestamp()) + 10;
+      const permitParams = {
+        owner: alice,
+        spender: permitUser.address,
+        value: ether(100),
+        deadline,
+      };
+      const connector = new Web3ProviderConnector(web3);
+      const eip2612PermitUtils = new Eip2612PermitUtils(connector);
+      const signature = await eip2612PermitUtils.buildPermitSignature(
+        {
+          ...permitParams,
+          nonce: await eip2612PermitUtils.getTokenNonce(piCake.address, alice),
+        },
+        chainId,
+        'WrappedPiCAKE',
+        piCake.address,
+      );
+
+      const vrs = fromRpcSig(signature);
+      await permitUser.acceptTokens(alice, ether(100), deadline, vrs.v, vrs.r, vrs.s);
+
+      assert.equal(await piCake.balanceOf(alice), 0);
+      assert.equal(await piCake.balanceOf(permitUser.address), ether(100));
+
+      await expectRevert(
+        permitUser.acceptTokens(alice, ether(100), deadline, vrs.v, vrs.r, vrs.s),
+        'INVALID_SIGNATURE',
+      );
+    })
   });
 
   describe('deposit', async () => {
@@ -511,6 +559,208 @@ describe('WrappedPiErc20 Unit Tests', () => {
 
         // Withdraw
         const res = await piCake.withdraw(ether(200), { from: bob });
+
+        expectEvent(res, 'Withdraw', {
+          account: bob,
+          underlyingWithdrawn: ether(200),
+          piBurned: ether(100),
+        });
+
+        assert.equal(await cake.balanceOf(bob), ether(200));
+        assert.equal(await cake.balanceOf(piCake.address), ether(0));
+
+        assert.equal(await piCake.totalSupply(), ether(0));
+        assert.equal(await piCake.balanceOf(bob), ether(0));
+      });
+    });
+  });
+
+  describe('withdrawShares', async () => {
+    beforeEach(async () => {
+      await cake.transfer(alice, ether('10000'));
+    });
+
+    describe('balanced wrapper', () => {
+      beforeEach(async () => {
+        await cake.approve(piCake.address, ether(42), { from: alice });
+        await piCake.deposit(ether(42), { from: alice });
+      });
+
+      it('should charge the same token amount that was returned', async () => {
+        assert.equal(await cake.balanceOf(alice), ether(9958));
+        assert.equal(await cake.balanceOf(piCake.address), ether(42));
+        assert.equal(await piCake.balanceOf(alice), ether(42));
+
+        const res = await piCake.withdrawShares(ether(42), { from: alice });
+
+        expectEvent(res, 'Withdraw', {
+          account: alice,
+          underlyingWithdrawn: ether(42),
+          piBurned: ether(42),
+        });
+
+        assert.equal(await cake.balanceOf(alice), ether(10000));
+        assert.equal(await cake.balanceOf(piCake.address), ether(0));
+
+        assert.equal(await piCake.totalSupply(), ether(0));
+        assert.equal(await piCake.balanceOf(alice), ether(0));
+      });
+
+      it('should call the router callback with the returned amount', async () => {
+        const res = await piCake.withdrawShares(ether(42), { from: alice });
+        await expectEvent.inTransaction(res.tx, MockRouter, 'MockWrapperCallback', {
+          withdrawAmount: ether(42),
+        });
+      });
+
+      it('should revert if there isn not enough balance', async () => {
+        await expectRevert(piCake.withdrawShares(ether(43), { from: alice }), 'ERC20: burn amount exceeds balance');
+      });
+
+      it('should deny withdrawing 0', async () => {
+        await expectRevert(piCake.withdrawShares(ether(0), { from: alice }), 'ZERO_WITHDRAWAL');
+      });
+
+      it('should take fee if set', async () => {
+        assert.equal(await piCake.ethFee(), ether(0));
+
+        const ethFee = ether(0.001);
+
+        await router.setPiTokenEthFee(ethFee, { from: deployer });
+
+        assert.equal(await piCake.ethFee(), ethFee);
+
+        assert.equal(await web3.eth.getBalance(router.address), 0);
+
+        await expectRevert(piCake.withdrawShares(ether(42), { from: alice }), 'FEE');
+
+        const res = await piCake.withdrawShares(ether(42), { from: alice, value: ethFee });
+        expectEvent(res, 'Withdraw', {
+          account: alice,
+          underlyingWithdrawn: ether(42),
+          piBurned: ether(42),
+        });
+
+        assert.equal(await cake.balanceOf(alice), ether(10000));
+        assert.equal(await cake.balanceOf(piCake.address), ether(0));
+
+        assert.equal(await piCake.totalSupply(), ether(0));
+        assert.equal(await piCake.balanceOf(alice), ether(0));
+
+        assert.equal(await web3.eth.getBalance(router.address), ethFee);
+        assert.equal(await web3.eth.getBalance(piCake.address), 0);
+      });
+
+      it('should ignore fee for the whitelisted addresses', async () => {
+        assert.equal(await piCake.ethFee(), ether(0));
+
+        const ethFee = ether(0.001);
+
+        await router.setPiTokenEthFee(ethFee, { from: deployer });
+        await router.setPiTokenNoFee(alice, true, { from: deployer });
+
+        assert.equal(await piCake.ethFee(), ethFee);
+
+        await expectRevert(piCake.withdrawShares(ether(42), { from: alice, value: ethFee }), 'NO_FEE_FOR_WL');
+
+        const res = await piCake.withdrawShares(ether(42), { from: alice });
+        expectEvent(res, 'Withdraw', {
+          account: alice,
+          underlyingWithdrawn: ether(42),
+          piBurned: ether(42),
+        });
+      });
+    });
+
+    describe('imbalanced wrapper', () => {
+      beforeEach(async () => {
+        assert.equal(await cake.balanceOf(bob), ether(0));
+      });
+
+      it('should burn correspoinding pi amount for a negatively imbalanced router', async () => {
+        await cake.approve(piCake.address, ether(1200), { from: alice });
+        await piCake.deposit(ether(1200), { from: alice });
+        // Drain 200 cake from the wrapper token
+        await router.drip(stub, ether(200));
+        assert.equal(await cake.balanceOf(piCake.address), ether(1000));
+        assert.equal(await piCake.totalSupply(), ether(1200));
+        await piCake.transfer(bob, ether(120), { from: alice });
+
+        // Withdraw
+        const res = await piCake.withdrawShares(ether(120), { from: bob });
+
+        expectEvent(res, 'Withdraw', {
+          account: bob,
+          underlyingWithdrawn: ether(100),
+          piBurned: ether(120),
+        });
+
+        assert.equal(await cake.balanceOf(bob), ether(100));
+        assert.equal(await cake.balanceOf(piCake.address), ether(900));
+
+        assert.equal(await piCake.totalSupply(), ether(1080));
+        assert.equal(await piCake.balanceOf(bob), ether(0));
+      });
+
+      it('should burn smaller pi amount for a positively imbalanced router', async () => {
+        await cake.approve(piCake.address, ether(1000), { from: alice });
+        await piCake.deposit(ether(1000), { from: alice });
+        await cake.transfer(piCake.address, ether(600), { from: alice });
+        assert.equal(await cake.balanceOf(piCake.address), ether(1600));
+        assert.equal(await piCake.totalSupply(), ether(1000));
+        await piCake.transfer(bob, ether(62.5), { from: alice });
+
+        // Withdraw
+        const res = await piCake.withdrawShares(ether('62.5'), { from: bob });
+
+        expectEvent(res, 'Withdraw', {
+          account: bob,
+          underlyingWithdrawn: ether(100),
+          piBurned: ether(62.5),
+        });
+
+        assert.equal(await cake.balanceOf(bob), ether(100));
+        assert.equal(await cake.balanceOf(piCake.address), ether(1500));
+
+        assert.equal(await piCake.totalSupply(), ether(937.5));
+        assert.equal(await piCake.balanceOf(bob), ether(0));
+      });
+
+      it('should allow draining a negatively imbalanced router', async () => {
+        await cake.approve(piCake.address, ether(200), { from: alice });
+        await piCake.deposit(ether(200), { from: alice });
+        await router.drip(stub, ether(100));
+        assert.equal(await cake.balanceOf(piCake.address), ether(100));
+        assert.equal(await piCake.totalSupply(), ether(200));
+
+        await piCake.transfer(bob, ether(200), { from: alice });
+
+        // Withdraw
+        const res = await piCake.withdrawShares(ether(200), { from: bob });
+
+        expectEvent(res, 'Withdraw', {
+          account: bob,
+          underlyingWithdrawn: ether(100),
+          piBurned: ether(200),
+        });
+
+        assert.equal(await cake.balanceOf(bob), ether(100));
+        assert.equal(await cake.balanceOf(piCake.address), ether(0));
+
+        assert.equal(await piCake.totalSupply(), ether(0));
+        assert.equal(await piCake.balanceOf(bob), ether(0));
+      });
+
+      it('should allow draining a positively imbalanced router', async () => {
+        await cake.approve(piCake.address, ether(100), { from: alice });
+        await piCake.deposit(ether(100), { from: alice });
+        await cake.transfer(piCake.address, ether(100), { from: alice });
+        assert.equal(await cake.balanceOf(piCake.address), ether(200));
+        assert.equal(await piCake.totalSupply(), ether(100));
+        await piCake.transfer(bob, ether(100), { from: alice });
+
+        // Withdraw
+        const res = await piCake.withdrawShares(ether(100), { from: bob });
 
         expectEvent(res, 'Withdraw', {
           account: bob,

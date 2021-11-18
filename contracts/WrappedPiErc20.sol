@@ -26,7 +26,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   address public router;
   uint256 public ethFee;
   mapping(address => bool) public noFeeWhitelist;
-  mapping(address => uint256) public _nonces;
+  mapping(address => uint256) public nonces;
 
   event Deposit(address indexed account, uint256 undelyingDeposited, uint256 piMinted);
   event Withdraw(address indexed account, uint256 underlyingWithdrawn, uint256 piBurned);
@@ -227,10 +227,10 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     uint8 v,
     bytes32 r,
     bytes32 s
-  ) external {
+  ) external override {
     require(owner != address(0), "INVALID_OWNER");
     require(block.timestamp <= deadline, "INVALID_EXPIRATION");
-    uint256 currentValidNonce = _nonces[owner];
+    uint256 currentValidNonce = nonces[owner];
     bytes32 digest = keccak256(
       abi.encodePacked(
         "\x19\x01",
@@ -240,7 +240,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     );
 
     require(owner == ecrecover(digest, v, r, s), "INVALID_SIGNATURE");
-    _nonces[owner] = currentValidNonce.add(1);
+    nonces[owner] = currentValidNonce.add(1);
     _approve(owner, spender, value);
   }
 
