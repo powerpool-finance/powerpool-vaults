@@ -1,7 +1,7 @@
 # PowerIndex Vaults
 
-![CI](https://github.com/powerpool-finance/powerindex-routers/workflows/CI/badge.svg)
-[![codecov](https://codecov.io/gh/powerpool-finance/powerindex-routers/branch/master/graph/badge.svg)](https://codecov.io/gh/powerpool-finance/powerindex-routers)
+![CI](https://github.com/powerpool-finance/powerpool-vaults/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/powerpool-finance/powerpool-vaults/branch/master/graph/badge.svg)](https://codecov.io/gh/powerpool-finance/powerpool-vaults)
 
 Smart vaults for DeFI protocols in different ecosystems with automatic rewards claim and compounding
 
