@@ -114,8 +114,7 @@ abstract contract AbstractConnector is IRouterConnector {
       if (underlyingBalance >= totalFeeToPayOut) {
         _safeTransfer(_piToken, _underlying, _performanceFeeReceiver, totalFeeToPayOut);
       } else {
-        uint256 diff = totalFeeToPayOut.sub(underlyingBalance);
-        resultPerformanceFeeDebt = totalFeeToPayOut.sub(diff);
+        resultPerformanceFeeDebt = totalFeeToPayOut.sub(underlyingBalance);
         _safeTransfer(_piToken, _underlying, _performanceFeeReceiver, underlyingBalance);
       }
 
