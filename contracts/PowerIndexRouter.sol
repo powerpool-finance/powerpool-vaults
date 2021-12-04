@@ -54,6 +54,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   Connector[] public connectors;
 
   struct RebalanceConfig {
+    bool shouldPushFunds;
     StakeStatus status;
     uint256 diff;
     bool forceRebalance;
@@ -271,10 +272,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
       if (status == StakeStatus.EXCESS) {
         if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
-          _rebalancePokeByConf(RebalanceConfig(status, diff, forceRebalance, i), _claimAndDistributeRewards);
+          _rebalancePokeByConf(RebalanceConfig(false, status, diff, forceRebalance, i), _claimAndDistributeRewards);
         }
       } else {
-        configs[i] = RebalanceConfig(status, diff, forceRebalance, i);
+        configs[i] = RebalanceConfig(true, status, diff, forceRebalance, i);
       }
     }
 
@@ -284,7 +285,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     );
 
     for (uint256 i = 0; i < connectors.length; i++) {
-      if (configs[i].diff == 0) {
+      if (!configs[i].shouldPushFunds) {
         continue;
       }
       if (_canPoke(_isSlasher, configs[i].forceRebalance, minInterval, maxInterval)) {
@@ -388,7 +389,14 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    *      and there is no use in calling `_claimRewards()` immediately after calling one of these methods.
    */
   function _claimRewards(Connector storage c, StakeStatus _stakeStatus) internal {
-    c.connector.claimRewards(_stakeStatus, _getDistributeData(c));
+    (bool success, bytes memory result) = address(c.connector).delegatecall(
+      abi.encodeWithSelector(IRouterConnector.claimRewards.selector, _stakeStatus, _getDistributeData(c))
+    );
+    require(success, string(result));
+    result = abi.decode(result, (bytes));
+    if (result.length > 0) {
+      c.stakeData = result;
+    }
   }
 
   function _reward(
