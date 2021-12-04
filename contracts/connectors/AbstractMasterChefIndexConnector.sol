@@ -67,7 +67,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore).sub(_amount);
 
-    bytes memory result;
+    bytes memory result = new bytes(0);
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
     }
