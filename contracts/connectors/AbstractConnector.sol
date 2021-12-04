@@ -39,7 +39,7 @@ abstract contract AbstractConnector is IRouterConnector {
     LOCKED_PROFIT_DEGRADATION = _lockedProfitDegradation;
   }
 
-  function _callStaking(
+  function _callExternal(
     WrappedPiErc20Interface _piToken,
     address _staking,
     bytes4 _sig,

@@ -40,10 +40,10 @@ contract MasterChefPowerIndexConnector is AbstractMasterChefIndexConnector {
   }
 
   function _stakeImpl(uint256 _amount) internal override {
-    _callStaking(PI_TOKEN, STAKING, IMasterChefV1.deposit.selector, abi.encode(MASTER_CHEF_PID, _amount));
+    _callExternal(PI_TOKEN, STAKING, IMasterChefV1.deposit.selector, abi.encode(MASTER_CHEF_PID, _amount));
   }
 
   function _redeemImpl(uint256 _amount) internal override {
-    _callStaking(PI_TOKEN, STAKING, IMasterChefV1.withdraw.selector, abi.encode(MASTER_CHEF_PID, _amount));
+    _callExternal(PI_TOKEN, STAKING, IMasterChefV1.withdraw.selector, abi.encode(MASTER_CHEF_PID, _amount));
   }
 }

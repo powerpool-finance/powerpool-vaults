@@ -37,10 +37,10 @@ contract BakeryChefPowerIndexConnector is AbstractMasterChefIndexConnector {
   }
 
   function _stakeImpl(uint256 _amount) internal override {
-    _callStaking(PI_TOKEN, STAKING, IBakeryMasterChef.deposit.selector, abi.encode(address(UNDERLYING), _amount));
+    _callExternal(PI_TOKEN, STAKING, IBakeryMasterChef.deposit.selector, abi.encode(address(UNDERLYING), _amount));
   }
 
   function _redeemImpl(uint256 _amount) internal override {
-    _callStaking(PI_TOKEN, STAKING, IBakeryMasterChef.withdraw.selector, abi.encode(address(UNDERLYING), _amount));
+    _callExternal(PI_TOKEN, STAKING, IBakeryMasterChef.withdraw.selector, abi.encode(address(UNDERLYING), _amount));
   }
 }
