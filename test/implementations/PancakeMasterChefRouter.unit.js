@@ -182,7 +182,7 @@ describe('PancakeMasterChefRouter Tests', () => {
       let res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
       let data = await myRouter.connectors(0);
       let rewards = await connector.unpackRewardsData(data.stakeData);
-      assert.equal(await rewards.lockedProfit, ether('2.31182920678'));
+      assert.equal(await rewards.lockedProfit, ether('2.7197990668'));
 
       await time.increase(time.duration.years(1));
       assert.equal(await myRouter.calculateLockedProfit(), ether(0));
