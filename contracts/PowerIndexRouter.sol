@@ -78,11 +78,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     bool callBeforeAfterPoke;
   }
 
-  modifier onlyPiToken() {
-    require(msg.sender == address(piToken), "ONLY_PI_TOKEN_ALLOWED");
-    _;
-  }
-
   modifier onlyEOA() {
     require(tx.origin == msg.sender, "ONLY_EOA");
     _;
