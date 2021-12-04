@@ -372,11 +372,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
   }
 
-  function redeem(uint256 _connectorIndex, uint256 _diff) public onlyOwner {
+  function redeem(uint256 _connectorIndex, uint256 _diff) external onlyOwner {
     _redeem(connectors[_connectorIndex], _diff);
   }
 
-  function stake(uint256 _connectorIndex, uint256 _diff) public onlyOwner {
+  function stake(uint256 _connectorIndex, uint256 _diff) external onlyOwner {
     _stake(connectors[_connectorIndex], _diff);
   }
 
