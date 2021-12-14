@@ -63,8 +63,8 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   }
 
   /**
-   * @notice Deposits underlying token to the piToken
-   * @param _depositAmount The amount to deposit in underlying tokens
+   * @notice Deposits underlying ERC20 token to the piToken(piERC20).
+   * @param _depositAmount The amount to deposit in underlying ERC20 tokens.
    */
   function deposit(uint256 _depositAmount) external payable override nonReentrant returns (uint256) {
     if (noFeeWhitelist[msg.sender]) {
@@ -89,9 +89,9 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   }
 
   /**
-   * @notice Withdraws underlying token from the piToken
-   * @param _withdrawAmount The amount to withdraw in underlying tokens
-   * @return The amount of the burned shares
+   * @notice Withdraws underlying ERC20 token from the piToken (piERC20).
+   * @param _withdrawAmount The amount to withdraw in underlying ERC20 tokens.
+   * @return The amount of the burned shares.
    */
   function withdraw(uint256 _withdrawAmount) external payable override nonReentrant returns (uint256) {
     if (noFeeWhitelist[msg.sender]) {
@@ -116,9 +116,9 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   }
 
   /**
-   * @notice Withdraws underlying token from the piToken
-   * @param _burnAmount The amount of shares to burn
-   * @return The amount of the withdrawn underlying
+   * @notice Withdraws underlying ERC20 token from the piToken(piERC20).
+   * @param _burnAmount The amount of shares to burn.
+   * @return The amount of the withdrawn underlying ERC20 token.
    */
   function withdrawShares(uint256 _burnAmount) external payable override nonReentrant returns (uint256) {
     if (noFeeWhitelist[msg.sender]) {

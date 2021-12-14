@@ -10,8 +10,8 @@ import "./AbstractMasterChefIndexConnector.sol";
  * Compatible with:
  * - Bakery: https://bscscan.com/address/0x20ec291bb8459b6145317e7126532ce7ece5056f,
  *   pending rewards via pendingBake(pair, user)
- * @dev Notice that in deposit/withdraw/pendingBake method signatures Bakery uses the staking token addresses
- *      instead of numerical pool IDs like in the majority of masterChef forks.
+ * @dev Notice that in deposit/withdraw/pending Bake method signatures, Bakery uses the staking token addresses
+ *      instead of numerical pool IDs like in most masterChef forks.
  */
 contract BakeryChefPowerIndexConnector is AbstractMasterChefIndexConnector {
   constructor(

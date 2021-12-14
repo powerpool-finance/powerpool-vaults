@@ -11,6 +11,13 @@ import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
 import "./PowerIndexNaiveRouter.sol";
 
+/**
+   * @notice PowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
+   * protocol-specified staking contracts. After calling, it saves stakeData and pokeData as connectors storage.
+   * Available ERC20 token balance from piERC20 is distributed between connectors by its shares and calculated
+   * as the difference between total balance and share of necessary balance(reserveRatio) for keeping in piERC20
+   * for withdrawals.
+   */
 contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   using SafeERC20 for IERC20;
 
@@ -123,6 +130,13 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
   /*** OWNER METHODS ***/
 
+  /**
+   * @notice Set reserve ratio config
+   * @param _reserveRatio Share of necessary token balance that piERC20 must hold after poke execution.
+   * @param _reserveRatioLowerBound Lower bound of ERC20 token balance to force rebalance.
+   * @param _reserveRatioUpperBound Upper bound of ERC20 token balance to force rebalance.
+   * @param _claimRewardsInterval Time interval to claim rewards in connectors contracts.
+   */
   function setReserveConfig(
     uint256 _reserveRatio,
     uint256 _reserveRatioLowerBound,
@@ -140,17 +154,30 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     emit SetReserveConfig(_reserveRatio, _reserveRatioLowerBound, _reserveRatioUpperBound, _claimRewardsInterval);
   }
 
+  /**
+   * @notice Set performance fee.
+   * @param _performanceFee Share of rewards for distributing to performanceFeeReceiver(Protocol treasury).
+   */
   function setPerformanceFee(uint256 _performanceFee) external onlyOwner {
     require(_performanceFee < HUNDRED_PCT, "PERFORMANCE_FEE_OVER_THE_LIMIT");
     performanceFee = _performanceFee;
     emit SetPerformanceFee(_performanceFee);
   }
 
+  /**
+   * @notice Set piERC20 ETH fee for deposit and withdrawal functions.
+   * @param _ethFee Fee amount in ETH.
+   */
   function setPiTokenEthFee(uint256 _ethFee) external onlyOwner {
     require(_ethFee <= 0.1 ether, "ETH_FEE_OVER_THE_LIMIT");
     piToken.setEthFee(_ethFee);
   }
 
+  /**
+   * @notice Set connectors configs. Items should have `newConnector` variable to create connectors and `connectorIndex`
+   * to update existing connectors.
+   * @param _connectorList Array of connector items.
+   */
   function setConnectorList(ConnectorInput[] memory _connectorList) external onlyOwner {
     require(_connectorList.length != 0, "CONNECTORS_LENGTH_CANT_BE_NULL");
 
@@ -171,14 +198,29 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     _checkConnectorsTotalShare();
   }
 
+  /**
+   * @notice Set piERC20 noFee config for account address.
+   * @param _for Account address.
+   * @param _noFee Value for account.
+   */
   function setPiTokenNoFee(address _for, bool _noFee) external onlyOwner {
     piToken.setNoFee(_for, _noFee);
   }
 
+  /**
+   * @notice Call piERC20 `withdrawEthFee`.
+   * @param _receiver Receiver address.
+   */
   function withdrawEthFee(address payable _receiver) external onlyOwner {
     piToken.withdrawEthFee(_receiver);
   }
 
+  /**
+   * @notice Transfer ERC20 balances and rights to a new router address.
+   * @param _piToken piERC20 address.
+   * @param _newRouter New router contract address.
+   * @param _tokens ERC20 to transfer.
+   */
   function migrateToNewRouter(
     address _piToken,
     address payable _newRouter,
@@ -195,13 +237,24 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
   }
 
-  function initRouterByConnector(uint256 _connectorIndex) public onlyOwner {
+  /**
+   * @notice Call initRouter function of the connector contract.
+   * @param _connectorIndex Connector index in connectors array.
+   * @param _data To pass as an argument.
+   */
+  function initRouterByConnector(uint256 _connectorIndex, bytes memory _data) public onlyOwner {
     (bool success, bytes memory result) = address(connectors[_connectorIndex].connector).delegatecall(
-      abi.encodeWithSignature("initRouter(bytes)", new bytes(0))
+      abi.encodeWithSignature("initRouter(bytes)", _data)
     );
     require(success, string(result));
   }
 
+  /**
+   * @notice Call poke by Reporter.
+   * @param _reporterId Reporter ID.
+   * @param _claimAndDistributeRewards Claim rewards only if interval reached.
+   * @param _rewardOpts To whom and how to reward Reporter.
+   */
   function pokeFromReporter(
     uint256 _reporterId,
     bool _claimAndDistributeRewards,
@@ -210,6 +263,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     _pokeFrom(_claimAndDistributeRewards, false);
   }
 
+  /**
+   * @notice Call poke by Slasher.
+   * @param _reporterId Slasher ID.
+   * @param _claimAndDistributeRewards Claim rewards only if interval reached.
+   * @param _rewardOpts To whom and how reward Slasher.
+   */
   function pokeFromSlasher(
     uint256 _reporterId,
     bool _claimAndDistributeRewards,
@@ -218,6 +277,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     _pokeFrom(_claimAndDistributeRewards, true);
   }
 
+  /**
+   * @notice Executes rebalance(beforePoke, rebalancePoke, claimRewards, afterPoke) for connector contract by config.
+   * @param _conf Connector rebalance config.
+   * @param _claimAndDistributeRewards Need to claim and distribute rewards.
+   */
   function _rebalancePokeByConf(RebalanceConfig memory _conf, bool _claimAndDistributeRewards) internal {
     bool shouldClaim = _claimAndDistributeRewards &&
       connectors[_conf.connectorIndex].lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
@@ -240,6 +304,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
   }
 
+  /**
+   * @notice Rebalance every connector according to its share in an array.
+   * @param _claimAndDistributeRewards Need to claim and distribute rewards.
+   * @param _isSlasher Calling by Slasher.
+   */
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
     (uint256 minInterval, uint256 maxInterval) = _getMinMaxReportInterval();
 
@@ -250,6 +319,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
+    // First cycle: connectors with EXCESS balance status on staking
     for (uint256 i = 0; i < connectors.length; i++) {
       if (connectors[i].share == 0) {
         continue;
@@ -266,10 +336,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
 
       if (status == StakeStatus.EXCESS) {
+        // Calling rebalance immediately if interval conditions reached
         if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
           _rebalancePokeByConf(RebalanceConfig(false, status, diff, forceRebalance, i), _claimAndDistributeRewards);
         }
       } else {
+        // Push config for second cycle
         configs[i] = RebalanceConfig(true, status, diff, forceRebalance, i);
       }
     }
@@ -279,10 +351,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
     );
 
+    // Second cycle: connectors with EQUILIBRIUM and SHORTAGE balance status on staking
     for (uint256 i = 0; i < connectors.length; i++) {
       if (!configs[i].shouldPushFunds) {
         continue;
       }
+      // Calling rebalance if interval conditions reached
       if (_canPoke(_isSlasher, configs[i].forceRebalance, minInterval, maxInterval)) {
         _rebalancePokeByConf(configs[i], _claimAndDistributeRewards);
       }
@@ -291,6 +365,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     lastRebalancedAt = block.timestamp;
   }
 
+  /**
+   * @notice Checking: if time interval reached or have `forceRebalance`.
+   */
   function _canPoke(
     bool _isSlasher,
     bool _forceRebalance,
@@ -306,6 +383,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         : (lastRebalancedAt + _minInterval < block.timestamp);
   }
 
+  /**
+   * @notice Call redeem in the connector with delegatecall, save result stakeData if not null.
+   */
   function _redeem(Connector storage c, uint256 diff) internal {
     (bool success, bytes memory result) = address(c.connector).delegatecall(
       abi.encodeWithSignature("redeem(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
@@ -317,6 +397,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
   }
 
+
+  /**
+   * @notice Call stake in the connector with delegatecall, save result `stakeData` if not null.
+   */
   function _stake(Connector storage c, uint256 diff) internal {
     (bool success, bytes memory result) = address(c.connector).delegatecall(
       abi.encodeWithSignature("stake(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
@@ -328,6 +412,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
   }
 
+  /**
+   * @notice Call `beforePoke` in the connector with delegatecall, do not save `pokeData`.
+   */
   function _beforePoke(Connector storage c, bool _willClaimReward) internal {
     (bool success, ) = address(c.connector).delegatecall(
       abi.encodeWithSignature(
@@ -340,6 +427,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     require(success, "_beforePoke call error");
   }
 
+  /**
+   * @notice Call `afterPoke` in the connector with delegatecall, save result `pokeData` if not null.
+   */
   function _afterPoke(
     Connector storage _c,
     StakeStatus _stakeStatus,
@@ -355,6 +445,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
   }
 
+  /**
+   * @notice Rebalance connector: stake if StakeStatus.SHORTAGE and redeem if StakeStatus.EXCESS.
+   */
   function _rebalancePoke(
     Connector storage _c,
     StakeStatus _stakeStatus,
@@ -376,12 +469,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   /**
-   * @notice Explicitly collects the assigned rewards. If a reward token is the same token as underlying, it should
-   *         allocate this reward at piToken. Otherwise, it should transfer it to the router contract for a further
-   *         actions.
-   * @dev This is not the only way the rewards can be claimed. Sometimes they are distributed implicitly while
-   *      interacting with a protocol. For ex. MasterChef distributes rewards on each `deposit()/withdraw()` action
-   *      and there is no use in calling `_claimRewards()` immediately after calling one of these methods.
+   * @notice Explicitly collects the assigned rewards. If a reward token is the same as the underlying, it should
+   * allocate it at piERC20. Otherwise, it should transfer to the router contract for further action.
+   * @dev It's not the only way to claim rewards. Sometimes rewards are distributed implicitly while interacting
+   * with a protocol. E.g., MasterChef distributes rewards on each `deposit()/withdraw()` action, and there is
+   * no use in calling `_claimRewards()` immediately after calling one of these methods.
    */
   function _claimRewards(Connector storage c, StakeStatus _stakeStatus) internal {
     (bool success, bytes memory result) = address(c.connector).delegatecall(
@@ -552,21 +644,21 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   /**
-   * @notice Calculates the desired stake status
-   * @param _reserveRatioPct The reserve ratio in %, 1 ether == 100 ether
-   * @param _leftOnPiToken The amount of origin tokens left on the piToken (WrappedPiErc20) contract
-   * @param _totalStakedBalance The amount of original tokens staked on the all connected staking contracts
-   * @param _stakedBalance The amount of original tokens staked on the connector staking contract
-   * @param _share Share of the connector
+   * @notice Calculates the desired stake status.
+   * @param _reserveRatioPct The reserve ratio in %, 1 ether == 100 ether.
+   * @param _leftOnPiToken The underlying ERC20 tokens balance on the piERC20 contract.
+   * @param _totalStakedBalance The underlying ERC20 tokens balance staked on the all connected staking contracts.
+   * @param _stakedBalance The underlying ERC20 tokens balance staked on the connector staking contract.
+   * @param _share Share of the connector contract.
    * @return status The stake status:
-   * * SHORTAGE - There is not enough underlying funds on the staking contract to satisfy the reserve ratio,
-   *           the diff amount should be sent to the staking contract
-   * * EXCESS - There are some extra funds on the staking contract,
-   *           the diff amount should be redeem from the staking contract
-   * * EQUILIBRIUM - the reserve ratio hasn't changed,
-   *           the diff amount is 0 and there are no additional stake/redeem actions expected
-   * @return diff The difference between `expectedStakeAmount` and `_stakedBalance`
-   * @return expectedStakeAmount The calculated expected reserve amount
+   * * SHORTAGE: There is not enough underlying ERC20 balance on the staking contract to satisfy the reserve ratio.
+   *             Therefore, the connector contract should send the diff amount to the staking contract.
+   * * EXCESS: There is some extra underlying ERC20 balance on the staking contract.
+   *           Therefore, the connector contract should redeem the diff amount from the staking contract.
+   * * EQUILIBRIUM: The reserve ratio hasn't changed, the diff amount is 0, and no need for additional
+   *                stake/redeem actions.
+   * @return diff The difference between `expectedStakeAmount` and `_stakedBalance`.
+   * @return expectedStakeAmount The calculated expected underlying ERC20 staked balance.
    */
   function getStakeStatusPure(
     uint256 _reserveRatioPct,
@@ -599,12 +691,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   /**
-   * @notice Calculates an expected stake amount
-   * @param _reserveRatioPct % of a reserve ratio, 1 ether == 100%
-   * @param _leftOnPiToken The amount of origin tokens left on the piToken (WrappedPiErc20) contract
-   * @param _stakedBalance The amount of original tokens staked on the staking contract
-   * @param _share % of a total connectors share, 1 ether == 100%
-   * @return expectedStakeAmount The expected stake amount
+   * @notice Calculates an expected underlying ERC20 staked balance.
+   * @param _reserveRatioPct % of a reserve ratio, 1 ether == 100%.
+   * @param _leftOnPiToken The underlying ERC20 tokens balance on the piERC20 contract.
+   * @param _stakedBalance The underlying ERC20 tokens balance staked on the staking contract.
+   * @param _share % of a total connectors share, 1 ether == 100%.
+   * @return expectedStakeAmount The expected stake amount:
    *
    *                           / (100% - %reserveRatio) * (_leftOnPiToken + _stakedBalance) * %share \
    *    expectedStakeAmount = | ----------------------------------------------------------------------|
