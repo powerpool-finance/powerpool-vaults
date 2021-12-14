@@ -10,13 +10,13 @@ import "../interfaces/WrappedPiErc20Interface.sol";
 import "../interfaces/IRouterConnector.sol";
 
 /**
-   * @notice Connectors execute staking strategies by calling from PowerIndexRouter with delegatecall. Therefore,
-   * connector contracts should not have any rights stored in other contracts. Instead, rights for connector logic
-   * must be provided to PowerIndexRouter by proxy pattern, where the router is a proxy, and the connectors are
-   * implementations. Every connector implementation has unique staking logic for stake, redeem, beforePoke, and
-   * afterPoke functions, that returns data to save in PowerIndexRouter storage because connectors don't have any
-   * storage.
-   */
+ * @notice Connectors execute staking strategies by calling from PowerIndexRouter with delegatecall. Therefore,
+ * connector contracts should not have any rights stored in other contracts. Instead, rights for connector logic
+ * must be provided to PowerIndexRouter by proxy pattern, where the router is a proxy, and the connectors are
+ * implementations. Every connector implementation has unique staking logic for stake, redeem, beforePoke, and
+ * afterPoke functions, that returns data to save in PowerIndexRouter storage because connectors don't have any
+ * storage.
+ */
 abstract contract AbstractConnector is IRouterConnector {
   using SafeMath for uint256;
 

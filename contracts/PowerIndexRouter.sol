@@ -12,12 +12,12 @@ import "./interfaces/IRouterConnector.sol";
 import "./PowerIndexNaiveRouter.sol";
 
 /**
-   * @notice PowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
-   * protocol-specified staking contracts. After calling, it saves stakeData and pokeData as connectors storage.
-   * Available ERC20 token balance from piERC20 is distributed between connectors by its shares and calculated
-   * as the difference between total balance and share of necessary balance(reserveRatio) for keeping in piERC20
-   * for withdrawals.
-   */
+ * @notice PowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
+ * protocol-specified staking contracts. After calling, it saves stakeData and pokeData as connectors storage.
+ * Available ERC20 token balance from piERC20 is distributed between connectors by its shares and calculated
+ * as the difference between total balance and share of necessary balance(reserveRatio) for keeping in piERC20
+ * for withdrawals.
+ */
 contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   using SafeERC20 for IERC20;
 
@@ -396,7 +396,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       c.stakeData = result;
     }
   }
-
 
   /**
    * @notice Call stake in the connector with delegatecall, save result `stakeData` if not null.
