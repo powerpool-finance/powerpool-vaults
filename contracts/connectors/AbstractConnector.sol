@@ -69,8 +69,8 @@ abstract contract AbstractConnector is IRouterConnector {
    * @param _distributeData Data is stored in the router contract and passed to the connector's functions.
    * @param _piToken piToken(piERC20) address.
    * @param _token ERC20 Token address to distribute reward.
-   * @param _totalReward
-   * @return Result packed rewards data.
+   * @param _totalReward Total reward received
+   * @return rewardsData Result packed rewards data.
    */
   function _distributeReward(
     DistributeData memory _distributeData,
