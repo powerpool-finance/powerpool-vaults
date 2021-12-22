@@ -187,12 +187,13 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     bytes4 _signature,
     bytes calldata _args,
     uint256 _value
-  ) external override onlyRouter returns (bytes memory) {
+  ) external payable override onlyRouter returns (bytes memory) {
     return _callExternal(_destination, _signature, _args, _value);
   }
 
   function callExternalMultiple(ExternalCallData[] calldata _calls)
     external
+    payable
     override
     onlyRouter
     returns (bytes[] memory results)
