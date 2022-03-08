@@ -4,14 +4,14 @@ pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/sushi/IMasterChefV1.sol";
-import "./AbstractMasterChefIndexConnector.sol";
+import "./AbstractStakeRedeemConnector.sol";
 
 /**
  * Compatible with:
  * - MDEX: https://bscscan.com/address/0x6aee12e5eb987b3be1ba8e621be7c4804925ba68,
  *   pending rewards via pending(pid, user)
  */
-contract MasterChefPowerIndexConnector is AbstractMasterChefIndexConnector {
+contract MasterChefPowerIndexConnector is AbstractStakeRedeemConnector {
   uint256 public immutable MASTER_CHEF_PID;
 
   constructor(
@@ -19,7 +19,7 @@ contract MasterChefPowerIndexConnector is AbstractMasterChefIndexConnector {
     address _underlying,
     address _piToken,
     uint256 _masterChefPid
-  ) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {
+  ) public AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e12) { //6 hours with 13ms block
     MASTER_CHEF_PID = _masterChefPid;
   }
 
@@ -37,6 +37,10 @@ contract MasterChefPowerIndexConnector is AbstractMasterChefIndexConnector {
     }
     (uint256 amount, ) = IMasterChefV1(STAKING).userInfo(MASTER_CHEF_PID, address(PI_TOKEN));
     return amount;
+  }
+
+  function _claimImpl() internal override {
+    stake(0, _distributeData);
   }
 
   function _stakeImpl(uint256 _amount) internal override {

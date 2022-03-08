@@ -6,7 +6,7 @@ pragma experimental ABIEncoderV2;
 import "../interfaces/sushi/IMasterChefV1.sol";
 import "./AbstractConnector.sol";
 
-abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
+abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
@@ -17,9 +17,9 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
   constructor(
     address _staking,
     address _underlying,
-    address _piToken
-  ) public AbstractConnector(46e12) {
-    // 6 hours with 13ms block
+    address _piToken,
+    uint256 _lockedProfitDegradation
+  ) public AbstractConnector(_lockedProfitDegradation) {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
@@ -33,14 +33,17 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
     returns (bytes memory)
   {
     if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
-      return stake(0, _distributeData);
+      uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
+      _claimImpl();
+      uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
+      if (receivedReward > 0) {
+        return _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      }
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
     return new bytes(0);
   }
-
-  /*** INTERNALS ***/
 
   function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory) {
     uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
@@ -67,7 +70,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore).sub(_amount);
 
-    bytes memory result = new bytes(0);
+    bytes memory result;
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
     }
@@ -75,6 +78,10 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
     return result;
   }
+
+  /*** INTERNALS ***/
+
+  function _claimImpl() internal virtual;
 
   function _stakeImpl(uint256 _amount) internal virtual;
 

@@ -4,7 +4,7 @@ pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/IBakeryMasterChef.sol";
-import "./AbstractMasterChefIndexConnector.sol";
+import "./AbstractStakeRedeemConnector.sol";
 
 /**
  * Compatible with:
@@ -13,12 +13,12 @@ import "./AbstractMasterChefIndexConnector.sol";
  * @dev Notice that in deposit/withdraw/pending Bake method signatures, Bakery uses the staking token addresses
  *      instead of numerical pool IDs like in most masterChef forks.
  */
-contract BakeryChefPowerIndexConnector is AbstractMasterChefIndexConnector {
+contract BakeryChefPowerIndexConnector is AbstractStakeRedeemConnector {
   constructor(
     address _staking,
     address _underlying,
     address _piToken
-  ) public AbstractMasterChefIndexConnector(_staking, _underlying, _piToken) {}
+  ) public AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e12) {} //6 hours with 13ms block
 
   /*** VIEWERS ***/
 
@@ -34,6 +34,10 @@ contract BakeryChefPowerIndexConnector is AbstractMasterChefIndexConnector {
     }
     (uint256 amount, ) = IBakeryMasterChef(STAKING).poolUserInfoMap(address(UNDERLYING), address(PI_TOKEN));
     return amount;
+  }
+
+  function _claimImpl() internal override {
+    stake(0, _distributeData);
   }
 
   function _stakeImpl(uint256 _amount) internal override {
