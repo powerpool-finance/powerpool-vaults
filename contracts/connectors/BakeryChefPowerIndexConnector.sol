@@ -37,7 +37,7 @@ contract BakeryChefPowerIndexConnector is AbstractStakeRedeemConnector {
   }
 
   function _claimImpl() internal override {
-    stake(0, _distributeData);
+    _stakeImpl(0);
   }
 
   function _stakeImpl(uint256 _amount) internal override {
