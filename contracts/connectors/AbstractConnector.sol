@@ -70,16 +70,16 @@ abstract contract AbstractConnector is IRouterConnector {
    * @param _piToken piToken(piERC20) address.
    * @param _token ERC20 Token address to distribute reward.
    * @param _totalReward Total reward received
-   * @return rewardsData Result packed rewards data.
+   * @return stakeData Result packed rewards data.
    */
   function _distributeReward(
     DistributeData memory _distributeData,
     WrappedPiErc20Interface _piToken,
     IERC20 _token,
     uint256 _totalReward
-  ) internal returns (bytes memory rewardsData) {
-    (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackRewardsData(
-      _distributeData.rewardsData
+  ) internal returns (bytes memory stakeData) {
+    (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackStakeData(
+      _distributeData.stakeData
     );
     uint256 pvpReward;
     uint256 piTokenReward;
@@ -103,7 +103,7 @@ abstract contract AbstractConnector is IRouterConnector {
 
     emit DistributeReward(msg.sender, _totalReward, pvpReward, piTokenReward, lockedProfitBefore, lockedProfitAfter);
 
-    return packRewardsData(lockedProfit, lastRewardDistribution, performanceFeeDebt);
+    return packStakeData(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
   /**
@@ -161,7 +161,7 @@ abstract contract AbstractConnector is IRouterConnector {
   /**
    * @notice Pack reward data to bytes.
    */
-  function packRewardsData(
+  function packStakeData(
     uint256 lockedProfit,
     uint256 lastRewardDistribution,
     uint256 performanceFeeDebt
@@ -172,7 +172,7 @@ abstract contract AbstractConnector is IRouterConnector {
   /**
    * @notice Unpack reward data from bytes to variables.
    */
-  function unpackRewardsData(bytes memory _rewardsData)
+  function unpackStakeData(bytes memory _stakeData)
     public
     pure
     returns (
@@ -181,17 +181,17 @@ abstract contract AbstractConnector is IRouterConnector {
       uint256 performanceFeeDebt
     )
   {
-    if (_rewardsData.length == 0 || keccak256(_rewardsData) == keccak256("")) {
+    if (_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
       return (0, 0, 0);
     }
-    (lockedProfit, lastRewardDistribution, performanceFeeDebt) = abi.decode(_rewardsData, (uint256, uint256, uint256));
+    (lockedProfit, lastRewardDistribution, performanceFeeDebt) = abi.decode(_stakeData, (uint256, uint256, uint256));
   }
 
   /**
-   * @notice Calculate locked profit from packed _rewardsData.
+   * @notice Calculate locked profit from packed _stakeData.
    */
-  function calculateLockedProfit(bytes memory _rewardsData) external view override returns (uint256) {
-    (uint256 lockedProfit, uint256 lastRewardDistribution, ) = unpackRewardsData(_rewardsData);
+  function calculateLockedProfit(bytes memory _stakeData) external view override returns (uint256) {
+    (uint256 lockedProfit, uint256 lastRewardDistribution, ) = unpackStakeData(_stakeData);
     return calculateLockedProfit(lockedProfit, lastRewardDistribution);
   }
 
