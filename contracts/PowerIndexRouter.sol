@@ -11,8 +11,6 @@ import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
 import "./PowerIndexNaiveRouter.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @notice PowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
  * protocol-specified staking contracts. After calling, it saves stakeData and pokeData as connectors storage.
@@ -292,12 +290,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       _beforePoke(connectors[_conf.connectorIndex], shouldClaim);
     }
 
-    console.log("_rebalancePoke");
     if (_conf.status != StakeStatus.EQUILIBRIUM) {
       _rebalancePoke(connectors[_conf.connectorIndex], _conf.status, _conf.diff);
     }
 
-    console.log("_claimRewards");
     if (shouldClaim) {
       _claimRewards(connectors[_conf.connectorIndex], _conf.status);
       connectors[_conf.connectorIndex].lastClaimRewardsAt = block.timestamp;
@@ -340,7 +336,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
 
       if (status == StakeStatus.EXCESS) {
-        console.log("excess");
         // Calling rebalance immediately if interval conditions reached
         if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
           _rebalancePokeByConf(RebalanceConfig(false, status, diff, forceRebalance, i), _claimAndDistributeRewards);
@@ -363,7 +358,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
       // Calling rebalance if interval conditions reached
       if (_canPoke(_isSlasher, configs[i].forceRebalance, minInterval, maxInterval)) {
-        console.log("shortage");
         _rebalancePokeByConf(configs[i], _claimAndDistributeRewards);
       }
     }
@@ -673,7 +667,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 _share
   )
     public
-    pure
+    view
     returns (
       StakeStatus status,
       uint256 diff,

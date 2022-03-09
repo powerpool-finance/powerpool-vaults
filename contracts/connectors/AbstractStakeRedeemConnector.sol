@@ -48,7 +48,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory) {
     uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
-    PI_TOKEN.approveUnderlying(STAKING, _amount);
+    _approveToStaking(_amount);
 
     _stakeImpl(_amount);
 
@@ -80,6 +80,9 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   }
 
   /*** INTERNALS ***/
+  function _approveToStaking(uint256 _amount) internal virtual {
+    PI_TOKEN.approveUnderlying(STAKING, _amount);
+  }
 
   function _claimImpl() internal virtual;
 

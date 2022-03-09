@@ -11,7 +11,6 @@ import "./interfaces/PowerIndexNaiveRouterInterface.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/WrappedPiErc20Interface.sol";
 
-import "hardhat/console.sol";
 
 contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   using SafeMath for uint256;
@@ -71,33 +70,25 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
    * @param _depositAmount The amount to deposit in underlying ERC20 tokens.
    */
   function deposit(uint256 _depositAmount) external payable override nonReentrant returns (uint256) {
-    console.log("deposit 1");
     if (noFeeWhitelist[msg.sender]) {
       require(msg.value == 0, "NO_FEE_FOR_WL");
     } else {
       require(msg.value >= ethFee, "FEE");
     }
-    console.log("deposit 2");
 
     require(_depositAmount > 0, "ZERO_DEPOSIT");
-    console.log("deposit 3");
 
     uint256 mintAmount = getPiEquivalentForUnderlying(_depositAmount);
-    console.log("deposit 4");
     require(mintAmount > 0, "ZERO_PI_FOR_MINT");
-    console.log("deposit 5");
 
     underlying.safeTransferFrom(msg.sender, address(this), _depositAmount);
-    console.log("deposit 6");
     _mint(msg.sender, mintAmount);
-    console.log("deposit 7");
 
     emit Deposit(msg.sender, _depositAmount, mintAmount);
 
     if (routerCallbackEnabled) {
       PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, 0);
     }
-    console.log("deposit 8");
 
     return mintAmount;
   }

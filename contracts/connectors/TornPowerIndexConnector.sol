@@ -35,6 +35,10 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     return ITornGovernance(GOVERNANCE).lockedBalance(address(PI_TOKEN));
   }
 
+  function _approveToStaking(uint256 _amount) internal override {
+    PI_TOKEN.approveUnderlying(GOVERNANCE, _amount);
+  }
+
   function _claimImpl() internal override {
     _callExternal(PI_TOKEN, STAKING, ITornStaking.getReward.selector, new bytes(0));
   }

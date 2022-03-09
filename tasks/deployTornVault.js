@@ -98,9 +98,11 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
     {to: pokerReporter, compensateInETH: true},
   );
 
+  await impersonateAccount(ethers, pokerReporter);
+
   await tornRouter.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
 
   console.log('3 wrapper balance', fromEther(await torn.balanceOf(piTorn.address)));
-  const governance = await ITornGovernance.at('0x2fc93484614a34f26f7970cbb94615ba109bb4bf');
+  const governance = await ITornGovernance.at('0x5efda50f22d34f262c29268506c5fa42cb56a1ce');
   console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
 });
