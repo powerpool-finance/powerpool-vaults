@@ -45,34 +45,34 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     return new bytes(0);
   }
 
-  function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory) {
+  function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
     uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
     _approveToStaking(_amount);
 
     _stakeImpl(_amount);
 
-    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore.sub(_amount));
+    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(_amount).sub(tokenBefore);
 
-    bytes memory result = new bytes(0);
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      claimed = true;
     }
 
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
     return result;
   }
 
-  function redeem(uint256 _amount, DistributeData memory _distributeData) external override returns (bytes memory) {
+  function redeem(uint256 _amount, DistributeData memory _distributeData) external override returns (bytes memory result, bool claimed) {
     uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
     _redeemImpl(_amount);
 
-    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore).sub(_amount);
+    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).add(_amount).sub(tokenBefore);
 
-    bytes memory result;
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      claimed = true;
     }
 
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
