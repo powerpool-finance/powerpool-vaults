@@ -75,6 +75,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 lastClaimRewardsAt;
     bytes stakeData;
     bytes pokeData;
+    bytes rewardsData;
   }
 
   struct ConnectorInput {
@@ -283,25 +284,30 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    * @param _claimAndDistributeRewards Need to claim and distribute rewards.
    */
   function _rebalancePokeByConf(RebalanceConfig memory _conf, bool _claimAndDistributeRewards) internal {
-    bool shouldClaim = _claimAndDistributeRewards &&
-      connectors[_conf.connectorIndex].lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
+    Connector storage c = connectors[_conf.connectorIndex];
+    bool shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(c);
 
-    if (connectors[_conf.connectorIndex].callBeforeAfterPoke) {
-      _beforePoke(connectors[_conf.connectorIndex], shouldClaim);
+    if (c.callBeforeAfterPoke) {
+      _beforePoke(c, shouldClaim);
     }
 
     if (_conf.status != StakeStatus.EQUILIBRIUM) {
-      _rebalancePoke(connectors[_conf.connectorIndex], _conf.status, _conf.diff);
+      _rebalancePoke(c, _conf.status, _conf.diff);
     }
 
-    if (shouldClaim) {
-      _claimRewards(connectors[_conf.connectorIndex], _conf.status);
-      connectors[_conf.connectorIndex].lastClaimRewardsAt = block.timestamp;
+    // check claim interval again due to possibility of claiming by stake or redeem function(maybe already claimed)
+    if (shouldClaim && claimRewardsIntervalReached(c)) {
+      _claimRewards(c, _conf.status);
+      c.lastClaimRewardsAt = block.timestamp;
     }
 
-    if (connectors[_conf.connectorIndex].callBeforeAfterPoke) {
-      _afterPoke(connectors[_conf.connectorIndex], _conf.status, shouldClaim);
+    if (c.callBeforeAfterPoke) {
+      _afterPoke(c, _conf.status, shouldClaim);
     }
+  }
+
+  function claimRewardsIntervalReached(Connector storage _c) public view {
+    return _c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
   }
 
   /**
@@ -386,28 +392,29 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   /**
    * @notice Call redeem in the connector with delegatecall, save result stakeData if not null.
    */
-  function _redeem(Connector storage c, uint256 diff) internal {
-    (bool success, bytes memory result) = address(c.connector).delegatecall(
-      abi.encodeWithSignature("redeem(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
-    );
-    require(success, string(result));
-    result = abi.decode(result, (bytes));
-    if (result.length > 0) {
-      c.stakeData = result;
-    }
+  function _redeem(Connector storage _c, uint256 _diff) internal {
+    _callStakeRedeem("redeem(uint256,(bytes,uint256,address))", _c, _diff);
   }
 
   /**
    * @notice Call stake in the connector with delegatecall, save result `stakeData` if not null.
    */
-  function _stake(Connector storage c, uint256 diff) internal {
-    (bool success, bytes memory result) = address(c.connector).delegatecall(
-      abi.encodeWithSignature("stake(uint256,(bytes,uint256,address))", diff, _getDistributeData(c))
+  function _stake(Connector storage _c, uint256 _diff) internal {
+    _callStakeRedeem("stake(uint256,(bytes,uint256,address))", _c, _diff);
+  }
+
+  function _callStakeRedeem(string memory _method, Connector storage _c, uint256 _diff) internal {
+    (bool success, bytes memory result) = address(_c.connector).delegatecall(
+      abi.encodeWithSignature(_method, diff, _getDistributeData(_c))
     );
     require(success, string(result));
-    result = abi.decode(result, (bytes));
+    bool claimed;
+    (result, claimed) = abi.decode(result, (bytes, bool));
     if (result.length > 0) {
-      c.stakeData = result;
+      _c.stakeData = result;
+    }
+    if (claimed) {
+      _c.lastClaimRewardsAt = block.timestamp;
     }
   }
 
