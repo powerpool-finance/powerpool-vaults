@@ -6,4 +6,6 @@ interface ITornStaking {
   function checkReward(address user) external view returns (uint256 amount);
 
   function getReward() external;
+
+  function accumulatedRewards(address user) external view returns (uint256 amount);
 }

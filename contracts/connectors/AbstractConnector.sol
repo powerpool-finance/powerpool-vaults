@@ -159,7 +159,7 @@ abstract contract AbstractConnector is IRouterConnector {
   }
 
   /**
-   * @notice Pack reward data to bytes.
+   * @notice Pack stake data to bytes.
    */
   function packStakeData(
     uint256 lockedProfit,
@@ -170,7 +170,7 @@ abstract contract AbstractConnector is IRouterConnector {
   }
 
   /**
-   * @notice Unpack reward data from bytes to variables.
+   * @notice Unpack stake data from bytes to variables.
    */
   function unpackStakeData(bytes memory _stakeData)
     public
@@ -236,5 +236,9 @@ abstract contract AbstractConnector is IRouterConnector {
       // Return data is optional
       require(abi.decode(response, (bool)), "ERC20 operation did not succeed");
     }
+  }
+
+  function isClaimAvailable(bytes _claimParams) external virtual returns (bool) {
+    return true;
   }
 }

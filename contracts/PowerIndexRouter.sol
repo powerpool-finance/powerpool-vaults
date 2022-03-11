@@ -75,7 +75,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 lastClaimRewardsAt;
     bytes stakeData;
     bytes pokeData;
-    bytes rewardsData;
+    bytes claimParams;
   }
 
   struct ConnectorInput {
@@ -200,6 +200,16 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   /**
+   * @notice Set connectors claim params to pass it to connector.
+   * @param _connectorIndex Index of connector
+   * @param _claimParams Claim params
+   */
+  function setClaimParams(uint256 _connectorIndex, bytes memory _claimParams) external onlyOwner {
+    connectors[_connectorIndex].claimParams = _claimParams;
+    emit SetConnectorClaimParams(connectors[_connectorIndex].connector, _claimParams);
+  }
+
+  /**
    * @notice Set piERC20 noFee config for account address.
    * @param _for Account address.
    * @param _noFee Value for account.
@@ -297,6 +307,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
     // check claim interval again due to possibility of claiming by stake or redeem function(maybe already claimed)
     if (shouldClaim && claimRewardsIntervalReached(c)) {
+      if (c.claimParams.length != 0) {
+        shouldClaim = c.connector.getUnderlyingStaked();
+      }
       _claimRewards(c, _conf.status);
       c.lastClaimRewardsAt = block.timestamp;
     }

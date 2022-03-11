@@ -25,6 +25,8 @@ interface IRouterConnector {
 
   function getUnderlyingStaked() external view returns (uint256);
 
+  function isClaimAvailable(bytes _claimParams) external view returns (bool);
+
   function redeem(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata);
 
   function stake(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata);

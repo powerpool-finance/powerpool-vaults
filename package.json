@@ -48,6 +48,8 @@
     "solhint-plugin-prettier": "^0.0.5",
     "solidity-coverage": "^0.7.11",
     "typechain": "^6.0.2",
-    "web3": "1.6.0"
+    "web3": "1.6.0",
+    "@uniswap/v3-periphery": "1.4.0",
+    "@uniswap/v3-core": "1.0.1"
   }
 }
