@@ -64,6 +64,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     bool shouldPushFunds;
     StakeStatus status;
     uint256 diff;
+    bool shouldClaim;
     bool forceRebalance;
     uint256 connectorIndex;
   }
@@ -293,9 +294,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    * @param _conf Connector rebalance config.
    * @param _claimAndDistributeRewards Need to claim and distribute rewards.
    */
-  function _rebalancePokeByConf(RebalanceConfig memory _conf, bool _claimAndDistributeRewards) internal {
+  function _rebalancePokeByConf(RebalanceConfig memory _conf) internal {
     Connector storage c = connectors[_conf.connectorIndex];
-    bool shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(c);
 
     if (c.callBeforeAfterPoke) {
       _beforePoke(c, shouldClaim);
@@ -306,12 +306,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
 
     // check claim interval again due to possibility of claiming by stake or redeem function(maybe already claimed)
-    if (shouldClaim && claimRewardsIntervalReached(c)) {
-      if (c.claimParams.length != 0) {
-        shouldClaim = c.connector.getUnderlyingStaked();
-      }
-      _claimRewards(c, _conf.status);
-      c.lastClaimRewardsAt = block.timestamp;
+    if (_conf.shouldClaim && claimRewardsIntervalReached(c)) {
+        _claimRewards(c, _conf.status);
+        c.lastClaimRewardsAt = block.timestamp;
+    } else {
+      require(_conf.status != StakeStatus.EQUILIBRIUM, "NOTHING_TO_DO");
     }
 
     if (c.callBeforeAfterPoke) {
@@ -344,11 +343,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         continue;
       }
 
-      (StakeStatus status, uint256 diff, bool forceRebalance) = getStakeStatus(
+      (StakeStatus status, uint256 diff, bool shouldClaim, bool forceRebalance) = getStakeAndClaimStatus(
         piTokenUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[i],
-        connectors[i].share
+        _claimAndDistributeRewards,
+        connectors[i]
       );
       if (forceRebalance) {
         atLeastOneForceRebalance = true;
@@ -357,11 +357,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       if (status == StakeStatus.EXCESS) {
         // Calling rebalance immediately if interval conditions reached
         if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
-          _rebalancePokeByConf(RebalanceConfig(false, status, diff, forceRebalance, i), _claimAndDistributeRewards);
+          _rebalancePokeByConf(RebalanceConfig(false, status, diff, shouldClaim, forceRebalance, i));
         }
       } else {
         // Push config for second cycle
-        configs[i] = RebalanceConfig(true, status, diff, forceRebalance, i);
+        configs[i] = RebalanceConfig(true, status, diff, shouldClaim, forceRebalance, i);
       }
     }
 
@@ -377,7 +377,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
       // Calling rebalance if interval conditions reached
       if (_canPoke(_isSlasher, configs[i].forceRebalance, minInterval, maxInterval)) {
-        _rebalancePokeByConf(configs[i], _claimAndDistributeRewards);
+        _rebalancePokeByConf(configs[i]);
       }
     }
 
@@ -527,6 +527,34 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     )
   {
     return getStakeStatus(piToken.getUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, _share);
+  }
+
+  function getStakeAndClaimStatus(
+    uint256 _leftOnPiTokenBalance,
+    uint256 _totalStakedBalance,
+    uint256 _stakedBalance,
+    bool _claimAndDistributeRewards,
+    Connector memory _c
+  )
+    public
+    view
+    returns (
+      StakeStatus status,
+      uint256 diff,
+      bool shouldClaim,
+      bool forceRebalance
+    )
+  {
+    (status, diff, forceRebalance) = getStakeStatus(_leftOnPiTokenBalance, _totalStakedBalance, _stakedBalance, _c.share);
+    shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(_c);
+
+    if (shouldClaim && c.claimParams.length != 0) {
+      shouldClaim = c.connector.isClaimAvailable(c.claimParams);
+    }
+
+    if (status == StakeStatus.EQUILIBRIUM && shouldClaim) {
+      forceRebalance = true;
+    }
   }
 
   /*
