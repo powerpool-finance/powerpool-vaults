@@ -8,4 +8,8 @@ interface ITornStaking {
   function getReward() external;
 
   function accumulatedRewards(address user) external view returns (uint256 amount);
+
+  function accumulatedRewardPerTorn() external view returns (uint256);
+
+  function accumulatedRewardRateOnLastUpdate(address user) external view returns (uint256);
 }

@@ -74,6 +74,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 share;
     bool callBeforeAfterPoke;
     uint256 lastClaimRewardsAt;
+    uint256 lastChangeStakeAt;
     bytes stakeData;
     bytes pokeData;
     bytes claimParams;
@@ -429,6 +430,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     if (claimed) {
       _c.lastClaimRewardsAt = block.timestamp;
     }
+    _c.lastChangeStakeAt = block.timestamp;
   }
 
   /**
@@ -549,7 +551,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(_c);
 
     if (shouldClaim && c.claimParams.length != 0) {
-      shouldClaim = c.connector.isClaimAvailable(c.claimParams);
+      shouldClaim = c.connector.isClaimAvailable(c.claimParams, c.lastClaimRewardsAt, c.lastChangeStakeAt);
     }
 
     if (status == StakeStatus.EQUILIBRIUM && shouldClaim) {
