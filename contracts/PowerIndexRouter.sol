@@ -33,6 +33,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 indexed connectorIndex,
     bool indexed isNewConnector
   );
+  event SetConnectorClaimParams(address connector, bytes claimParams);
 
   struct BasicConfig {
     address poolRestrictions;
@@ -188,7 +189,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       ConnectorInput memory c = _connectorList[i];
 
       if (c.newConnector) {
-        connectors.push(Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, new bytes(0), new bytes(0)));
+        connectors.push(Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, 0, new bytes(0), new bytes(0), new bytes(0)));
         c.connectorIndex = connectors.length - 1;
       } else {
         connectors[c.connectorIndex].connector = c.connector;
@@ -208,7 +209,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    */
   function setClaimParams(uint256 _connectorIndex, bytes memory _claimParams) external onlyOwner {
     connectors[_connectorIndex].claimParams = _claimParams;
-    emit SetConnectorClaimParams(connectors[_connectorIndex].connector, _claimParams);
+    emit SetConnectorClaimParams(address(connectors[_connectorIndex].connector), _claimParams);
   }
 
   /**
@@ -293,13 +294,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   /**
    * @notice Executes rebalance(beforePoke, rebalancePoke, claimRewards, afterPoke) for connector contract by config.
    * @param _conf Connector rebalance config.
-   * @param _claimAndDistributeRewards Need to claim and distribute rewards.
    */
   function _rebalancePokeByConf(RebalanceConfig memory _conf) internal {
     Connector storage c = connectors[_conf.connectorIndex];
 
     if (c.callBeforeAfterPoke) {
-      _beforePoke(c, shouldClaim);
+      _beforePoke(c, _conf.shouldClaim);
     }
 
     if (_conf.status != StakeStatus.EQUILIBRIUM) {
@@ -307,7 +307,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
 
     // check claim interval again due to possibility of claiming by stake or redeem function(maybe already claimed)
-    if (_conf.shouldClaim && claimRewardsIntervalReached(c)) {
+    if (_conf.shouldClaim && claimRewardsIntervalReached(c.lastClaimRewardsAt)) {
         _claimRewards(c, _conf.status);
         c.lastClaimRewardsAt = block.timestamp;
     } else {
@@ -315,12 +315,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
 
     if (c.callBeforeAfterPoke) {
-      _afterPoke(c, _conf.status, shouldClaim);
+      _afterPoke(c, _conf.status, _conf.shouldClaim);
     }
   }
 
-  function claimRewardsIntervalReached(Connector storage _c) public view {
-    return _c.lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
+  function claimRewardsIntervalReached(uint256 _lastClaimRewardsAt) public view returns (bool) {
+    return _lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
   }
 
   /**
@@ -419,7 +419,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
   function _callStakeRedeem(string memory _method, Connector storage _c, uint256 _diff) internal {
     (bool success, bytes memory result) = address(_c.connector).delegatecall(
-      abi.encodeWithSignature(_method, diff, _getDistributeData(_c))
+      abi.encodeWithSignature(_method, _diff, _getDistributeData(_c))
     );
     require(success, string(result));
     bool claimed;
@@ -548,10 +548,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     )
   {
     (status, diff, forceRebalance) = getStakeStatus(_leftOnPiTokenBalance, _totalStakedBalance, _stakedBalance, _c.share);
-    shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(_c);
+    shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(_c.lastClaimRewardsAt);
 
-    if (shouldClaim && c.claimParams.length != 0) {
-      shouldClaim = c.connector.isClaimAvailable(c.claimParams, c.lastClaimRewardsAt, c.lastChangeStakeAt);
+    if (shouldClaim && _c.claimParams.length != 0) {
+      shouldClaim = _c.connector.isClaimAvailable(_c.claimParams, _c.lastClaimRewardsAt, _c.lastChangeStakeAt);
     }
 
     if (status == StakeStatus.EQUILIBRIUM && shouldClaim) {

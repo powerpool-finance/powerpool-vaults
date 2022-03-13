@@ -6,7 +6,7 @@ pragma experimental ABIEncoderV2;
 import "../interfaces/torn/ITornStaking.sol";
 import "../interfaces/torn/ITornGovernance.sol";
 import "./AbstractStakeRedeemConnector.sol";
-
+import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 
 contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
   uint256 public constant RATIO_CONSTANT = 10000000 ether;
@@ -40,7 +40,7 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
   }
 
   function accumulatedRewardRateDiffForLastUpdate() public view returns (uint256) {
-    return accumulatedRewardPerTorn().diff(accumulatedRewardRateOnLastUpdate());
+    return accumulatedRewardPerTorn().sub(accumulatedRewardRateOnLastUpdate());
   }
 
   function pendingReward(
@@ -49,9 +49,9 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     uint256 _lockedBalance
   ) public view returns (uint256) {
     return _lockedBalance
-    .mul(_accRewardPerTorn.sub(_accRewardRateOnLastUpdate))
-    .div(RATIO_CONSTANT)
-    .add(accumulatedReward());
+      .mul(_accRewardPerTorn.sub(_accRewardRateOnLastUpdate))
+      .div(RATIO_CONSTANT)
+      .add(accumulatedReward());
   }
 
   function forecastReward(
@@ -71,31 +71,24 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
   function getPendingAndForecastReward(
     uint256 _lastClaimRewardsAt,
     uint256 _lastChangeStakeAt,
-    uint256 _reinvestDuration,
-    uint256 _subPendingToForecast
-  ) public view returns (uint256 pending, uint256 forecast, uint256 forecastWithReinvest) {
+    uint256 _reinvestDuration
+  ) public view returns (uint256 pending, uint256 forecast, uint256 forecastByPending) {
     uint256 lastUpdate = _lastClaimRewardsAt > _lastChangeStakeAt ? _lastClaimRewardsAt : _lastChangeStakeAt;
     uint256 lockedBalance = getUnderlyingStaked();
     uint256 accRewardPerTorn = accumulatedRewardPerTorn();
     uint256 accRewardOnLastUpdate = accumulatedRewardRateOnLastUpdate();
-    uint256 pending = pendingReward(accRewardPerTorn, accRewardOnLastUpdate, lockedBalance);
+    pending = pendingReward(accRewardPerTorn, accRewardOnLastUpdate, lockedBalance);
 
     return (
       pending,
-      forecastReward(accRewardPerTorn, accRewardOnLastUpdate, reinvestDuration, lastUpdate, lockedBalance),
-      forecastReward(
-        accRewardPerTorn,
-        accRewardOnLastUpdate,
-        reinvestDuration,
-        lastUpdate,
-        lockedBalance.add(pending).sub(_subPendingToForecast)
-      )
+      forecastReward(accRewardPerTorn, accRewardOnLastUpdate, _reinvestDuration, lastUpdate, lockedBalance),
+      forecastReward(accRewardPerTorn, accRewardOnLastUpdate, _reinvestDuration, lastUpdate, pending)
     );
   }
 
   /*** OVERRIDES ***/
 
-  function getUnderlyingStaked() external view override returns (uint256) {
+  function getUnderlyingStaked() public view override returns (uint256) {
     if (STAKING == address(0)) {
       return 0;
     }
@@ -119,32 +112,26 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
   }
 
   function isClaimAvailable(
-    bytes _claimParams,
+    bytes calldata _claimParams,
     uint256 _lastClaimRewardsAt,
     uint256 _lastChangeStakeAt
-  ) external virtual returns (bool) {
-    (uint256 reinvestDuration, uint256 reinvestRatio, uint256 gasToReinvest) = unpackClaimParams(_claimParams);
+  ) external view virtual override returns (bool) {
+    (uint256 paybackDuration, uint256 gasToReinvest) = unpackClaimParams(_claimParams);
 
     uint256 tornPriceRatio = getTornPriceRatio();
     uint256 ethNeedToReinvest = gasToReinvest.mul(tx.gasprice);
     uint256 tornNeedToReinvest = calcWethToTornWithRatio(ethNeedToReinvest, tornPriceRatio);
-    (
-      ,
-      uint256 forecastReward,
-      uint256 forecastWithReinvestReward
-    ) = getPendingAndForecastReward(_lastClaimRewardsAt, _lastChangeStakeAt, reinvestDuration, tornNeedToReinvest);
-
-    uint256 currentRatio = forecastWithReinvestReward.mul(1 ether).div(forecastReward);
-    return currentRatio >= reinvestRatio;
+    (, , uint256 forecastByPending) = getPendingAndForecastReward(_lastClaimRewardsAt, _lastChangeStakeAt, paybackDuration);
+    return forecastByPending >= tornNeedToReinvest;
   }
 
-  function getTornPriceRatio(uint256 _tornAmountIn) public view returns (uint256) {
-    uint256 uniswapTimePeriod = 5400;
-    uint256 uniswapTornSwappingFee = 10000;
-    uint256 uniswapWethSwappingFee = 0;
+  function getTornPriceRatio() public view returns (uint256) {
+    uint32 uniswapTimePeriod = 5400;
+    uint24 uniswapTornSwappingFee = 10000;
+    uint24 uniswapWethSwappingFee = 0;
 
     return UniswapV3OracleHelper.getPriceRatioOfTokens(
-      [torn, UniswapV3OracleHelper.WETH],
+      [address(UNDERLYING), UniswapV3OracleHelper.WETH],
       [uniswapTornSwappingFee, uniswapWethSwappingFee],
       uniswapTimePeriod
     );
@@ -166,24 +153,22 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
    * @notice Pack claim params to bytes.
    */
   function packClaimParams(
-    uint256 duration,
-    uint256 ratio,
+    uint256 paybackDuration,
     uint256 gasToReinvest
   ) public pure returns (bytes memory) {
-    return abi.encode(duration, ratio, gasToReinvest);
+    return abi.encode(paybackDuration, gasToReinvest);
   }
 
   /**
    * @notice Unpack claim params from bytes to variables.
    */
   function unpackClaimParams(bytes memory _claimParams) public pure returns (
-    uint256 duration,
-    uint256 ratio,
+    uint256 paybackDuration,
     uint256 gasToReinvest
   ) {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
-      return (0, 0, 0);
+      return (0, 0);
     }
-    (duration, ratio, gasToReinvest) = abi.decode(_claimParams, (uint256, uint256, uint256));
+    (paybackDuration, gasToReinvest) = abi.decode(_claimParams, (uint256, uint256));
   }
 }

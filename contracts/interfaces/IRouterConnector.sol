@@ -26,18 +26,18 @@ interface IRouterConnector {
   function getUnderlyingStaked() external view returns (uint256);
 
   function isClaimAvailable(
-    bytes _claimParams,
+    bytes calldata _claimParams,
     uint256 _lastClaimRewardsAt,
     uint256 _lastChangeStakeAt
   ) external view returns (bool);
 
-  function redeem(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata);
+  function redeem(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata, bool claimed);
 
-  function stake(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata);
+  function stake(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata, bool claimed);
 
   function calculateLockedProfit(bytes calldata _stakeData) external view returns (uint256);
 
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
+  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData calldata _distributeData)
     external
-    returns (bytes memory);
+    returns (bytes calldata);
 }

@@ -239,10 +239,10 @@ abstract contract AbstractConnector is IRouterConnector {
   }
 
   function isClaimAvailable(
-    bytes _claimParams,
+    bytes calldata _claimParams,
     uint256 _lastClaimRewardsAt,
     uint256 _lastChangeStakeAt
-  ) external virtual returns (bool) {
+  ) external view virtual override returns (bool) {
     return true;
   }
 }

@@ -2,16 +2,16 @@
 
 pragma solidity ^0.6.12;
 
+import "@openzeppelin/contracts/math/SafeMath.sol";
 import { OracleLibrary } from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import { IUniswapV3Factory } from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
-import { LowGasSafeMath } from "@uniswap/v3-core/contracts/libraries/LowGasSafeMath.sol";
 
 interface IERC20Decimals {
   function decimals() external view returns (uint8);
 }
 
 library UniswapV3OracleHelper {
-  using LowGasSafeMath for uint256;
+  using SafeMath for uint256;
 
   IUniswapV3Factory internal constant UniswapV3Factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
   address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -33,16 +33,17 @@ library UniswapV3OracleHelper {
     uint24 fee,
     uint32 period
   ) internal view returns (uint256) {
-    uint128 base = uint128(10)**uint128(IERC20Decimals(quoteToken).decimals());
-    if (baseToken == quoteToken) return base;
-    else
-      return
-      OracleLibrary.getQuoteAtTick(
-        OracleLibrary.consult(UniswapV3Factory.getPool(baseToken, quoteToken, fee), period),
-        base,
-        baseToken,
-        quoteToken
+    uint128 base = uint128(10) ** uint128(IERC20Decimals(quoteToken).decimals());
+    if (baseToken == quoteToken) {
+      return base;
+    }
+    else {
+      (int24 timeWeightedAverageTick, ) = OracleLibrary.consult(
+        UniswapV3Factory.getPool(baseToken, quoteToken, fee),
+        period
       );
+      return OracleLibrary.getQuoteAtTick(timeWeightedAverageTick, base, baseToken, quoteToken);
+    }
   }
 
   /**

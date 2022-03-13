@@ -60,7 +60,6 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     }
 
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
-    return result;
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData) external override returns (bytes memory result, bool claimed) {
@@ -76,7 +75,6 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     }
 
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
-    return result;
   }
 
   /*** INTERNALS ***/
