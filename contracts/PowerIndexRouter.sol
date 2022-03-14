@@ -89,6 +89,13 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     bool callBeforeAfterPoke;
   }
 
+  struct PokeFromState {
+    uint256 minInterval;
+    uint256 maxInterval;
+    uint256 piTokenUnderlyingBalance;
+    bool atLeastOneForceRebalance;
+  }
+
   modifier onlyEOA() {
     require(tx.origin == msg.sender, "ONLY_EOA");
     _;
@@ -329,12 +336,13 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    * @param _isSlasher Calling by Slasher.
    */
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
-    (uint256 minInterval, uint256 maxInterval) = _getMinMaxReportInterval();
+    PokeFromState memory state = PokeFromState(0, 0, 0, false);
+    (state.minInterval, state.maxInterval) = _getMinMaxReportInterval();
 
-    uint256 piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
+    state.piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
     (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
 
-    bool atLeastOneForceRebalance = false;
+    state.atLeastOneForceRebalance = false;
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
@@ -345,19 +353,19 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
 
       (StakeStatus status, uint256 diff, bool shouldClaim, bool forceRebalance) = getStakeAndClaimStatus(
-        piTokenUnderlyingBalance,
+        state.piTokenUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[i],
         _claimAndDistributeRewards,
         connectors[i]
       );
       if (forceRebalance) {
-        atLeastOneForceRebalance = true;
+        state.atLeastOneForceRebalance = true;
       }
 
       if (status == StakeStatus.EXCESS) {
         // Calling rebalance immediately if interval conditions reached
-        if (_canPoke(_isSlasher, forceRebalance, minInterval, maxInterval)) {
+        if (_canPoke(_isSlasher, forceRebalance, state.minInterval, state.maxInterval)) {
           _rebalancePokeByConf(RebalanceConfig(false, status, diff, shouldClaim, forceRebalance, i));
         }
       } else {
@@ -367,7 +375,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
 
     require(
-      _canPoke(_isSlasher, atLeastOneForceRebalance, minInterval, maxInterval),
+      _canPoke(_isSlasher, state.atLeastOneForceRebalance, state.minInterval, state.maxInterval),
       "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
     );
 
@@ -377,7 +385,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         continue;
       }
       // Calling rebalance if interval conditions reached
-      if (_canPoke(_isSlasher, configs[i].forceRebalance, minInterval, maxInterval)) {
+      if (_canPoke(_isSlasher, configs[i].forceRebalance, state.minInterval, state.maxInterval)) {
         _rebalancePokeByConf(configs[i]);
       }
     }
