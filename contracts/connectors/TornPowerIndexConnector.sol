@@ -128,7 +128,7 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
    * @param _gasPrice Gas price
    */
   function getTornUsedToReinvest(uint256 _gasUsed, uint256 _gasPrice) public view returns(uint256) {
-    return calcTornOutByWethInWithRatio(gasToReinvest.mul(_gasPrice), getTornPriceRatio());
+    return calcTornOutByWethIn(_gasUsed.mul(_gasPrice));
   }
 
   /**
@@ -148,7 +148,7 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
 
   /**
    * @notice Convert TORN amount to WETH amount with built in ratio
-   * @param _tornAmount TORN amount to convert
+   * @param _tornAmountIn TORN amount to convert
    */
   function calcWethOutByTornIn(uint256 _tornAmountIn) external view returns (uint256) {
     return calcWethOutByTornInWithRatio(_tornAmountIn, getTornPriceRatio());
@@ -160,14 +160,14 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
    * @param _ratio Uniswap V3 ratio
    */
   function calcWethOutByTornInWithRatio(uint256 _tornAmount, uint256 _ratio) public pure returns (uint256) {
-    return _tornAmount.mul(UniswapV3OracleHelper.RATIO_DIVIDER).div(_ratio);
+    return _tornAmount.mul(_ratio).div(UniswapV3OracleHelper.RATIO_DIVIDER);
   }
 
   /**
    * @notice Convert WETH amount to TORN amount with built in ratio
    * @param _wethAmount WETH amount to convert
    */
-  function calcTornOutByWethIn(uint256 _wethAmount) external view returns (uint256) {
+  function calcTornOutByWethIn(uint256 _wethAmount) public view returns (uint256) {
     return calcTornOutByWethInWithRatio(_wethAmount, getTornPriceRatio());
   }
 
@@ -177,7 +177,7 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
    * @param _ratio Uniswap V3 ratio
    */
   function calcTornOutByWethInWithRatio(uint256 _wethAmount, uint256 _ratio) public pure returns (uint256) {
-    return _wethAmount.mul(_ratio).div(UniswapV3OracleHelper.RATIO_DIVIDER);
+    return _wethAmount.mul(UniswapV3OracleHelper.RATIO_DIVIDER).div(_ratio);
   }
 
   /**

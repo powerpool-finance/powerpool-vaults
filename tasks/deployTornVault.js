@@ -45,6 +45,8 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
 
   const tornConnector = await TornPowerIndexConnector.new(TORN_STAKING, torn.address, piTorn.address, TORN_GOVERNANCE);
   console.log('tornConnector', tornConnector.address);
+  // console.log('calcTornOutByWethIn', fromEther(await tornConnector.calcTornOutByWethIn(ether('0.1'))));
+  // console.log('calcWethOutByTornIn', fromEther(await tornConnector.calcWethOutByTornIn(ether('5.38727'))));
   await tornRouter.setConnectorList([
     {
       connector: tornConnector.address,
@@ -116,27 +118,36 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   console.log('checkReward 1', fromEther(await staking.checkReward(piTorn.address)));
 
   const TEN_HOURS = 60 * 60 * 10;
+  const GAS_TO_REINVEST = '100000';
+  await impersonateAccount(ethers, TORN_GOVERNANCE);
+
+  await tornRouter.setClaimParams('0', await getClaimParams(TEN_HOURS), {from: OWNER});
+
   await increaseTime(TEN_HOURS);
   await advanceBlocks(1);
-
-  await impersonateAccount(ethers, TORN_GOVERNANCE);
-  await staking.addBurnRewards(ether(840), {from: TORN_GOVERNANCE});
+  await staking.addBurnRewards(ether(1700), {from: TORN_GOVERNANCE});
   console.log('checkReward 2', fromEther(await staking.checkReward(piTorn.address)));
-
   await printForecast(TEN_HOURS);
+  await checkClaimAvailability(TEN_HOURS);
 
-  await tornRouter.setClaimParams('0', await getClaimParams(TEN_HOURS));
+  await increaseTime(TEN_HOURS);
+  await advanceBlocks(1);
+  await staking.addBurnRewards(ether(1700), {from: TORN_GOVERNANCE});
+  console.log('checkReward 3', fromEther(await staking.checkReward(piTorn.address)));
+  await printForecast(TEN_HOURS);
   await checkClaimAvailability(TEN_HOURS);
 
   await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
 
   function getClaimParams(duration) {
-    return tornConnector.packClaimParams(duration, '100000');
+    return tornConnector.packClaimParams(duration, GAS_TO_REINVEST);
   }
   async function checkClaimAvailability(duration) {
-    const connector = await getClaimParams(duration);
-    const res = await tornRouter.isClaimAvailable(connector.claimParams, connector.lastClaimRewardsAt, connector.lastChangeStakeAt);
-    const tornNeedToReinvest = await tornConnector.getTornUsedToReinvest()
+    const connector = await tornRouter.connectors('0');
+    const claimParams = await getClaimParams(duration);
+    const res = await tornConnector.isClaimAvailable(claimParams, connector.lastClaimRewardsAt, connector.lastChangeStakeAt);
+    const tornNeedToReinvest = await tornConnector.getTornUsedToReinvest(GAS_TO_REINVEST, parseInt(process.env.GAS_PRICE) * 10 ** 9);
+    console.log('tornNeedToReinvest', fromEther(tornNeedToReinvest));
     console.log('isClaimAvailable for', parseInt(duration) / (60 * 60), 'hours:', res);
     return res;
   }

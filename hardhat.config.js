@@ -67,7 +67,7 @@ const config = {
     },
     mainnetfork: {
       url: 'http://127.0.0.1:8545/',
-      gasPrice: process.env.GAS_PRICE || 20 * 10 ** 9,
+      gasPrice: process.env.GAS_PRICE ? parseInt(process.env.GAS_PRICE) * 10 ** 9 : 20 * 10 ** 9,
       // accounts: getAccounts('mainnet'),
       gasMultiplier: 1.2,
       timeout: 2000000,
