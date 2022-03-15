@@ -46,13 +46,13 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   }
 
   function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
-    uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
+    uint256 balanceBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
     _approveToStaking(_amount);
 
     _stakeImpl(_amount);
 
-    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(_amount).sub(tokenBefore);
+    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).add(_amount).sub(balanceBefore);
 
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
@@ -63,11 +63,11 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData) external override returns (bytes memory result, bool claimed) {
-    uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
+    uint256 balanceBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
     _redeemImpl(_amount);
 
-    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).add(_amount).sub(tokenBefore);
+    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(_amount).sub(balanceBefore);
 
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
