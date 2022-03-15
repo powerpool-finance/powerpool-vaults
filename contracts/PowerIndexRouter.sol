@@ -10,7 +10,6 @@ import "./interfaces/IPoolRestrictions.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
 import "./PowerIndexNaiveRouter.sol";
-import "hardhat/console.sol";
 
 /**
  * @notice PowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
@@ -310,12 +309,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       _beforePoke(c, _conf.shouldClaim);
     }
 
-    console.log("_pokeFrom 6");
     if (_conf.status != StakeStatus.EQUILIBRIUM) {
       _rebalancePoke(c, _conf.status, _conf.diff);
     }
 
-    console.log("_pokeFrom 7");
     // check claim interval again due to possibility of claiming by stake or redeem function(maybe already claimed)
     if (_conf.shouldClaim && claimRewardsIntervalReached(c.lastClaimRewardsAt)) {
         _claimRewards(c, _conf.status);
@@ -342,10 +339,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     PokeFromState memory state = PokeFromState(0, 0, 0, false);
     (state.minInterval, state.maxInterval) = _getMinMaxReportInterval();
 
-    console.log("_pokeFrom 1");
     state.piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
     (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
-    console.log("_pokeFrom 2");
 
     state.atLeastOneForceRebalance = false;
 
@@ -364,7 +359,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         _claimAndDistributeRewards,
         connectors[i]
       );
-      console.log("_pokeFrom 3");
       if (forceRebalance) {
         state.atLeastOneForceRebalance = true;
       }
@@ -379,7 +373,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         configs[i] = RebalanceConfig(true, status, diff, shouldClaim, forceRebalance, i);
       }
     }
-    console.log("_pokeFrom 4");
 
     require(
       _canPoke(_isSlasher, state.atLeastOneForceRebalance, state.minInterval, state.maxInterval),
@@ -391,10 +384,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       if (!configs[i].shouldPushFunds) {
         continue;
       }
-      console.log("_pokeFrom 5");
       // Calling rebalance if interval conditions reached
       if (_canPoke(_isSlasher, configs[i].forceRebalance, state.minInterval, state.maxInterval)) {
-        console.log("_pokeFrom 5.1");
         _rebalancePokeByConf(configs[i]);
       }
     }
@@ -435,13 +426,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function _callStakeRedeem(string memory _method, Connector storage _c, uint256 _diff) internal {
-    console.log("_pokeFrom 6.1");
     (bool success, bytes memory result) = address(_c.connector).delegatecall(
       abi.encodeWithSignature(_method, _diff, _getDistributeData(_c))
     );
-    console.log("_pokeFrom 6.2");
     require(success, string(result));
-    console.log("_pokeFrom 6.3");
     bool claimed;
     (result, claimed) = abi.decode(result, (bytes, bool));
     if (result.length > 0) {

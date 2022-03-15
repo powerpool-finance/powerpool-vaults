@@ -43,11 +43,11 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   );
   console.log('tornRouter', tornRouter.address);
 
-  const connector = await TornPowerIndexConnector.new(TORN_STAKING, torn.address, piTorn.address, TORN_GOVERNANCE);
-  console.log('connector', connector.address);
+  const tornConnector = await TornPowerIndexConnector.new(TORN_STAKING, torn.address, piTorn.address, TORN_GOVERNANCE);
+  console.log('tornConnector', tornConnector.address);
   await tornRouter.setConnectorList([
     {
-      connector: connector.address,
+      connector: tornConnector.address,
       share: ether(1),
       callBeforeAfterPoke: false,
       newConnector: true,
@@ -55,9 +55,9 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
     },
   ]);
   await piTorn.changeRouter(tornRouter.address);
-  console.log('connector done');
+  console.log('tornConnector done');
   // console.log('getUnderlyingReserve', await tornRouter.getUnderlyingReserve());
-  // console.log('connector.getUnderlyingStaked', await connector.getUnderlyingStaked());
+  // console.log('tornConnector.getUnderlyingStaked', await tornConnector.getUnderlyingStaked());
   // console.log('router.getUnderlyingStaked', await tornRouter.getUnderlyingStaked());
   // console.log('calculateLockedProfit', await tornRouter.calculateLockedProfit());
   // console.log('getUnderlyingAvailable', await tornRouter.getUnderlyingAvailable());
@@ -72,7 +72,7 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   const tornHolder = '0xf977814e90da44bfa03b6295a0616a897441acec';
   const pokerReporter = '0xabdf215fce6c5b0c1b40b9f2068204a9e7c49627';
   await impersonateAccount(ethers, tornHolder);
-  const amount = ether(	300000);
+  const amount = ether(	33400);
   console.log('1 wrapper balance', fromEther(await torn.balanceOf(piTorn.address)));
   await torn.approve(piTorn.address, amount, {from: tornHolder});
   await piTorn.deposit(amount, {from: tornHolder});
@@ -119,15 +119,23 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   await advanceBlocks(1);
 
   await impersonateAccount(ethers, TORN_GOVERNANCE);
-  await staking.addBurnRewards(ether(1000), {from: TORN_GOVERNANCE});
+  await staking.addBurnRewards(ether(840), {from: TORN_GOVERNANCE});
   console.log('checkReward 2', fromEther(await staking.checkReward(piTorn.address)));
 
-  const block = await web3.eth.getBlock('latest');
+  await printForecast(60 * 60 * 10)
 
-  console.log('getPendingAndForecastReward', fromEther(await connector.getPendingAndForecastReward(
-    await tornRouter.connectors('0').then(c => c.lastClaimRewardsAt),
-    await tornRouter.connectors('0').then(c => c.lastChangeStakeAt),
-    (60 * 60 * 24).toString()
-  ).then(r => r.forecastByPending)));
+  async function printForecast(investDuration) {
+    const block = await web3.eth.getBlock('latest');
+    const connector = await tornRouter.connectors('0');
+    let {lastClaimRewardsAt, lastChangeStakeAt} = connector;
+    lastClaimRewardsAt = parseInt(lastClaimRewardsAt.toString(10));
+    lastChangeStakeAt = parseInt(lastChangeStakeAt.toString(10));
+    const lastRewardsAt = lastClaimRewardsAt > lastChangeStakeAt ? lastClaimRewardsAt : lastChangeStakeAt;
 
+    console.log('forecast after', (block.timestamp - lastRewardsAt) / (60 * 60), 'hours:', fromEther(await tornConnector.getPendingAndForecastReward(
+      lastClaimRewardsAt,
+      lastChangeStakeAt,
+      investDuration
+    ).then(r => r.forecastByPending)), 'with invest duration', investDuration / (60 * 60), 'hours');
+  }
 });
