@@ -31,11 +31,11 @@ function signatureAndArgs(payload) {
 }
 
 describe('WrappedPiErc20 Unit Tests', () => {
-  let deployer, alice, bob, stub, mockStaking;
+  let deployer, alice, bob, stub, mockStaking, feeReceiver;
   let cake, router, piCake, myContract, defaultBasicConfig;
 
   beforeEach(async function () {
-    [deployer, alice, bob, stub, mockStaking] = await web3.eth.getAccounts();
+    [deployer, alice, bob, stub, mockStaking, feeReceiver] = await web3.eth.getAccounts();
     myContract = await MyContract.new();
     const poke = await MockPoke.new(true);
     defaultBasicConfig = buildBasicRouterConfig(
@@ -231,6 +231,7 @@ describe('WrappedPiErc20 Unit Tests', () => {
     });
 
     it('should call the router callback with 0', async () => {
+      await router.enableRouterCallback(piCake.address, true);
       await cake.approve(piCake.address, ether(42), { from: alice });
       const res = await piCake.deposit(ether(42), { from: alice });
       await expectEvent.inTransaction(res.tx, MockRouter, 'MockWrapperCallback', {
@@ -248,6 +249,8 @@ describe('WrappedPiErc20 Unit Tests', () => {
 
     it('should take fee if set', async () => {
       assert.equal(await piCake.ethFee(), ether(0));
+
+      await router.enableRouterCallback(piCake.address, true);
 
       const ethFee = ether(0.001);
 
@@ -405,6 +408,7 @@ describe('WrappedPiErc20 Unit Tests', () => {
       });
 
       it('should call the router callback with the returned amount', async () => {
+        await router.enableRouterCallback(piCake.address, true);
         const res = await piCake.withdraw(ether(42), { from: alice });
         await expectEvent.inTransaction(res.tx, MockRouter, 'MockWrapperCallback', {
           withdrawAmount: ether(42),
@@ -445,8 +449,8 @@ describe('WrappedPiErc20 Unit Tests', () => {
         assert.equal(await piCake.totalSupply(), ether(0));
         assert.equal(await piCake.balanceOf(alice), ether(0));
 
-        assert.equal(await web3.eth.getBalance(router.address), ethFee);
-        assert.equal(await web3.eth.getBalance(piCake.address), 0);
+        assert.equal(await web3.eth.getBalance(piCake.address), ethFee);
+        assert.equal(await web3.eth.getBalance(router.address), 0);
       });
 
       it('should ignore fee for the whitelisted addresses', async () => {
@@ -607,6 +611,7 @@ describe('WrappedPiErc20 Unit Tests', () => {
       });
 
       it('should call the router callback with the returned amount', async () => {
+        await router.enableRouterCallback(piCake.address, true);
         const res = await piCake.withdrawShares(ether(42), { from: alice });
         await expectEvent.inTransaction(res.tx, MockRouter, 'MockWrapperCallback', {
           withdrawAmount: ether(42),
