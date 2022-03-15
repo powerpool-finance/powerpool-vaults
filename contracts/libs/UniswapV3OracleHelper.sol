@@ -33,11 +33,10 @@ library UniswapV3OracleHelper {
     uint24 fee,
     uint32 period
   ) internal view returns (uint256) {
-    uint128 base = uint128(10) ** uint128(IERC20Decimals(quoteToken).decimals());
+    uint128 base = uint128(10)**uint128(IERC20Decimals(quoteToken).decimals());
     if (baseToken == quoteToken) {
       return base;
-    }
-    else {
+    } else {
       (int24 timeWeightedAverageTick, ) = OracleLibrary.consult(
         UniswapV3Factory.getPool(baseToken, quoteToken, fee),
         period
@@ -92,6 +91,7 @@ library UniswapV3OracleHelper {
     uint32 period
   ) internal view returns (uint256) {
     return
-    getPriceOfTokenInWETH(tokens[0], fees[0], period).mul(RATIO_DIVIDER) / getPriceOfTokenInWETH(tokens[1], fees[1], period);
+      getPriceOfTokenInWETH(tokens[0], fees[0], period).mul(RATIO_DIVIDER) /
+      getPriceOfTokenInWETH(tokens[1], fees[1], period);
   }
 }

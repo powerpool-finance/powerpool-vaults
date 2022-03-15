@@ -31,9 +31,13 @@ interface IRouterConnector {
     uint256 _lastChangeStakeAt
   ) external view returns (bool);
 
-  function redeem(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata, bool claimed);
+  function redeem(uint256 _amount, DistributeData calldata _distributeData)
+    external
+    returns (bytes calldata, bool claimed);
 
-  function stake(uint256 _amount, DistributeData calldata _distributeData) external returns (bytes calldata, bool claimed);
+  function stake(uint256 _amount, DistributeData calldata _distributeData)
+    external
+    returns (bytes calldata, bool claimed);
 
   function calculateLockedProfit(bytes calldata _stakeData) external view returns (uint256);
 

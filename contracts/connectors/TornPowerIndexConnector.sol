@@ -54,10 +54,10 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     uint256 _accRewardRateOnLastUpdate,
     uint256 _lockedBalance
   ) public view returns (uint256) {
-    return _lockedBalance
-      .mul(_accRewardPerTorn.sub(_accRewardRateOnLastUpdate))
-      .div(RATIO_CONSTANT)
-      .add(accumulatedReward());
+    return
+      _lockedBalance.mul(_accRewardPerTorn.sub(_accRewardRateOnLastUpdate)).div(RATIO_CONSTANT).add(
+        accumulatedReward()
+      );
   }
 
   /**
@@ -75,11 +75,12 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     uint256 _lastRewardsUpdate,
     uint256 _lockedBalance
   ) public view returns (uint256) {
-    return _reinvestDuration
-      .mul(_accRewardPerTorn.sub(_accRewardRateOnLastUpdate))
-      .div(block.timestamp.sub(_lastRewardsUpdate))
-      .mul(_lockedBalance)
-      .div(RATIO_CONSTANT);
+    return
+      _reinvestDuration
+        .mul(_accRewardPerTorn.sub(_accRewardRateOnLastUpdate))
+        .div(block.timestamp.sub(_lastRewardsUpdate))
+        .mul(_lockedBalance)
+        .div(RATIO_CONSTANT);
   }
 
   /**
@@ -92,7 +93,15 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     uint256 _lastClaimRewardsAt,
     uint256 _lastChangeStakeAt,
     uint256 _reinvestDuration
-  ) public view returns (uint256 pending, uint256 forecast, uint256 forecastByPending) {
+  )
+    public
+    view
+    returns (
+      uint256 pending,
+      uint256 forecast,
+      uint256 forecastByPending
+    )
+  {
     uint256 lastUpdate = _lastClaimRewardsAt > _lastChangeStakeAt ? _lastClaimRewardsAt : _lastChangeStakeAt;
     uint256 lockedBalance = getUnderlyingStaked();
     uint256 accRewardPerTorn = accumulatedRewardPerTorn();
@@ -118,7 +127,11 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     uint256 _lastChangeStakeAt
   ) external view virtual override returns (bool) {
     (uint256 paybackDuration, uint256 gasToReinvest) = unpackClaimParams(_claimParams);
-    (, , uint256 forecastByPending) = getPendingAndForecastReward(_lastClaimRewardsAt, _lastChangeStakeAt, paybackDuration);
+    (, , uint256 forecastByPending) = getPendingAndForecastReward(
+      _lastClaimRewardsAt,
+      _lastChangeStakeAt,
+      paybackDuration
+    );
     return forecastByPending >= getTornUsedToReinvest(gasToReinvest, tx.gasprice);
   }
 
@@ -127,7 +140,7 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
    * @param _gasUsed Gas used for reinvest transaction
    * @param _gasPrice Gas price
    */
-  function getTornUsedToReinvest(uint256 _gasUsed, uint256 _gasPrice) public view returns(uint256) {
+  function getTornUsedToReinvest(uint256 _gasUsed, uint256 _gasPrice) public view returns (uint256) {
     return calcTornOutByWethIn(_gasUsed.mul(_gasPrice));
   }
 
@@ -139,11 +152,12 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     uint24 uniswapTornSwappingFee = 10000;
     uint24 uniswapWethSwappingFee = 0;
 
-    return UniswapV3OracleHelper.getPriceRatioOfTokens(
-      [address(UNDERLYING), UniswapV3OracleHelper.WETH],
-      [uniswapTornSwappingFee, uniswapWethSwappingFee],
-      uniswapTimePeriod
-    );
+    return
+      UniswapV3OracleHelper.getPriceRatioOfTokens(
+        [address(UNDERLYING), UniswapV3OracleHelper.WETH],
+        [uniswapTornSwappingFee, uniswapWethSwappingFee],
+        uniswapTimePeriod
+      );
   }
 
   /**
@@ -183,20 +197,18 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(
-    uint256 paybackDuration,
-    uint256 gasToReinvest
-  ) public pure returns (bytes memory) {
+  function packClaimParams(uint256 paybackDuration, uint256 gasToReinvest) public pure returns (bytes memory) {
     return abi.encode(paybackDuration, gasToReinvest);
   }
 
   /**
    * @notice Unpack claim params from bytes to variables.
    */
-  function unpackClaimParams(bytes memory _claimParams) public pure returns (
-    uint256 paybackDuration,
-    uint256 gasToReinvest
-  ) {
+  function unpackClaimParams(bytes memory _claimParams)
+    public
+    pure
+    returns (uint256 paybackDuration, uint256 gasToReinvest)
+  {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
       return (0, 0);
     }

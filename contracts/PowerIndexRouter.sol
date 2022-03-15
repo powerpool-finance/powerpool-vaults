@@ -197,7 +197,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       ConnectorInput memory c = _connectorList[i];
 
       if (c.newConnector) {
-        connectors.push(Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, 0, new bytes(0), new bytes(0), new bytes(0)));
+        connectors.push(
+          Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, 0, new bytes(0), new bytes(0), new bytes(0))
+        );
         c.connectorIndex = connectors.length - 1;
       } else {
         connectors[c.connectorIndex].connector = c.connector;
@@ -426,7 +428,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     _callStakeRedeem("stake(uint256,(bytes,uint256,address))", _c, _diff);
   }
 
-  function _callStakeRedeem(string memory _method, Connector storage _c, uint256 _diff) internal {
+  function _callStakeRedeem(
+    string memory _method,
+    Connector storage _c,
+    uint256 _diff
+  ) internal {
     (bool success, bytes memory result) = address(_c.connector).delegatecall(
       abi.encodeWithSignature(_method, _diff, _getDistributeData(_c))
     );
@@ -556,7 +562,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       bool forceRebalance
     )
   {
-    (status, diff, forceRebalance) = getStakeStatus(_leftOnPiTokenBalance, _totalStakedBalance, _stakedBalance, _c.share);
+    (status, diff, forceRebalance) = getStakeStatus(
+      _leftOnPiTokenBalance,
+      _totalStakedBalance,
+      _stakedBalance,
+      _c.share
+    );
     shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(_c.lastClaimRewardsAt);
 
     if (shouldClaim && _c.claimParams.length != 0) {

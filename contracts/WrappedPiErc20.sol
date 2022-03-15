@@ -11,7 +11,6 @@ import "./interfaces/PowerIndexNaiveRouterInterface.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/WrappedPiErc20Interface.sol";
 
-
 contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;

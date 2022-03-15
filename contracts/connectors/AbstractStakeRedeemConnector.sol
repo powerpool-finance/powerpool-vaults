@@ -45,7 +45,11 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     return new bytes(0);
   }
 
-  function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
+  function stake(uint256 _amount, DistributeData memory _distributeData)
+    public
+    override
+    returns (bytes memory result, bool claimed)
+  {
     uint256 balanceBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
     _approveToStaking(_amount);
@@ -62,7 +66,11 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
   }
 
-  function redeem(uint256 _amount, DistributeData memory _distributeData) external override returns (bytes memory result, bool claimed) {
+  function redeem(uint256 _amount, DistributeData memory _distributeData)
+    external
+    override
+    returns (bytes memory result, bool claimed)
+  {
     uint256 balanceBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
     _redeemImpl(_amount);
