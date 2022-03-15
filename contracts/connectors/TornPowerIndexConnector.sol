@@ -117,12 +117,12 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     uint256 _lastChangeStakeAt
   ) external view virtual override returns (bool) {
     (uint256 paybackDuration, uint256 gasToReinvest) = unpackClaimParams(_claimParams);
-
-    uint256 tornPriceRatio = getTornPriceRatio();
-    uint256 ethNeedToReinvest = gasToReinvest.mul(tx.gasprice);
-    uint256 tornNeedToReinvest = calcWethToTornWithRatio(ethNeedToReinvest, tornPriceRatio);
     (, , uint256 forecastByPending) = getPendingAndForecastReward(_lastClaimRewardsAt, _lastChangeStakeAt, paybackDuration);
-    return forecastByPending >= tornNeedToReinvest;
+    return forecastByPending >= getTornUsedToReinvest(gasToReinvest, tx.gasprice);
+  }
+
+  function getTornUsedToReinvest(uint256 gasUsed, uint256 gasPrice) public view returns(uint256) {
+    return calcWethToTornWithRatio(gasToReinvest.mul(gasPrice), getTornPriceRatio());
   }
 
   function getTornPriceRatio() public view returns (uint256) {

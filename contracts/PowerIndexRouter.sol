@@ -10,6 +10,7 @@ import "./interfaces/IPoolRestrictions.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
 import "./PowerIndexNaiveRouter.sol";
+import "hardhat/console.sol";
 
 /**
  * @notice PowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
@@ -315,8 +316,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
     // check claim interval again due to possibility of claiming by stake or redeem function(maybe already claimed)
     if (_conf.shouldClaim && claimRewardsIntervalReached(c.lastClaimRewardsAt)) {
-        _claimRewards(c, _conf.status);
-        c.lastClaimRewardsAt = block.timestamp;
+      _claimRewards(c, _conf.status);
+      c.lastClaimRewardsAt = block.timestamp;
     } else {
       require(_conf.status != StakeStatus.EQUILIBRIUM, "NOTHING_TO_DO");
     }

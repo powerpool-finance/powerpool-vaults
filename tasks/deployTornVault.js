@@ -115,14 +115,31 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
   console.log('checkReward 1', fromEther(await staking.checkReward(piTorn.address)));
 
-  await increaseTime(60 * 60 * 10);
+  const TEN_HOURS = 60 * 60 * 10;
+  await increaseTime(TEN_HOURS);
   await advanceBlocks(1);
 
   await impersonateAccount(ethers, TORN_GOVERNANCE);
   await staking.addBurnRewards(ether(840), {from: TORN_GOVERNANCE});
   console.log('checkReward 2', fromEther(await staking.checkReward(piTorn.address)));
 
-  await printForecast(60 * 60 * 10)
+  await printForecast(TEN_HOURS);
+
+  await tornRouter.setClaimParams('0', await getClaimParams(TEN_HOURS));
+  await checkClaimAvailability(TEN_HOURS);
+
+  await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
+
+  function getClaimParams(duration) {
+    return tornConnector.packClaimParams(duration, '100000');
+  }
+  async function checkClaimAvailability(duration) {
+    const connector = await getClaimParams(duration);
+    const res = await tornRouter.isClaimAvailable(connector.claimParams, connector.lastClaimRewardsAt, connector.lastChangeStakeAt);
+    const tornNeedToReinvest = await tornConnector.getTornUsedToReinvest()
+    console.log('isClaimAvailable for', parseInt(duration) / (60 * 60), 'hours:', res);
+    return res;
+  }
 
   async function printForecast(investDuration) {
     const block = await web3.eth.getBlock('latest');
