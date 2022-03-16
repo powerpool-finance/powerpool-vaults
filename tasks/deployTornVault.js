@@ -2,7 +2,7 @@ require('@nomiclabs/hardhat-truffle5');
 require('@nomiclabs/hardhat-ethers');
 
 task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers, network}) => {
-  const {ether, fromEther, impersonateAccount, gwei, increaseTime, advanceBlocks} = require("../test/helpers");
+  const {ether, fromEther, impersonateAccount, gwei, increaseTime, advanceBlocks} = require('../test/helpers');
   const WrappedPiErc20 = await artifacts.require('WrappedPiErc20');
   const IERC20 = await artifacts.require('IERC20');
   const PowerIndexRouter = await artifacts.require('PowerIndexRouter');
@@ -12,7 +12,7 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   const TornPowerIndexConnector = await artifacts.require('TornPowerIndexConnector');
 
   if (process.env.FORK) {
-    await ethers.provider.send("hardhat_reset", [{forking: {jsonRpcUrl: process.env.FORK}}]);
+    await ethers.provider.send('hardhat_reset', [{forking: {jsonRpcUrl: process.env.FORK}}]);
   }
 
   const { web3 } = WrappedPiErc20;
@@ -31,13 +31,13 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   const tornRouter = await PowerIndexRouter.new(
     piTorn.address,
     {
-      poolRestrictions: "0x698967cA2fB85A6D9a7D2BeD4D2F6D32Bbc5fCdc",
-      powerPoke: "0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96",
+      poolRestrictions: '0x698967cA2fB85A6D9a7D2BeD4D2F6D32Bbc5fCdc',
+      powerPoke: '0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96',
       reserveRatio: ether(0.1),
       reserveRatioLowerBound: ether(0.01),
       reserveRatioUpperBound: ether(0.2),
-      claimRewardsInterval: "604800",
-      performanceFeeReceiver: "0xd132973eaebbd6d7ca7b88e9170f2cca058de430",
+      claimRewardsInterval: '604800',
+      performanceFeeReceiver: '0xd132973eaebbd6d7ca7b88e9170f2cca058de430',
       performanceFee: ether(0.003)
     }
   );

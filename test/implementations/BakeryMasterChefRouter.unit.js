@@ -261,11 +261,7 @@ describe('BakeryMasterChefRouter Tests', () => {
 
     describe('on poke', async () => {
       it('should do nothing when nothing has changed', async () => {
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-
-        assert.equal(await bake.balanceOf(bakeryChef.address), ether(50400));
-        assert.equal((await bakeryChef.poolUserInfoMap(bake.address, piBake.address)).amount, ether(8000));
-        assert.equal(await bake.balanceOf(piBake.address), ether(2000));
+        await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
       });
 
       it('should increase reserve if required', async () => {

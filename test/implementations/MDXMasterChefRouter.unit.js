@@ -277,11 +277,7 @@ describe('MDXMasterChefRouter Tests', () => {
 
     describe('on poke', async () => {
       it('should do nothing when nothing has changed', async () => {
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-
-        assert.equal(await mdx.balanceOf(boardRoomMDX.address), ether(568400));
-        assert.equal((await boardRoomMDX.userInfo(0, piMdx.address)).amount, ether(8000));
-        assert.equal(await mdx.balanceOf(piMdx.address), ether(2000));
+        await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
       });
 
       it('should increase reserve if required', async () => {
