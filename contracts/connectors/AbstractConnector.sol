@@ -72,7 +72,7 @@ abstract contract AbstractConnector is IRouterConnector {
    * @param _totalReward Total reward received
    * @return lockedProfitReward Rewards that locked in vesting.
    * @return stakeData Result packed rewards data.
-  */
+   */
   function _distributeReward(
     DistributeData memory _distributeData,
     WrappedPiErc20Interface _piToken,
@@ -101,7 +101,14 @@ abstract contract AbstractConnector is IRouterConnector {
 
     lastRewardDistribution = block.timestamp;
 
-    emit DistributeReward(msg.sender, _totalReward, pvpReward, lockedProfitReward, lockedProfitBefore, lockedProfitAfter);
+    emit DistributeReward(
+      msg.sender,
+      _totalReward,
+      pvpReward,
+      lockedProfitReward,
+      lockedProfitBefore,
+      lockedProfitAfter
+    );
 
     return (lockedProfitReward, packStakeData(lockedProfit, lastRewardDistribution, performanceFeeDebt));
   }
