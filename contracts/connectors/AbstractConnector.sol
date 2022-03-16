@@ -70,21 +70,21 @@ abstract contract AbstractConnector is IRouterConnector {
    * @param _piToken piToken(piERC20) address.
    * @param _token ERC20 Token address to distribute reward.
    * @param _totalReward Total reward received
+   * @return lockedProfitReward Rewards that locked in vesting.
    * @return stakeData Result packed rewards data.
-   */
+  */
   function _distributeReward(
     DistributeData memory _distributeData,
     WrappedPiErc20Interface _piToken,
     IERC20 _token,
     uint256 _totalReward
-  ) internal returns (bytes memory stakeData) {
+  ) internal returns (uint256 lockedProfitReward, bytes memory stakeData) {
     (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackStakeData(
       _distributeData.stakeData
     );
     uint256 pvpReward;
-    uint256 piTokenReward;
     // Step #1. Distribute pvpReward
-    (pvpReward, piTokenReward, performanceFeeDebt) = _distributePerformanceFee(
+    (pvpReward, lockedProfitReward, performanceFeeDebt) = _distributePerformanceFee(
       _distributeData.performanceFee,
       _distributeData.performanceFeeReceiver,
       performanceFeeDebt,
@@ -92,18 +92,18 @@ abstract contract AbstractConnector is IRouterConnector {
       _token,
       _totalReward
     );
-    require(piTokenReward > 0, "NO_POOL_REWARDS_UNDERLYING");
+    require(lockedProfitReward > 0, "NO_POOL_REWARDS_UNDERLYING");
 
     // Step #2 Reset lockedProfit
     uint256 lockedProfitBefore = calculateLockedProfit(lockedProfit, lastRewardDistribution);
-    uint256 lockedProfitAfter = lockedProfitBefore.add(piTokenReward);
+    uint256 lockedProfitAfter = lockedProfitBefore.add(lockedProfitReward);
     lockedProfit = lockedProfitAfter;
 
     lastRewardDistribution = block.timestamp;
 
-    emit DistributeReward(msg.sender, _totalReward, pvpReward, piTokenReward, lockedProfitBefore, lockedProfitAfter);
+    emit DistributeReward(msg.sender, _totalReward, pvpReward, lockedProfitReward, lockedProfitBefore, lockedProfitAfter);
 
-    return packStakeData(lockedProfit, lastRewardDistribution, performanceFeeDebt);
+    return (lockedProfitReward, packStakeData(lockedProfit, lastRewardDistribution, performanceFeeDebt));
   }
 
   /**

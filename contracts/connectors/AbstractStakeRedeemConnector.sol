@@ -29,15 +29,17 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
 
   function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
     external
+    virtual
     override
-    returns (bytes memory)
+    returns (bytes memory stakeData)
   {
     if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
       uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
       _claimImpl();
       uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
       if (receivedReward > 0) {
-        return _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+        (, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+        return stakeData;
       }
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
@@ -59,7 +61,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).add(_amount).sub(balanceBefore);
 
     if (receivedReward > 0) {
-      result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (, result) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
       claimed = true;
     }
 
@@ -78,7 +80,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(_amount).sub(balanceBefore);
 
     if (receivedReward > 0) {
-      result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (, result) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
       claimed = true;
     }
 

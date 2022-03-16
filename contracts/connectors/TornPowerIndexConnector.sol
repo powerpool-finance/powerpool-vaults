@@ -21,6 +21,26 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     GOVERNANCE = _governance;
   }
 
+  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
+    external
+    override
+    returns (bytes memory stakeData)
+  {
+      uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
+      _claimImpl();
+      uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
+      if (receivedReward > 0) {
+        uint256 rewardsToReinvest;
+        (rewardsToReinvest, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+        _approveToStaking(rewardsToReinvest);
+        _stakeImpl(rewardsToReinvest);
+        return stakeData;
+      }
+    // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
+    // so no additional actions required.
+    return new bytes(0);
+  }
+
   /*** VIEWERS ***/
 
   function getPendingRewards() public view returns (uint256) {

@@ -139,6 +139,8 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
 
   await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
 
+  console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
+
   function getClaimParams(duration) {
     return tornConnector.packClaimParams(duration, GAS_TO_REINVEST);
   }
