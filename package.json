@@ -30,7 +30,7 @@
     "@openzeppelin/test-helpers": "^0.5.6",
     "@openzeppelin/truffle-upgrades": "^1.2.1",
     "@openzeppelin/upgrades": "^2.8.0",
-    "@powerpool/power-oracle": "git://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf9",
+    "@powerpool/power-oracle": "https://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf9",
     "@truffle/contract": "^4.2.26",
     "@truffle/hdwallet-provider": "^1.1.1",
     "eslint": "^8.1.0",

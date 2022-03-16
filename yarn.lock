@@ -875,9 +875,9 @@
     web3-eth-contract "1.2.2"
     web3-utils "1.2.2"
 
-"@powerpool/power-oracle@git://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf9":
+"@powerpool/power-oracle@https://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf9":
   version "1.0.0"
-  resolved "git://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf915b2d03b4e2e50ab68712165e379d1640"
+  resolved "https://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf915b2d03b4e2e50ab68712165e379d1640"
   dependencies:
     hardhat-typechain "^0.3.4"
 
