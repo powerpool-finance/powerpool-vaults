@@ -9,6 +9,14 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "../interfaces/WrappedPiErc20Interface.sol";
 import "../interfaces/IRouterConnector.sol";
 
+/**
+ * @notice Connectors execute staking strategies by calling from PowerIndexRouter with delegatecall. Therefore,
+ * connector contracts should not have any rights stored in other contracts. Instead, rights for connector logic
+ * must be provided to PowerIndexRouter by proxy pattern, where the router is a proxy, and the connectors are
+ * implementations. Every connector implementation has unique staking logic for stake, redeem, beforePoke, and
+ * afterPoke functions, that returns data to save in PowerIndexRouter storage because connectors don't have any
+ * storage.
+ */
 abstract contract AbstractConnector is IRouterConnector {
   using SafeMath for uint256;
 
@@ -39,17 +47,30 @@ abstract contract AbstractConnector is IRouterConnector {
     LOCKED_PROFIT_DEGRADATION = _lockedProfitDegradation;
   }
 
-  function _callStaking(
+  /**
+   * @notice Call external contract by piToken (piERC20) contract.
+   * @param _piToken piToken(piERC20) to call from.
+   * @param _contract Contract to call.
+   * @param _sig Function signature to call.
+   * @param _data Data of function arguments to call.
+   * @return Data returned from contract.
+   */
+  function _callExternal(
     WrappedPiErc20Interface _piToken,
-    address _staking,
+    address _contract,
     bytes4 _sig,
     bytes memory _data
   ) internal returns (bytes memory) {
-    return _piToken.callExternal(_staking, _sig, _data, 0);
+    return _piToken.callExternal(_contract, _sig, _data, 0);
   }
 
   /**
-   * @notice Distributes an underlying token reward received in the same tx earlier.
+   * @notice Distributes performance fee from reward and calculates locked profit.
+   * @param _distributeData Data is stored in the router contract and passed to the connector's functions.
+   * @param _piToken piToken(piERC20) address.
+   * @param _token ERC20 Token address to distribute reward.
+   * @param _totalReward Total reward received
+   * @return rewardsData Result packed rewards data.
    */
   function _distributeReward(
     DistributeData memory _distributeData,
@@ -85,6 +106,19 @@ abstract contract AbstractConnector is IRouterConnector {
     return packRewardsData(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
+  /**
+   * @notice Distributes performance fee from reward.
+   * @param _performanceFee Share of fee to subtract as performance fee.
+   * @param _performanceFeeReceiver Receiver of performance fee.
+   * @param _performanceFeeDebt Performance fee amount left from last distribution.
+   * @param _piToken piToken(piERC20).
+   * @param _underlying Underlying ERC20 token.
+   * @param _totalReward Total reward amount.
+   * @return performance Fee amount calculated to distribute.
+   * @return remainder Diff between total reward amount and performance fee.
+   * @return resultPerformanceFeeDebt Not yet distributed performance amount due to insufficient balance on
+   *         piToken (piERC20).
+   */
   function _distributePerformanceFee(
     uint256 _performanceFee,
     address _performanceFeeReceiver,
@@ -114,8 +148,7 @@ abstract contract AbstractConnector is IRouterConnector {
       if (underlyingBalance >= totalFeeToPayOut) {
         _safeTransfer(_piToken, _underlying, _performanceFeeReceiver, totalFeeToPayOut);
       } else {
-        uint256 diff = totalFeeToPayOut.sub(underlyingBalance);
-        resultPerformanceFeeDebt = totalFeeToPayOut.sub(diff);
+        resultPerformanceFeeDebt = totalFeeToPayOut.sub(underlyingBalance);
         _safeTransfer(_piToken, _underlying, _performanceFeeReceiver, underlyingBalance);
       }
 
@@ -125,6 +158,9 @@ abstract contract AbstractConnector is IRouterConnector {
     }
   }
 
+  /**
+   * @notice Pack reward data to bytes.
+   */
   function packRewardsData(
     uint256 lockedProfit,
     uint256 lastRewardDistribution,
@@ -133,6 +169,9 @@ abstract contract AbstractConnector is IRouterConnector {
     return abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
+  /**
+   * @notice Unpack reward data from bytes to variables.
+   */
   function unpackRewardsData(bytes memory _rewardsData)
     public
     pure
@@ -148,22 +187,38 @@ abstract contract AbstractConnector is IRouterConnector {
     (lockedProfit, lastRewardDistribution, performanceFeeDebt) = abi.decode(_rewardsData, (uint256, uint256, uint256));
   }
 
+  /**
+   * @notice Calculate locked profit from packed _rewardsData.
+   */
   function calculateLockedProfit(bytes memory _rewardsData) external view override returns (uint256) {
     (uint256 lockedProfit, uint256 lastRewardDistribution, ) = unpackRewardsData(_rewardsData);
     return calculateLockedProfit(lockedProfit, lastRewardDistribution);
   }
 
-  function calculateLockedProfit(uint256 lockedProfit, uint256 lastRewardDistribution) public view returns (uint256) {
-    uint256 lockedFundsRatio = (block.timestamp.sub(lastRewardDistribution)).mul(LOCKED_PROFIT_DEGRADATION);
+  /**
+   * @notice Calculate locked profit based on lastRewardDistribution timestamp.
+   * @param _lockedProfit Previous locked profit amount.
+   * @param _lastRewardDistribution Timestamp of last rewards distribution.
+   * @return Updated locked profit amount, calculated with past time from _lastRewardDistribution.
+   */
+  function calculateLockedProfit(uint256 _lockedProfit, uint256 _lastRewardDistribution) public view returns (uint256) {
+    uint256 lockedFundsRatio = (block.timestamp.sub(_lastRewardDistribution)).mul(LOCKED_PROFIT_DEGRADATION);
 
     if (lockedFundsRatio < DEGRADATION_COEFFICIENT) {
-      uint256 currentLockedProfit = lockedProfit;
+      uint256 currentLockedProfit = _lockedProfit;
       return currentLockedProfit.sub(lockedFundsRatio.mul(currentLockedProfit) / DEGRADATION_COEFFICIENT);
     } else {
       return 0;
     }
   }
 
+  /**
+   * @notice Transfer token amount from piToken(piERC20) to destination.
+   * @param _piToken piToken(piERC20).
+   * @param _token ERC20 token address.
+   * @param _to Destination address.
+   * @param _value Amount to transfer.
+   */
   function _safeTransfer(
     WrappedPiErc20Interface _piToken,
     IERC20 _token,

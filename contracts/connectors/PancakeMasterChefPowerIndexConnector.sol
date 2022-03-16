@@ -37,10 +37,10 @@ contract PancakeMasterChefIndexConnector is AbstractMasterChefIndexConnector {
   }
 
   function _stakeImpl(uint256 _amount) internal override {
-    _callStaking(PI_TOKEN, STAKING, IPancakeMasterChef.enterStaking.selector, abi.encode(_amount));
+    _callExternal(PI_TOKEN, STAKING, IPancakeMasterChef.enterStaking.selector, abi.encode(_amount));
   }
 
   function _redeemImpl(uint256 _amount) internal override {
-    _callStaking(PI_TOKEN, STAKING, IPancakeMasterChef.leaveStaking.selector, abi.encode(_amount));
+    _callExternal(PI_TOKEN, STAKING, IPancakeMasterChef.leaveStaking.selector, abi.encode(_amount));
   }
 }

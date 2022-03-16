@@ -15,6 +15,7 @@ const PancakeSyrupPool = artifactFromBytecode('bsc/PancakeSyrupPool');
 MockERC20.numberFormat = 'String';
 PancakeMasterChefIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
+PowerIndexRouter.numberFormat = 'String';
 
 const { web3 } = MockERC20;
 
@@ -173,6 +174,22 @@ describe('PancakeMasterChefRouter Tests', () => {
 
       assert.equal(await cake.balanceOf(masterChef.address), ether(50000));
       assert.equal(await cake.balanceOf(piCake.address), ether(2000));
+    });
+
+    it('should allow explicitly claiming rewards', async () => {
+      await time.increase(time.duration.years(1));
+      assert.equal(await myRouter.calculateLockedProfit(), ether(0));
+      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+      let data = await myRouter.connectors(0);
+      let rewards = await connector.unpackRewardsData(data.stakeData);
+      assert.equal(await rewards.lockedProfit, ether('2.7197990668'));
+
+      await time.increase(time.duration.years(1));
+      assert.equal(await myRouter.calculateLockedProfit(), ether(0));
+      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+      data = await myRouter.connectors(0);
+      rewards = await connector.unpackRewardsData(data.stakeData);
+      assert.equal(await rewards.lockedProfit, ether('2.7197990668'));
     });
 
     it('should ignore rebalancing if the staking address is 0', async () => {

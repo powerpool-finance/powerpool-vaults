@@ -33,12 +33,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
     returns (bytes memory)
   {
     if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
-      uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
-      stake(0, _distributeData);
-      uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
-      if (receivedReward > 0) {
-        return _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
-      }
+      return stake(0, _distributeData);
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
@@ -72,7 +67,7 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore).sub(_amount);
 
-    bytes memory result;
+    bytes memory result = new bytes(0);
     if (receivedReward > 0) {
       result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
     }

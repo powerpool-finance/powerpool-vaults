@@ -43,7 +43,7 @@ interface WrappedPiErc20Interface is IERC20 {
     bytes4 signature,
     bytes calldata args,
     uint256 value
-  ) external returns (bytes memory);
+  ) external payable returns (bytes memory);
 
   struct ExternalCallData {
     address destination;
@@ -52,7 +52,7 @@ interface WrappedPiErc20Interface is IERC20 {
     uint256 value;
   }
 
-  function callExternalMultiple(ExternalCallData[] calldata calls) external returns (bytes[] memory);
+  function callExternalMultiple(ExternalCallData[] calldata calls) external payable returns (bytes[] memory);
 
   function getUnderlyingBalance() external view returns (uint256);
 }
