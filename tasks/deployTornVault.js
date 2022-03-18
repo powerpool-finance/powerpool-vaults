@@ -59,7 +59,7 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   await piTorn.changeRouter(tornRouter.address);
   console.log('tornConnector done');
   // console.log('getUnderlyingReserve', await tornRouter.getUnderlyingReserve());
-  // console.log('tornConnector.getUnderlyingStaked', await tornConnector.getUnderlyingStaked());
+  console.log('tornConnector.getTornPriceRatio', await tornConnector.getTornPriceRatio().then(r => r.toString()));
   // console.log('router.getUnderlyingStaked', await tornRouter.getUnderlyingStaked());
   // console.log('calculateLockedProfit', await tornRouter.calculateLockedProfit());
   // console.log('getUnderlyingAvailable', await tornRouter.getUnderlyingAvailable());

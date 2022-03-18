@@ -39,7 +39,7 @@ contract TornGovernance {
   }
 
   function unlock(uint256 amount) public virtual updateRewards(msg.sender) {
-//    require(getBlockTimestamp() > canWithdrawAfter[msg.sender], "Governance: tokens are locked");
+    //    require(getBlockTimestamp() > canWithdrawAfter[msg.sender], "Governance: tokens are locked");
     lockedBalance[msg.sender] = lockedBalance[msg.sender].sub(amount, "Governance: insufficient balance");
     require(torn.transfer(msg.sender, amount), "TORN: transfer failed");
   }

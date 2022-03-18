@@ -316,6 +316,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       _rebalancePoke(c, _conf.status, _conf.diff);
     }
 
+    console.log("_conf.shouldClaim", _conf.shouldClaim);
+    console.log("claimRewardsIntervalReached(c.lastClaimRewardsAt)", claimRewardsIntervalReached(c.lastClaimRewardsAt));
+
     // check claim interval again due to possibility of claiming by stake or redeem function(maybe already claimed)
     if (_conf.shouldClaim && claimRewardsIntervalReached(c.lastClaimRewardsAt)) {
       _claimRewards(c, _conf.status);

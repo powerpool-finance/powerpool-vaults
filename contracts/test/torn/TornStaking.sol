@@ -105,9 +105,9 @@ contract TornStaking {
    */
   function _updateReward(address account, uint256 amountLockedBeforehand) private returns (uint256 claimed) {
     if (amountLockedBeforehand != 0)
-      claimed = (accumulatedRewardPerTorn.sub(accumulatedRewardRateOnLastUpdate[account])).mul(amountLockedBeforehand).div(
-        ratioConstant
-      );
+      claimed = (accumulatedRewardPerTorn.sub(accumulatedRewardRateOnLastUpdate[account]))
+        .mul(amountLockedBeforehand)
+        .div(ratioConstant);
     accumulatedRewardRateOnLastUpdate[account] = accumulatedRewardPerTorn;
     emit RewardsUpdated(account, claimed);
   }
@@ -119,7 +119,9 @@ contract TornStaking {
   function checkReward(address account) external view returns (uint256 rewards) {
     uint256 amountLocked = Governance.lockedBalance(account);
     if (amountLocked != 0)
-      rewards = (accumulatedRewardPerTorn.sub(accumulatedRewardRateOnLastUpdate[account])).mul(amountLocked).div(ratioConstant);
+      rewards = (accumulatedRewardPerTorn.sub(accumulatedRewardRateOnLastUpdate[account])).mul(amountLocked).div(
+        ratioConstant
+      );
     rewards = rewards.add(accumulatedRewards[account]);
   }
 }

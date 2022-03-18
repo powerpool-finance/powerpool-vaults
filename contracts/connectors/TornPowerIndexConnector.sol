@@ -168,7 +168,7 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
   /**
    * @notice Get Uniswap V3 TORN price ratio
    */
-  function getTornPriceRatio() public view returns (uint256) {
+  function getTornPriceRatio() public view virtual returns (uint256) {
     uint32 uniswapTimePeriod = 5400;
     uint24 uniswapTornSwappingFee = 10000;
     uint24 uniswapWethSwappingFee = 0;

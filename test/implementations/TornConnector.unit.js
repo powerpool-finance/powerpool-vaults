@@ -1,9 +1,9 @@
-const { time, constants, expectEvent, expectRevert } = require('@openzeppelin/test-helpers');
-const { ether, artifactFromBytecode, latestBlockNumber } = require('./../helpers');
+const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
+const { ether, fromEther } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
-const TornPowerIndexConnector = artifacts.require('TornPowerIndexConnector');
+const TornPowerIndexConnector = artifacts.require('MockTornPowerIndexConnector');
 const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
@@ -30,9 +30,12 @@ describe('PancakeMasterChefRouter Tests', () => {
 
   let torn, staking, governance, poolRestrictions, piTorn, myRouter, connector, poke;
 
+  const GAS_TO_REINVEST = 1e6;
+  const GAS_PRICE = 100 * 1e9;
+
   beforeEach(async function () {
     // mainnet: 0x77777feddddffc19ff86db637967013e6c6a116c
-    torn = await MockERC20.new('Torn', 'Torn', '18', ether('10000000'));
+    torn = await MockERC20.new('Torn', 'Torn', '18', ether('10000000'), {from: deployer});
     // mainnet: 0x5efda50f22d34f262c29268506c5fa42cb56a1ce
     governance = await TornGovernance.new(torn.address);
     // mainnet: 0x2fc93484614a34f26f7970cbb94615ba109bb4bf
@@ -53,7 +56,7 @@ describe('PancakeMasterChefRouter Tests', () => {
         ether('0.2'),
         ether('0.02'),
         ether('0.3'),
-        '0',
+        0,
         pvp,
         ether('0.15'),
         [pool1, pool2],
@@ -77,7 +80,7 @@ describe('PancakeMasterChefRouter Tests', () => {
     assert.equal(await myRouter.owner(), piGov);
   });
 
-  describe.only('owner methods', async () => {
+  describe('owner methods', async () => {
     beforeEach(async () => {
       await myRouter.transferOwnership(piGov, { from: piGov });
     });
@@ -134,6 +137,9 @@ describe('PancakeMasterChefRouter Tests', () => {
 
   describe('reserve management', () => {
     beforeEach(async () => {
+      await torn.transfer(staking.address, ether('200000'));
+      await staking.addBurnRewards(ether('200000'));
+
       // alice
       await torn.transfer(alice, ether('20000'));
       await torn.approve(piTorn.address, ether('10000'), { from: alice });
@@ -142,105 +148,61 @@ describe('PancakeMasterChefRouter Tests', () => {
       // bob
       await torn.transfer(bob, ether('42000'));
       await torn.approve(governance.address, ether('42000'), { from: bob });
-      await governance.enterStaking(ether('42000'), { from: bob });
+      await governance.lockWithApproval(ether('42000'), { from: bob });
 
-      await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
+      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
 
+      assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
       assert.equal(await torn.balanceOf(governance.address), ether(50000));
       assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
     });
 
-    it('should allow explicitly claiming rewards', async () => {
-      await time.increase(time.duration.years(1));
-      assert.equal(await myRouter.calculateLockedProfit(), ether(0));
-      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
-      let data = await myRouter.connectors(0);
-      let rewards = await connector.unpackStakeData(data.stakeData);
-      assert.equal(await rewards.lockedProfit, ether('2.7197990668'));
+    it('should claim rewards and reinvest', async () => {
+      const reinvestDuration = 60 * 60;
+      const claimParams = await connector.packClaimParams(reinvestDuration, GAS_TO_REINVEST);
+      await myRouter.setClaimParams('0', claimParams, {from: piGov});
 
-      await time.increase(time.duration.years(1));
-      assert.equal(await myRouter.calculateLockedProfit(), ether(0));
-      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
-      data = await myRouter.connectors(0);
-      rewards = await connector.unpackStakeData(data.stakeData);
-      assert.equal(await rewards.lockedProfit, ether('2.7197990668'));
+      await time.increase(time.duration.hours(100));
+      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+      await torn.transfer(staking.address, ether('50000'));
+      await staking.addBurnRewards(ether('50000'));
+
+      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+
+      const c = await myRouter.connectors('0');
+      const tornNeedToReinvest = await connector.getTornUsedToReinvest(GAS_TO_REINVEST, GAS_PRICE);
+      let {pending, forecastByPending} = await connector.getPendingAndForecastReward(c.lastClaimRewardsAt, c.lastChangeStakeAt, reinvestDuration);
+
+      assert.equal(pending, ether('1600'));
+      assert.equal(fromEther(forecastByPending) >= fromEther(tornNeedToReinvest), false);
+      assert.equal(await connector.isClaimAvailable(claimParams, c.lastClaimRewardsAt, c.lastChangeStakeAt, {
+        gasPrice: GAS_PRICE
+      }), false);
+
+      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+
+      await time.increase(time.duration.hours(100));
+      await torn.transfer(staking.address, ether('100000'));
+      await staking.addBurnRewards(ether('100000'));
+
+      await connector.getPendingAndForecastReward(c.lastClaimRewardsAt, c.lastChangeStakeAt, reinvestDuration).then(r => {
+        pending = r.pending;
+        forecastByPending = r.forecastByPending;
+      })
+      assert.equal(fromEther(forecastByPending) >= fromEther(tornNeedToReinvest), true);
+      assert.equal(await connector.isClaimAvailable(claimParams, c.lastClaimRewardsAt, c.lastChangeStakeAt, {
+        gasPrice: GAS_PRICE
+      }), true);
+
+      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE});
+
+      assert.equal(fromEther(await governance.lockedBalance(piTorn.address)) > 11300, true);
+
+      assert.equal(fromEther(await myRouter.calculateLockedProfit()) > 3300, true);
+      let rewards = await connector.unpackStakeData(await myRouter.connectors(0).then(r => r.stakeData));
+      assert.equal(fromEther(await rewards.lockedProfit, ether('2.7197990668')) > 3300, true);
     });
 
-    it('should ignore rebalancing if the staking address is 0', async () => {
-      await myRouter.redeem('0', ether(8000), { from: piGov });
-      await expectRevert(
-        myRouter.setConnectorList(
-          [
-            {
-              connector: constants.ZERO_ADDRESS,
-              share: ether(1),
-              callBeforeAfterPoke: false,
-              newConnector: false,
-              connectorIndex: 0,
-            },
-          ],
-          { from: piGov },
-        ),
-        'CONNECTOR_IS_NULL',
-      );
-    });
-
-    describe('rebalanceing intervals', () => {
-      beforeEach(async () => {
-        await myRouter.setReserveConfig(ether('0.2'), ether('0.02'), ether('0.3'), time.duration.hours(1), {
-          from: piGov,
-        });
-        await poke.setMinMaxReportIntervals(time.duration.hours(1), time.duration.hours(2), { from: piGov });
-      });
-
-      it('should DO rebalance by pokeFromReporter if the rebalancing interval has passed', async () => {
-        await time.increase(time.duration.minutes(61));
-
-        await torn.approve(piTorn.address, ether(1000), { from: alice });
-        await piTorn.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
-      });
-
-      it('should DO rebalance by pokeFromSlasher if the rebalancing interval has passed', async () => {
-        await time.increase(time.duration.minutes(121));
-
-        await torn.approve(piTorn.address, ether(1000), { from: alice });
-        await piTorn.deposit(ether(1000), { from: alice });
-        await myRouter.pokeFromSlasher(0, false, '0x');
-
-        assert.equal(await torn.balanceOf(governance.address), ether(50800));
-        assert.equal((await governance.userInfo(0, piTorn.address)).amount, ether(8800));
-        assert.equal(await torn.balanceOf(piTorn.address), ether('2208.159397207200000000'));
-      });
-
-      it('should DO rebalance on withdrawal if the rebalancing interval has passed', async () => {
-        await time.increase(time.duration.minutes(61));
-
-        await piTorn.withdraw(ether(1000), { from: alice });
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-
-        assert.equal(await torn.balanceOf(governance.address), ether(49200));
-        assert.equal((await governance.userInfo(0, piTorn.address)).amount, ether(7200));
-        assert.equal(await torn.balanceOf(piTorn.address), ether('1806.799497670400000000'));
-      });
-
-      it('should NOT rebalance by pokeFromReporter if the rebalancing interval has passed', async () => {
-        await time.increase(time.duration.minutes(50));
-
-        await torn.approve(piTorn.address, ether(1000), { from: alice });
-        await piTorn.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
-      });
-
-      it('should NOT rebalance by pokeFromSlasher if the rebalancing interval has passed', async () => {
-        await time.increase(time.duration.minutes(70));
-
-        await torn.approve(piTorn.address, ether(1000), { from: alice });
-        await piTorn.deposit(ether(1000), { from: alice });
-        await expectRevert(myRouter.pokeFromSlasher(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
-      });
-    });
 
     describe('on poke', async () => {
       it('should do nothing when nothing has changed', async () => {
@@ -248,49 +210,34 @@ describe('PancakeMasterChefRouter Tests', () => {
       });
 
       it('should increase reserve if required', async () => {
+        await torn.transfer(staking.address, ether('50000'));
+        await staking.addBurnRewards(ether('50000'));
+
         await torn.transfer(piTorn.address, ether(1000), { from: alice });
 
         assert.equal(await torn.balanceOf(governance.address), ether(50000));
-        assert.equal((await governance.userInfo(0, piTorn.address)).amount, ether(8000));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
         assert.equal(await torn.balanceOf(piTorn.address), ether(3000));
 
-        const res = await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
+        const res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
         const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
           l => l.event === 'DistributeReward',
         )[0];
-        assert.equal(distributeRewards.args.totalReward, ether('3.199763608'));
+        assert.equal(distributeRewards.args.totalReward, ether('1600'));
 
-        assert.equal(await torn.balanceOf(governance.address), ether(50800));
-        assert.equal((await governance.userInfo(0, piTorn.address)).amount, ether(8800));
-        assert.equal(await myRouter.getUnderlyingStaked(), ether(8800));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether('2202.7197990668'));
+        assert.equal(await torn.balanceOf(governance.address), ether(52160));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(10160));
+        assert.equal(await myRouter.getUnderlyingStaked(), ether(10160));
+        assert.equal(await myRouter.getUnderlyingReserve(), ether('2200'));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether(11000));
-        assert.equal(await myRouter.getUnderlyingTotal(), ether('11002.7197990668'));
-        assert.equal(await myRouter.calculateLockedProfit(), ether('2.7197990668'));
-        assert.equal(await torn.balanceOf(piTorn.address), ether('2202.7197990668'));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('12360'));
+        assert.equal(await myRouter.calculateLockedProfit(), ether('1360'));
+        assert.equal(await torn.balanceOf(piTorn.address), ether('2200'));
 
         await time.increase(time.duration.hours(10));
         assert.equal(await myRouter.calculateLockedProfit(), ether(0));
-        assert.equal(await myRouter.getUnderlyingAvailable(), ether('11002.7197990668'));
-        assert.equal(await myRouter.getUnderlyingTotal(), ether('11002.7197990668'));
-      });
-    });
-
-    describe('edge RRs', async () => {
-      it('should stake all the underlying tokens with 0 RR', async () => {
-        await myRouter.setReserveConfig(ether(0), ether(0), ether(1), 0, { from: piGov });
-
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        assert.equal(await torn.balanceOf(governance.address), ether(52000));
-        assert.equal(await torn.balanceOf(piTorn.address), ether('2.7197990668'));
-      });
-
-      it('should keep all the underlying tokens on piToken with 1 RR', async () => {
-        await myRouter.setReserveConfig(ether(1), ether(0), ether(1), 0, { from: piGov });
-
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-        assert.equal(await torn.balanceOf(governance.address), ether(42000));
-        assert.equal(await torn.balanceOf(piTorn.address), ether('10002.7197990668'));
+        assert.equal(await myRouter.getUnderlyingAvailable(), ether('12360'));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('12360'));
       });
     });
   });
