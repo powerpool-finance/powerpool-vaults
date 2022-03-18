@@ -2,7 +2,7 @@ const { expectEvent, expectRevert, constants } = require('@openzeppelin/test-hel
 const { buildBasicRouterConfig } = require('./helpers/builders');
 const { ether, expectExactRevert, splitPayload, toEvmBytes32, latestBlockTimestamp } = require('./helpers');
 const assert = require('chai').assert;
-const MockERC20 = artifacts.require('MockERC20');
+const MockERC20 = artifacts.require('MockERC20Permit');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockRouter = artifacts.require('MockRouter');
 const MyContract = artifacts.require('MyContract');
@@ -374,6 +374,39 @@ describe('WrappedPiErc20 Unit Tests', () => {
         assert.equal(await piCake.balanceOfUnderlying(bob), underlyingDeposit);
       });
     });
+  });
+
+  describe('depositWithPermit', async () => {
+    beforeEach(async() => {
+      await cake.transfer(alice, ether(100));
+    });
+
+    it('should allow transfers by signature within a limit', async () => {
+      const deadline = (await latestBlockTimestamp()) + 10;
+      const permitParams = {
+        owner: alice,
+        spender: piCake.address,
+        value: ether(100),
+        deadline,
+        nonce: 0,
+      };
+      const connector = new Web3ProviderConnector(web3);
+      const eip2612PermitUtils = new Eip2612PermitUtils(connector);
+      const signature = await eip2612PermitUtils.buildPermitSignature(
+        permitParams,
+        chainId,
+        'CAKE',
+        cake.address,
+        '1'
+      );
+
+      assert.equal(await piCake.balanceOf(alice), ether(0));
+
+      const vrs = fromRpcSig(signature);
+      await piCake.depositWithPermit(ether(100), deadline, vrs.v, vrs.r, vrs.s, {from: alice});
+
+      assert.equal(await piCake.balanceOf(alice), ether(100));
+    })
   });
 
   describe('withdraw', async () => {

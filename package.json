@@ -19,6 +19,7 @@
     "@1inch/permit-signed-approvals-utils": "^1.4.0",
     "@ethersproject/abstract-signer": "^5.0.1",
     "@ethersproject/bignumber": "^5.0.3",
+    "@ethersproject/signing-key": "^5.0.3",
     "@nomiclabs/hardhat-ethers": "^2.0.0",
     "@nomiclabs/hardhat-etherscan": "^2.0.1",
     "@nomiclabs/hardhat-ganache": "^2.0.0",
