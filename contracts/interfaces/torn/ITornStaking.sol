@@ -14,4 +14,6 @@ interface ITornStaking {
   function accumulatedRewardRateOnLastUpdate(address user) external view returns (uint256);
 
   function addBurnRewards(uint256 amount) external;
+
+  function updateRewardsOnLockedBalanceChange(address account, uint256 amountLockedBeforehand) external;
 }
