@@ -76,6 +76,7 @@ describe('PancakeMasterChefRouter Tests', () => {
       },
     ]);
 
+    await myRouter.initRouterByConnector('0', '0x');
     await myRouter.transferOwnership(piGov);
     assert.equal(await myRouter.owner(), piGov);
   });

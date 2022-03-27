@@ -110,4 +110,6 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   ) external override returns (bytes memory) {
     return new bytes(0);
   }
+
+  function initRouter(bytes calldata) external override {}
 }

@@ -23,6 +23,8 @@ interface IRouterConnector {
     external
     returns (bytes calldata);
 
+  function initRouter(bytes calldata) external;
+
   function getUnderlyingStaked() external view returns (uint256);
 
   function isClaimAvailable(

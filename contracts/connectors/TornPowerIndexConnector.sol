@@ -5,19 +5,28 @@ pragma experimental ABIEncoderV2;
 
 import "../interfaces/torn/ITornStaking.sol";
 import "../interfaces/torn/ITornGovernance.sol";
-import "./AbstractStakeRedeemConnector.sol";
+import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 
-contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
+contract TornPowerIndexConnector is AbstractConnector {
+  event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
+  event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
+
   uint256 public constant RATIO_CONSTANT = 10000000 ether;
   address public immutable GOVERNANCE;
+  address public immutable STAKING;
+  IERC20 public immutable UNDERLYING;
+  WrappedPiErc20Interface public immutable PI_TOKEN;
 
   constructor(
     address _staking,
     address _underlying,
     address _piToken,
     address _governance
-  ) public AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e14) {
+  ) public AbstractConnector(46e14) {
+    STAKING = _staking;
+    UNDERLYING = IERC20(_underlying);
+    PI_TOKEN = WrappedPiErc20Interface(_piToken);
     GOVERNANCE = _governance;
   }
 
@@ -40,6 +49,37 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
     return new bytes(0);
+  }
+
+  function stake(uint256 _amount, DistributeData memory) public override returns (bytes memory result, bool claimed) {
+    _stakeImpl(_amount);
+    emit Stake(msg.sender, GOVERNANCE, address(UNDERLYING), _amount);
+  }
+
+  function redeem(uint256 _amount, DistributeData memory)
+    external
+    override
+    returns (bytes memory result, bool claimed)
+  {
+    _redeemImpl(_amount);
+    emit Redeem(msg.sender, GOVERNANCE, address(UNDERLYING), _amount);
+  }
+
+  function beforePoke(
+    bytes memory _pokeData,
+    DistributeData memory _distributeData,
+    bool _willClaimReward
+  ) external override {}
+
+  function afterPoke(
+    PowerIndexRouterInterface.StakeStatus, /*reserveStatus*/
+    bool /*_rewardClaimDone*/
+  ) external override returns (bytes memory) {
+    return new bytes(0);
+  }
+
+  function initRouter(bytes calldata) external override {
+    _approveToStaking(uint256(-1));
   }
 
   /*** VIEWERS ***/
@@ -245,19 +285,19 @@ contract TornPowerIndexConnector is AbstractStakeRedeemConnector {
     return ITornGovernance(GOVERNANCE).lockedBalance(address(PI_TOKEN));
   }
 
-  function _approveToStaking(uint256 _amount) internal override {
+  function _approveToStaking(uint256 _amount) internal {
     PI_TOKEN.approveUnderlying(GOVERNANCE, _amount);
   }
 
-  function _claimImpl() internal override {
+  function _claimImpl() internal {
     _callExternal(PI_TOKEN, STAKING, ITornStaking.getReward.selector, new bytes(0));
   }
 
-  function _stakeImpl(uint256 _amount) internal override {
+  function _stakeImpl(uint256 _amount) internal {
     _callExternal(PI_TOKEN, GOVERNANCE, ITornGovernance.lockWithApproval.selector, abi.encode(_amount));
   }
 
-  function _redeemImpl(uint256 _amount) internal override {
+  function _redeemImpl(uint256 _amount) internal {
     _callExternal(PI_TOKEN, GOVERNANCE, ITornGovernance.unlock.selector, abi.encode(_amount));
   }
 }
