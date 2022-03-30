@@ -48,6 +48,7 @@ describe('TornConnector Tests', () => {
     poke = await MockPoke.new(true);
     myRouter = await PowerIndexVaultRouter.new(
       piTorn.address,
+      torn.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
         poke.address,

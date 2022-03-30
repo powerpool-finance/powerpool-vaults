@@ -50,6 +50,7 @@ describe('PancakeMasterChefRouter Tests', () => {
     poke = await MockPoke.new(true);
     myRouter = await PowerIndexVaultRouter.new(
       piCake.address,
+      cake.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
         poke.address,

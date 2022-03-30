@@ -43,6 +43,7 @@ describe('MDXMasterChefRouter Tests', () => {
 
     myRouter = await PowerIndexVaultRouter.new(
       piMdx.address,
+      mdx.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
         poke.address,

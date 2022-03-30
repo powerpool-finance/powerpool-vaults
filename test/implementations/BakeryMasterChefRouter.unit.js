@@ -57,6 +57,7 @@ describe('BakeryMasterChefRouter Tests', () => {
     poke = await MockPoke.new(true);
     myRouter = await PowerIndexVaultRouter.new(
       piBake.address,
+      bake.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
         poke.address,
