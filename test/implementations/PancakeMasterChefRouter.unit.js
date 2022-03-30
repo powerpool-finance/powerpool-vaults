@@ -4,7 +4,7 @@ const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
 const PancakeMasterChefIndexConnector = artifacts.require('PancakeMasterChefIndexConnector');
-const PowerIndexRouter = artifacts.require('PowerIndexRouter');
+const PowerIndexVaultRouter = artifacts.require('PowerIndexVaultRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
@@ -15,7 +15,7 @@ const PancakeSyrupPool = artifactFromBytecode('bsc/PancakeSyrupPool');
 MockERC20.numberFormat = 'String';
 PancakeMasterChefIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
-PowerIndexRouter.numberFormat = 'String';
+PowerIndexVaultRouter.numberFormat = 'String';
 
 const { web3 } = MockERC20;
 
@@ -48,7 +48,7 @@ describe('PancakeMasterChefRouter Tests', () => {
     piCake = await WrappedPiErc20.new(cake.address, stub, 'Wrapped CAKE', 'piCAKE');
 
     poke = await MockPoke.new(true);
-    myRouter = await PowerIndexRouter.new(
+    myRouter = await PowerIndexVaultRouter.new(
       piCake.address,
       buildBasicRouterConfig(
         poolRestrictions.address,

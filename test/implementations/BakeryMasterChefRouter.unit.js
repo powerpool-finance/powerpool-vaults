@@ -3,7 +3,7 @@ const { ether, artifactFromBytecode, latestBlockNumber } = require('./../helpers
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const BakeryChefPowerIndexConnector = artifacts.require('BakeryChefPowerIndexConnector');
-const PowerIndexRouter = artifacts.require('PowerIndexRouter');
+const PowerIndexVaultRouter = artifacts.require('PowerIndexVaultRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
@@ -55,7 +55,7 @@ describe('BakeryMasterChefRouter Tests', () => {
     piBake = await WrappedPiErc20.new(bake.address, stub, 'Wrapped BAKE', 'piBAKE');
 
     poke = await MockPoke.new(true);
-    myRouter = await PowerIndexRouter.new(
+    myRouter = await PowerIndexVaultRouter.new(
       piBake.address,
       buildBasicRouterConfig(
         poolRestrictions.address,

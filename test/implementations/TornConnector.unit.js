@@ -4,7 +4,7 @@ const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
 const TornPowerIndexConnector = artifacts.require('MockTornPowerIndexConnector');
-const PowerIndexRouter = artifacts.require('PowerIndexRouter');
+const PowerIndexVaultRouter = artifacts.require('PowerIndexVaultRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
@@ -15,13 +15,13 @@ const TornStaking = artifacts.require('TornStaking');
 MockERC20.numberFormat = 'String';
 TornPowerIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
-PowerIndexRouter.numberFormat = 'String';
+PowerIndexVaultRouter.numberFormat = 'String';
 
 const { web3 } = MockERC20;
 
 const REPORTER_ID = 42;
 
-describe('PancakeMasterChefRouter Tests', () => {
+describe('TornConnector Tests', () => {
   let deployer, bob, alice, piGov, stub, pvp, pool1, pool2;
 
   before(async function () {
@@ -46,7 +46,7 @@ describe('PancakeMasterChefRouter Tests', () => {
     piTorn = await WrappedPiErc20.new(torn.address, stub, 'Wrapped Torn', 'piTorn');
 
     poke = await MockPoke.new(true);
-    myRouter = await PowerIndexRouter.new(
+    myRouter = await PowerIndexVaultRouter.new(
       piTorn.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
