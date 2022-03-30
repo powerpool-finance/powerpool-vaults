@@ -461,6 +461,20 @@ function isBNHigher(bn1, bn2) {
 
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 
+function getFileContent(fileName) {
+  return fs.readFileSync('contracts/test/' + fileName, {encoding: 'utf8'});
+}
+
+async function deployContractWithBytecode(name, web3, args) {
+  const CrvStackingContract = await TruffleContract({
+    abi: getFileContent( name + 'Abi.json'),
+    bytecode: getFileContent(name, {encoding: 'utf8'})
+  });
+
+  CrvStackingContract.setProvider(web3.currentProvider);
+  return CrvStackingContract.new.apply(CrvStackingContract, args);
+}
+
 module.exports = {
   deployProxied,
   createOrGetProxyAdmin,
@@ -502,4 +516,5 @@ module.exports = {
   getTimestamp,
   isBNHigher,
   zeroAddress,
+  deployContractWithBytecode,
 };
