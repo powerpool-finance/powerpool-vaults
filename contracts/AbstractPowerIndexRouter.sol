@@ -17,7 +17,7 @@ import "./PowerIndexNaiveRouter.sol";
  * as the difference between total balance and share of necessary balance(reserveRatio) for keeping in piERC20
  * for withdrawals.
  */
-contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
+abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   using SafeERC20 for IERC20;
 
   uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
@@ -45,9 +45,9 @@ contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveR
     uint256 performanceFee;
   }
 
-  address public immutable assetsHolder;
+  address public assetsHolder;
   IERC20 public immutable underlying;
-  address public immutable performanceFeeReceiver;
+  address public performanceFeeReceiver;
 
   IPoolRestrictions public poolRestrictions;
   IPowerPoke public powerPoke;
@@ -124,7 +124,7 @@ contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveR
     require(_basicConfig.poolRestrictions != address(0), "INVALID_POOL_RESTRICTIONS_ADDR");
 
     assetsHolder = _assetsHolder;
-    underlying = _underlying;
+    underlying = IERC20(_underlying);
     poolRestrictions = IPoolRestrictions(_basicConfig.poolRestrictions);
     powerPoke = IPowerPoke(_basicConfig.powerPoke);
     reserveRatio = _basicConfig.reserveRatio;

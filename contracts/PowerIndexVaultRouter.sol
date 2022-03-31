@@ -36,11 +36,11 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
     WrappedPiErc20Interface(assetsHolder).withdrawEthFee(_receiver);
   }
 
-  function getAssetsHolderUnderlyingBalance() public view returns (uint256) {
+  function getAssetsHolderUnderlyingBalance() public view override returns (uint256) {
     return WrappedPiErc20Interface(assetsHolder).getUnderlyingBalance();
   }
 
-  function getUnderlyingReserve() public view returns (uint256) {
+  function getUnderlyingReserve() public view override returns (uint256) {
     return underlying.balanceOf(assetsHolder);
   }
 }
