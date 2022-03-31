@@ -5,14 +5,14 @@ pragma solidity 0.6.12;
 import "../interfaces/AggregatorV3Interface.sol";
 
 contract MockChainLinkPriceOracle is AggregatorV3Interface {
-  uint8 public constant decimals = 8;
-  uint256 public constant version = 4;
-  string public constant description = "buzz";
+  uint8 public override constant decimals = 8;
+  uint256 public override constant version = 4;
+  string public override constant description = "buzz";
   int256 internal _latestAnswer;
   uint80 internal latestRound;
   mapping(uint80 => int256) internal answers;
 
-  constructor(int256 latestAnswer_) {
+  constructor(int256 latestAnswer_) public {
     _latestAnswer = latestAnswer_;
     latestRound = 41;
     answers[41] = _latestAnswer;
@@ -29,15 +29,17 @@ contract MockChainLinkPriceOracle is AggregatorV3Interface {
   }
 
   function getRoundData(uint80 roundId_)
-  external
-  view
-  returns (
-    uint80 roundId,
-    int256 answer,
-    uint256 startedAt,
-    uint256 updatedAt,
-    uint80 answeredInRound
-  ) {
+    external
+    view
+    override
+    returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    )
+  {
     roundId = roundId_;
     answer = answers[roundId_];
     startedAt = block.timestamp - 100;
@@ -46,15 +48,17 @@ contract MockChainLinkPriceOracle is AggregatorV3Interface {
   }
 
   function latestRoundData()
-  external
-  view
-  returns (
-    uint80 roundId,
-    int256 answer,
-    uint256 startedAt,
-    uint256 updatedAt,
-    uint80 answeredInRound
-  ) {
+    external
+    view
+    override
+    returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    )
+  {
     roundId = latestRound;
     answer = answers[latestRound];
     startedAt = block.timestamp - 100;
