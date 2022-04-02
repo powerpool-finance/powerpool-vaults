@@ -52,12 +52,17 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const lusd = await IERC20.at(lusdAddress);
   const vault = await IVault.at(vaultAddress);
 
+  const lusdHolder = '0x99c9fc46f92e8a1c0dec1b1747d010903e884be1';
+  await impersonateAccount(ethers, lusdHolder);
+  await lusd.transfer(deployer, ether(2e6), {from: lusdHolder});
+
+  const lusdSecond = web3.utils.toBN(lusdAddress).gt(web3.utils.toBN(ausd.address));
   const stablePoolFactory = await IStablePoolFactory.at('0xC4ace7b47CB8D1d0A1EC9236c1CE050f623a2eCF');
   let res = await stablePoolFactory.create(
     "Balancer PP Stable Pool",
     "bb-p-USD",
-    [lusdAddress, ausd.address],
-    [assetManager.address, zeroAddress],
+    lusdSecond ? [ausd.address, lusdAddress] : [lusdAddress, ausd.address],
+    lusdSecond ? [zeroAddress, assetManager.address] : [assetManager.address, zeroAddress],
     200,
     5e14,
     deployer
@@ -84,7 +89,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   // assertEq(IERC20(lusd).balanceOf(DEPLOYER), 5e6 ether);
 
   vault.joinPool(await pool.getPoolId(), deployer, deployer, {
-    assets: [lusd.address, ausd.address],
+    assets: lusdSecond ? [ausd.address, lusdAddress] : [lusdAddress, ausd.address],
     maxAmountsIn: [ether(2e6), ether(2e6)],
     userData: web3.eth.abi.encodeParameters(
       ['uint256', 'uint256[]'],
@@ -103,6 +108,10 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
       connectorIndex: 0,
     },
   ]);
+
+  console.log('vault.getPoolTokenInfo', await vault.getPoolTokenInfo(await pool.getPoolId(), lusd.address));
+  console.log('connector.address', connector.address);
+  console.log('assetManager.address', assetManager.address);
 
   // await assetManager.initRouterByConnector('0', '0x');
   await assetManager.transferOwnership(OWNER);
@@ -125,14 +134,14 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const powerPokeAddress = '0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96';
   const cvpAddress = '0x38e4adb44ef08f22f5b5b76a8f0c2d0dcbe7dca1';
   const powerPoke = await PowerPoke.at(powerPokeAddress);
-  await powerPoke.addClient(tornRouter.address, OWNER, true, MAX_GAS_PRICE, MIN_REPORT_INTERVAL, MAX_REPORT_INTERVAL, {from: OWNER});
-  await powerPoke.setMinimalDeposit(tornRouter.address, MIN_SLASHING_DEPOSIT, {from: OWNER});
-  await powerPoke.setBonusPlan(tornRouter.address, '1', true, BONUS_NUMERATOR, BONUS_DENUMERATOR, PER_GAS, {from: OWNER});
-  await powerPoke.setFixedCompensations(tornRouter.address, 200000, 60000, {from: OWNER});
+  await powerPoke.addClient(assetManager.address, OWNER, true, MAX_GAS_PRICE, MIN_REPORT_INTERVAL, MAX_REPORT_INTERVAL, {from: OWNER});
+  await powerPoke.setMinimalDeposit(assetManager.address, MIN_SLASHING_DEPOSIT, {from: OWNER});
+  await powerPoke.setBonusPlan(assetManager.address, '1', true, BONUS_NUMERATOR, BONUS_DENUMERATOR, PER_GAS, {from: OWNER});
+  await powerPoke.setFixedCompensations(assetManager.address, 200000, 60000, {from: OWNER});
 
   const cvp = await IERC20.at(cvpAddress);
   await cvp.approve(powerPoke.address, ether(10000), {from: OWNER});
-  await powerPoke.addCredit(tornRouter.address, ether(10000), {from: OWNER});
+  await powerPoke.addCredit(assetManager.address, ether(10000), {from: OWNER});
 
   const powerPokeOpts = web3.eth.abi.encodeParameter(
     { PowerPokeRewardOpts: {to: 'address', compensateInETH: 'bool'} },
@@ -141,9 +150,10 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   await impersonateAccount(ethers, pokerReporter);
 
+  console.log('assetManager.getUnderlyingReserve', await assetManager.getUnderlyingReserve().then(r => r.toString()));
   await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
   console.log('getUnderlyingManaged', await assetManager.getUnderlyingManaged());
-  console.log('getUnderlyingCash', await assetManager.getUnderlyingCash());
+  console.log('getUnderlyingReserve', await assetManager.getUnderlyingReserve());
   console.log('getUnderlyingStaked', await assetManager.getUnderlyingStaked());
 //
   // console.log('3 wrapper balance', fromEther(await torn.balanceOf(piTorn.address)));

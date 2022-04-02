@@ -9,6 +9,8 @@ import "../interfaces/liquidity/IStabilityPool.sol";
 import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 
+import "hardhat/console.sol";
+
 contract BProtocolPowerIndexConnector is AbstractConnector {
   using SafeMath for uint256;
 
@@ -49,17 +51,21 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function stake(uint256 _amount, DistributeData memory) public override returns (bytes memory result, bool claimed) {
+    console.log("stake 1");
     _capitalOut(_amount);
+    console.log("stake 2");
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
   }
 
   function redeem(uint256 _amount, DistributeData memory)
-  external
-  override
-  returns (bytes memory result, bool claimed)
+    external
+    override
+    returns (bytes memory result, bool claimed)
   {
+    console.log("redeem 1");
     _redeemImpl(_amount);
+    console.log("redeem 2");
     _capitalIn(_amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
   }
@@ -74,8 +80,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
     ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, underlyingStaked);
-    // Pull funds from the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, amount);
+    // Send funds back to the vault
+    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.DEPOSIT, PID, UNDERLYING, amount);
 
     IVault(VAULT).managePoolBalance(ops);
   }
@@ -86,11 +92,15 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    */
   function _capitalOut(uint256 amount) private {
     uint256 underlyingStaked = getUnderlyingStaked();
+    (uint256 poolCash,,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
+    console.log("underlyingStaked", underlyingStaked);
+    console.log("poolCash", poolCash);
+    console.log("amount  ", amount);
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
     ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, underlyingStaked);
-    // Send funds back to the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.DEPOSIT, PID, UNDERLYING, amount);
+    // Pull funds from the vault
+    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, amount);
 
     IVault(VAULT).managePoolBalance(ops);
   }
@@ -230,7 +240,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   /**
    * @dev Returns current amount of LUSD remaining in the Balancer Vault.
    */
-  function getUnderlyingCash() public view returns (uint256) {
+  function getUnderlyingReserve() public view override returns (uint256) {
     (uint256 poolCash,,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
     return poolCash;
   }
@@ -259,9 +269,9 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return lusdValueTotal * amShares / totalShares;
   }
 
-  function getUnderlyingTotal() external view returns (uint256) {
+  function getUnderlyingTotal() external view override returns (uint256) {
     // getUnderlyingReserve + getUnderlyingStaked
-    return getUnderlyingCash() + getUnderlyingStaked();
+    return getUnderlyingReserve() + getUnderlyingStaked();
   }
 
   function getSharesByUnderlying(uint256 lusdAmount) external view returns (uint256) {

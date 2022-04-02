@@ -23,37 +23,26 @@ contract AssetManager is AbstractPowerIndexRouter {
   }
 
   function getAssetsHolderUnderlyingBalance() public view override returns (uint256) {
-    //TODO: implement getAssetsHolderUnderlyingBalance
-    return underlying.balanceOf(assetsHolder);
+    uint256 balance = 0;
+    for (uint256 i = 0; i < connectors.length; i++) {
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
+      balance += connectors[i].connector.getUnderlyingTotal();
+    }
+    return balance;
   }
 
   function getUnderlyingReserve() public view override returns (uint256) {
-    //TODO: implement getUnderlyingReserve
-    return underlying.balanceOf(assetsHolder);
+    uint256 balance = 0;
+    for (uint256 i = 0; i < connectors.length; i++) {
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
+      balance += connectors[i].connector.getUnderlyingReserve();
+    }
+    return balance;
   }
 
   function setAssetsHolder(address _assetsHolder, bytes32 _poolId) external onlyOwner {
     assetsHolder = _assetsHolder;
     poolId = _poolId;
     emit SetAssetsHolder(_assetsHolder, _poolId);
-  }
-
-  function getPoolBalances(bytes32 pId)
-    public
-    view
-    withCorrectPool(pId)
-    returns (uint256 poolCash, uint256 poolManaged)
-  {
-    (poolCash, poolManaged) = _getPoolBalances(_getAUM());
-  }
-
-  function _getPoolBalances(uint256 aum) internal view returns (uint256 poolCash, uint256 poolManaged) {
-    (poolCash, , , ) = IVault(assetsHolder).getPoolTokenInfo(poolId, IERC20(underlying));
-    // Calculate the managed portion of funds locally as the Vault is unaware of returns
-    poolManaged = aum;
-  }
-
-  function _getAUM() internal view returns (uint256) {
-    return IERC20(underlying).balanceOf(address(this));
   }
 }
