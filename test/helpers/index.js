@@ -300,11 +300,7 @@ async function forkReplacePoolTokenWithNewPiToken(
   const PowerIndexPoolController = await artifacts.require('PowerIndexPoolController');
   const WrappedPiErc20 = await artifacts.require('WrappedPiErc20');
   console.log('type', type);
-  const PowerIndexRouter = await artifacts.require(
-    type === 'aave'
-      ? 'AavePowerIndexRouter'
-      : 'contracts/powerindex-router/implementations/SushiPowerIndexRouter.sol:SushiPowerIndexRouter',
-  );
+  const PowerIndexVaultRouter = await artifacts.require('PowerIndexVaultRouter.sol');
   const pool = await PowerIndexPool.at(await callContract(controller, 'pool'));
   console.log('pool getBalance before', await callContract(pool, 'getBalance', [token.address]));
 
@@ -339,7 +335,7 @@ async function forkReplacePoolTokenWithNewPiToken(
   const wrappedToken = await WrappedPiErc20.at(wrappedTokenAddress);
   console.log('wrappedToken symbol', await callContract(wrappedToken, 'symbol'));
   console.log('wrappedToken name', await callContract(wrappedToken, 'name'));
-  const router = await PowerIndexRouter.at(await callContract(wrappedToken, 'router', []));
+  const router = await PowerIndexVaultRouter.at(await callContract(wrappedToken, 'router', []));
 
   await increaseTime(60);
 
@@ -460,6 +456,7 @@ function isBNHigher(bn1, bn2) {
 }
 
 const zeroAddress = '0x0000000000000000000000000000000000000000';
+const maxUint256 = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
 function getFileContent(fileName) {
   return fs.readFileSync('contracts/test/' + fileName, {encoding: 'utf8'});
@@ -468,10 +465,11 @@ function getFileContent(fileName) {
 async function deployContractWithBytecode(name, web3, args) {
   const CrvStackingContract = await TruffleContract({
     abi: getFileContent( name + 'Abi.json'),
-    bytecode: getFileContent(name, {encoding: 'utf8'})
+    bytecode: '0x' + getFileContent(name, {encoding: 'utf8'}).replace(/(?:\r\n|\r|\n)/g, '')
   });
 
   CrvStackingContract.setProvider(web3.currentProvider);
+  console.log('name', name);
   return CrvStackingContract.new.apply(CrvStackingContract, args);
 }
 
@@ -516,5 +514,6 @@ module.exports = {
   getTimestamp,
   isBNHigher,
   zeroAddress,
+  maxUint256,
   deployContractWithBytecode,
 };

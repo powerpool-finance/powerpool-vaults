@@ -1,29 +1,42 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/bprotocol/IBAMM.sol";
+import "../interfaces/balancerV3/IVault.sol";
+import "../interfaces/liquidity/IStabilityPool.sol";
 import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 
 contract BProtocolPowerIndexConnector is AbstractConnector {
+  using SafeMath for uint256;
+
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
   uint256 public constant RATIO_CONSTANT = 10000000 ether;
   address public immutable STAKING;
+  address public immutable STABILITY_POOL;
+  address public immutable LQTY_TOKEN;
+  address public immutable VAULT;
   IERC20 public immutable UNDERLYING;
-  WrappedPiErc20Interface public immutable PI_TOKEN;
+  bytes32 public immutable PID;
 
   constructor(
     address _staking,
     address _underlying,
-    address _piToken
+    address _vault,
+    address _stabilityPool,
+    address _lqtyToken,
+    bytes32 _pId
   ) public AbstractConnector(46e14) {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
-    PI_TOKEN = WrappedPiErc20Interface(_piToken);
+    VAULT = _vault;
+    STABILITY_POOL = _stabilityPool;
+    LQTY_TOKEN = _lqtyToken;
+    PID = _pId;
   }
 
   // solhint-disable-next-line
@@ -36,15 +49,50 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function stake(uint256 _amount, DistributeData memory) public override returns (bytes memory result, bool claimed) {
+    _capitalOut(_amount);
+    _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
   }
 
   function redeem(uint256 _amount, DistributeData memory)
-    external
-    override
-    returns (bytes memory result, bool claimed)
+  external
+  override
+  returns (bytes memory result, bool claimed)
   {
+    _redeemImpl(_amount);
+    _capitalIn(_amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
+  }
+
+  /**
+   * @dev Transfers capital into the asset manager, and then invests it
+   * @param amount - the amount of tokens being deposited
+   */
+  function _capitalIn(uint256 amount) private {
+    uint256 underlyingStaked = getUnderlyingStaked();
+
+    IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
+    // Update the vault with new managed balance accounting for returns
+    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, underlyingStaked);
+    // Pull funds from the vault
+    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, amount);
+
+    IVault(VAULT).managePoolBalance(ops);
+  }
+
+  /**
+   * @notice Divests capital back to the asset manager and then sends it to the vault
+   * @param amount - the amount of tokens to withdraw to the vault
+   */
+  function _capitalOut(uint256 amount) private {
+    uint256 underlyingStaked = getUnderlyingStaked();
+    IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
+    // Update the vault with new managed balance accounting for returns
+    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, underlyingStaked);
+    // Send funds back to the vault
+    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.DEPOSIT, PID, UNDERLYING, amount);
+
+    IVault(VAULT).managePoolBalance(ops);
   }
 
   function beforePoke(
@@ -61,14 +109,10 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function initRouter(bytes calldata) external override {
-    _approveToStaking(uint256(-1));
+    UNDERLYING.approve(STAKING, uint(-1));
   }
 
   /*** VIEWERS ***/
-
-  function getPendingRewards() public view returns (uint256) {
-    return 0;
-  }
 
   /**
    * @notice Checking: is pending rewards in LUSD enough to cover transaction cost to reinvest
@@ -171,24 +215,77 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   /*** OVERRIDES ***/
-
-  function getUnderlyingStaked() public view override returns (uint256) {
-    return 0;
-  }
-
-  function _approveToStaking(uint256 _amount) internal {
-    PI_TOKEN.approveUnderlying(STAKING, _amount);
-  }
-
   function _claimImpl() internal {
-    _callExternal(PI_TOKEN, STAKING, IBAMM.withdraw.selector, abi.encode(0));
+    IBAMM(STAKING).withdraw(0);
   }
 
   function _stakeImpl(uint256 _amount) internal {
-    _callExternal(PI_TOKEN, STAKING, IBAMM.deposit.selector, abi.encode(_amount));
+    IBAMM(STAKING).deposit(_amount);
   }
 
   function _redeemImpl(uint256 _amount) internal {
-    _callExternal(PI_TOKEN, STAKING, IBAMM.withdraw.selector, abi.encode(_amount));
+    IBAMM(STAKING).withdraw(_amount);
+  }
+
+  /**
+   * @dev Returns current amount of LUSD remaining in the Balancer Vault.
+   */
+  function getUnderlyingCash() public view returns (uint256) {
+    (uint256 poolCash,,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
+    return poolCash;
+  }
+
+  /**
+   * @dev Returns the accounted amount of LUSD borrowed from the Balancer Vault by this Asset Manager contract.
+   *      managed = total - cash
+   */
+  function getUnderlyingManaged() external view returns (uint256) {
+    (, uint256 poolManaged,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
+    return poolManaged;
+  }
+
+  /**
+   * @dev Returns the actual amount of LUSD managed by this Asset Manager contract and staked to Liquity stability pool.
+   *      staked = total - (cash + gain - loss)
+   */
+  function getUnderlyingStaked() public view override returns (uint256) {
+    uint256 amShares = IBAMM(STAKING).stake(address(this));
+    uint256 totalShares = IBAMM(STAKING).total();
+    uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
+    if (totalShares == 0) {
+      return 0;
+    }
+
+    return lusdValueTotal * amShares / totalShares;
+  }
+
+  function getUnderlyingTotal() external view returns (uint256) {
+    // getUnderlyingReserve + getUnderlyingStaked
+    return getUnderlyingCash() + getUnderlyingStaked();
+  }
+
+  function getSharesByUnderlying(uint256 lusdAmount) external view returns (uint256) {
+    uint256 amShares = IBAMM(STAKING).stake(address(this));
+    uint256 totalShares = IBAMM(STAKING).total();
+    uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
+
+    return totalShares * lusdAmount / lusdValueTotal;
+  }
+
+  function getPendingRewards() external view returns (uint256) {
+    uint256 crop = IERC20(LQTY_TOKEN).balanceOf(STAKING).sub(IBAMM(STAKING).stock());
+    uint256 total = IBAMM(STAKING).total();
+    uint256 share = IBAMM(STAKING).share();
+    if (total > 0) share = share.add(crop.mul(1 ether).div(total));
+
+    uint256 amStake = IBAMM(STAKING).stake(address(this));
+    uint256 curr = amStake.mul(share).div(1 ether);
+
+    uint256 last = IBAMM(STAKING).crops(address(this));
+    if (curr > last) {
+      return curr - last;
+    } else {
+      return 0;
+    }
   }
 }
