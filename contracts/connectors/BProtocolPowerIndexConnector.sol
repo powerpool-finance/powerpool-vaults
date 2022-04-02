@@ -18,6 +18,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
   uint256 public constant RATIO_CONSTANT = 10000000 ether;
+  address public immutable ASSET_MANAGER;
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
   address public immutable LQTY_TOKEN;
@@ -26,6 +27,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   bytes32 public immutable PID;
 
   constructor(
+    address _assetManager,
     address _staking,
     address _underlying,
     address _vault,
@@ -33,6 +35,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _lqtyToken,
     bytes32 _pId
   ) public AbstractConnector(46e14) {
+    ASSET_MANAGER = _assetManager;
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     VAULT = _vault;
@@ -226,14 +229,17 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   /*** OVERRIDES ***/
   function _claimImpl() internal {
+    console.log("_claimImpl");
     IBAMM(STAKING).withdraw(0);
   }
 
   function _stakeImpl(uint256 _amount) internal {
+    console.log("_stakeImpl", _amount);
     IBAMM(STAKING).deposit(_amount);
   }
 
   function _redeemImpl(uint256 _amount) internal {
+    console.log("_redeemImpl", _amount);
     IBAMM(STAKING).withdraw(_amount);
   }
 
@@ -259,9 +265,12 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    *      staked = total - (cash + gain - loss)
    */
   function getUnderlyingStaked() public view override returns (uint256) {
-    uint256 amShares = IBAMM(STAKING).stake(address(this));
+    uint256 amShares = IBAMM(STAKING).stake(ASSET_MANAGER);
+    console.log("amShares", amShares);
     uint256 totalShares = IBAMM(STAKING).total();
+    console.log("totalShares", totalShares);
     uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
+    console.log("lusdValueTotal", lusdValueTotal);
     if (totalShares == 0) {
       return 0;
     }
@@ -275,7 +284,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function getSharesByUnderlying(uint256 lusdAmount) external view returns (uint256) {
-    uint256 amShares = IBAMM(STAKING).stake(address(this));
+    uint256 amShares = IBAMM(STAKING).stake(ASSET_MANAGER);
     uint256 totalShares = IBAMM(STAKING).total();
     uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
 
@@ -288,10 +297,10 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint256 share = IBAMM(STAKING).share();
     if (total > 0) share = share.add(crop.mul(1 ether).div(total));
 
-    uint256 amStake = IBAMM(STAKING).stake(address(this));
+    uint256 amStake = IBAMM(STAKING).stake(ASSET_MANAGER);
     uint256 curr = amStake.mul(share).div(1 ether);
 
-    uint256 last = IBAMM(STAKING).crops(address(this));
+    uint256 last = IBAMM(STAKING).crops(ASSET_MANAGER);
     if (curr > last) {
       return curr - last;
     } else {

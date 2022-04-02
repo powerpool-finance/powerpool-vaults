@@ -11,6 +11,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const IAuthorizer = await artifacts.require('IAuthorizer');
   const IStablePoolFactory = await artifacts.require('IStablePoolFactory');
   const IBasePool = await artifacts.require('IBasePool');
+  const BAMM = await artifacts.require('BAMM');
+  const StabilityPool = await artifacts.require('StabilityPool');
   const BProtocolPowerIndexConnector = await artifacts.require('BProtocolPowerIndexConnector');
 
   const { web3 } = IERC20;
@@ -57,7 +59,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await lusd.transfer(deployer, ether(2e6), {from: lusdHolder});
 
   const lusdSecond = web3.utils.toBN(lusdAddress).gt(web3.utils.toBN(ausd.address));
-  const stablePoolFactory = await IStablePoolFactory.at('0xC4ace7b47CB8D1d0A1EC9236c1CE050f623a2eCF');
+  const stablePoolFactory = await IStablePoolFactory.at('0xB9650C69D7a4180E3C0135643652C130f819536e');
   let res = await stablePoolFactory.create(
     "Balancer PP Stable Pool",
     "bb-p-USD",
@@ -98,7 +100,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     fromInternalBalance: false
   });
 
-  const connector = await BProtocolPowerIndexConnector.new(bammAddress, lusd.address, vaultAddress, stabilityPoolAddress, lqtyAddress, await pool.getPoolId());
+  const connector = await BProtocolPowerIndexConnector.new(assetManager.address, bammAddress, lusd.address, vaultAddress, stabilityPoolAddress, lqtyAddress, await pool.getPoolId());
   await assetManager.setConnectorList([
     {
       connector: connector.address,
@@ -113,7 +115,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   console.log('connector.address', connector.address);
   console.log('assetManager.address', assetManager.address);
 
-  // await assetManager.initRouterByConnector('0', '0x');
+  await assetManager.initRouterByConnector('0', '0x');
   await assetManager.transferOwnership(OWNER);
 
   if (network.name !== 'mainnetfork') {
@@ -150,11 +152,19 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   await impersonateAccount(ethers, pokerReporter);
 
-  console.log('assetManager.getUnderlyingReserve', await assetManager.getUnderlyingReserve().then(r => r.toString()));
+  const bamm = await BAMM.at(bammAddress);
+  console.log('stability pool', await bamm.SP());
+  const stabilityPool = await StabilityPool.at(await bamm.SP());
+  console.log('getCompoundedLUSDDeposit', await stabilityPool.getCompoundedLUSDDeposit(bammAddress).then(r => r.toString()));
+  console.log('getDepositorETHGain', await stabilityPool.getDepositorETHGain(bammAddress).then(r => r.toString()));
+  console.log('fetchPrice', await bamm.fetchPrice().then(r => r.toString()));
+
+  console.log('1 getUnderlyingReserve', await connector.getUnderlyingReserve().then(r => r.toString()));
+  console.log('1 getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
   await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
-  console.log('getUnderlyingManaged', await assetManager.getUnderlyingManaged());
-  console.log('getUnderlyingReserve', await assetManager.getUnderlyingReserve());
-  console.log('getUnderlyingStaked', await assetManager.getUnderlyingStaked());
+  console.log('2 getUnderlyingReserve', await connector.getUnderlyingReserve().then(r => r.toString()));
+  console.log('2 getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
+  console.log('getUnderlyingStaked', await connector.getUnderlyingStaked().then(r => r.toString()));
 //
   // console.log('3 wrapper balance', fromEther(await torn.balanceOf(piTorn.address)));
   // const governance = await ITornGovernance.at(TORN_GOVERNANCE);
