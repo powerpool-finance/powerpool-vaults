@@ -165,8 +165,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     printsNumber++;
     console.log(printsNumber + ' getUnderlyingReserve', await connector.getUnderlyingReserve().then(r => r.toString()));
     console.log(printsNumber + ' getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
-    console.log(printsNumber + ' getUnderlyingStaked', await connector.getUnderlyingStaked().then(r => r.toString()));
-    console.log(printsNumber + ' getPendingRewards', await connector.getPendingRewards().then(r => r.toString()));
+    console.log(printsNumber + ' getUnderlyingStaked ', await connector.getUnderlyingStaked().then(r => r.toString()));
+    console.log(printsNumber + ' getPendingRewards   ', await connector.getPendingRewards().then(r => r.toString()));
   }
 
   await printState();
@@ -178,66 +178,4 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await increaseTime(60 * 60);
   await advanceBlocks(1);
   await printState();
-
-//
-  // console.log('3 wrapper balance', fromEther(await torn.balanceOf(piTorn.address)));
-  // const governance = await ITornGovernance.at(TORN_GOVERNANCE);
-  // const staking = await ITornStaking.at(TORN_STAKING);
-  // console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
-  // console.log('checkReward 1', fromEther(await staking.checkReward(piTorn.address)));
-  //
-  // const TEN_HOURS = 60 * 60 * 10;
-  // const GAS_TO_REINVEST = '100000';
-  // await impersonateAccount(ethers, TORN_GOVERNANCE);
-  //
-  // await tornRouter.setClaimParams('0', await getClaimParams(TEN_HOURS), {from: OWNER});
-  //
-  // await increaseTime(TEN_HOURS);
-  // await advanceBlocks(1);
-  // await staking.addBurnRewards(ether(1700), {from: TORN_GOVERNANCE});
-  // console.log('checkReward 2', fromEther(await staking.checkReward(piTorn.address)));
-  // await printForecast(TEN_HOURS);
-  // await checkClaimAvailability(TEN_HOURS);
-  //
-  // await increaseTime(TEN_HOURS);
-  // await advanceBlocks(1);
-  // await staking.addBurnRewards(ether(1700), {from: TORN_GOVERNANCE});
-  // console.log('checkReward 3', fromEther(await staking.checkReward(piTorn.address)));
-  // await printForecast(TEN_HOURS);
-  // await checkClaimAvailability(TEN_HOURS);
-  //
-  // await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
-  //
-  // console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
-  //
-  // await ethers.provider.send('hardhat_reset', [{forking: {jsonRpcUrl: process.env.FORK}}]);
-
-
-  // function getClaimParams(duration) {
-  //   return tornConnector.packClaimParams(duration, GAS_TO_REINVEST);
-  // }
-  // async function checkClaimAvailability(duration) {
-  //   const connector = await tornRouter.connectors('0');
-  //   const claimParams = await getClaimParams(duration);
-  //   const res = await tornConnector.isClaimAvailable(claimParams, connector.lastClaimRewardsAt, connector.lastChangeStakeAt);
-  //   const tornNeedToReinvest = await tornConnector.getTornUsedToReinvest(GAS_TO_REINVEST, parseInt(process.env.GAS_PRICE) * 10 ** 9);
-  //   console.log('tornNeedToReinvest', fromEther(tornNeedToReinvest));
-  //   console.log('isClaimAvailable for', parseInt(duration) / (60 * 60), 'hours:', res);
-  //   return res;
-  // }
-
-  // async function printForecast(investDuration) {
-  //   const block = await web3.eth.getBlock('latest');
-  //   const connector = await tornRouter.connectors('0');
-  //   let {lastClaimRewardsAt, lastChangeStakeAt} = connector;
-  //   lastClaimRewardsAt = parseInt(lastClaimRewardsAt.toString(10));
-  //   lastChangeStakeAt = parseInt(lastChangeStakeAt.toString(10));
-  //   const lastRewardsAt = lastClaimRewardsAt > lastChangeStakeAt ? lastClaimRewardsAt : lastChangeStakeAt;
-  //
-  //   console.log('forecast after', (block.timestamp - lastRewardsAt) / (60 * 60), 'hours:', fromEther(await tornConnector.getPendingAndForecastReward(
-  //     lastClaimRewardsAt,
-  //     lastChangeStakeAt,
-  //     investDuration
-  //   ).then(r => r.forecastByPending)), 'with invest duration', investDuration / (60 * 60), 'hours');
-  // }
 });
