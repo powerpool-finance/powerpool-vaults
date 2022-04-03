@@ -23,7 +23,7 @@ License; No Warranties; Limitation of Liability;
 
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 // Common interface for the Trove Manager.
 interface IBorrowerOperations {
@@ -111,7 +111,7 @@ interface IBorrowerOperations {
 
 // File contracts/Interfaces/IStabilityPool.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 /*
  * The Stability Pool holds LUSD tokens deposited by Stability Pool depositors.
@@ -308,7 +308,7 @@ interface IStabilityPool {
 
 // File contracts/Interfaces/IPriceFeed.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface IPriceFeed {
   // --- Events ---
@@ -320,7 +320,7 @@ interface IPriceFeed {
 
 // File contracts/Interfaces/ILiquityBase.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface ILiquityBase {
   function priceFeed() external view returns (IPriceFeed);
@@ -328,7 +328,7 @@ interface ILiquityBase {
 
 // File contracts/Dependencies/IERC20.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 /**
  * Based on the OpenZeppelin IER20 interface:
@@ -423,7 +423,7 @@ interface IERC20 {
 
 // File contracts/Dependencies/IERC2612.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 /**
  * @dev Interface of the ERC2612 standard as defined in the EIP.
@@ -491,7 +491,7 @@ interface IERC2612 {
 
 // File contracts/Interfaces/ILUSDToken.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface ILUSDToken is IERC20, IERC2612 {
   // --- Events ---
@@ -523,7 +523,7 @@ interface ILUSDToken is IERC20, IERC2612 {
 
 // File contracts/Interfaces/ILQTYToken.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface ILQTYToken is IERC20, IERC2612 {
   // --- Events ---
@@ -543,7 +543,7 @@ interface ILQTYToken is IERC20, IERC2612 {
 
 // File contracts/Interfaces/ILQTYStaking.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface ILQTYStaking {
   // --- Events --
@@ -587,7 +587,7 @@ interface ILQTYStaking {
 
 // File contracts/Interfaces/ITroveManager.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 // Common interface for the Trove Manager.
 interface ITroveManager is ILiquityBase {
@@ -739,7 +739,7 @@ interface ITroveManager is ILiquityBase {
 
 // File contracts/Interfaces/ISortedTroves.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 // Common interface for the SortedTroves Doubly Linked List.
 interface ISortedTroves {
@@ -807,7 +807,7 @@ interface ISortedTroves {
 
 // File contracts/Interfaces/ICommunityIssuance.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface ICommunityIssuance {
   // --- Events ---
@@ -827,7 +827,7 @@ interface ICommunityIssuance {
 
 // File contracts/Dependencies/BaseMath.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 contract BaseMath {
   uint256 public constant DECIMAL_PRECISION = 1e18;
@@ -835,7 +835,7 @@ contract BaseMath {
 
 // File contracts/Dependencies/SafeMath.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 /**
  * Based on OpenZeppelin's SafeMath:
@@ -1009,7 +1009,7 @@ library SafeMath {
 
 // File contracts/Dependencies/console.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 // Buidler's helper contract for console logging
 library console {
@@ -4934,7 +4934,7 @@ library console {
 
 // File contracts/Dependencies/LiquityMath.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 library LiquityMath {
   using SafeMath for uint256;
@@ -5056,7 +5056,7 @@ library LiquityMath {
 
 // File contracts/Interfaces/IPool.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 // Common interface for the Pools.
 interface IPool {
@@ -5082,7 +5082,7 @@ interface IPool {
 
 // File contracts/Interfaces/IActivePool.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface IActivePool is IPool {
   // --- Events ---
@@ -5097,7 +5097,7 @@ interface IActivePool is IPool {
 
 // File contracts/Interfaces/IDefaultPool.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface IDefaultPool is IPool {
   // --- Events ---
@@ -5111,7 +5111,7 @@ interface IDefaultPool is IPool {
 
 // File contracts/Dependencies/LiquityBase.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 /*
  * Base contract for TroveManager, BorrowerOperations and StabilityPool. Contains global system constants and
@@ -5202,7 +5202,7 @@ contract LiquityBase is BaseMath, ILiquityBase {
 
 // File contracts/Dependencies/LiquitySafeMath128.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 // uint128 addition and subtraction, with overflow protection.
 
@@ -5224,7 +5224,7 @@ library LiquitySafeMath128 {
 
 // File contracts/Dependencies/Ownable.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 /**
  * Based on OpenZeppelin's Ownable contract:
@@ -5246,7 +5246,7 @@ contract Ownable {
   /**
    * @dev Initializes the contract setting the deployer as the initial owner.
    */
-  constructor() internal {
+  constructor() {
     _owner = msg.sender;
     emit OwnershipTransferred(address(0), msg.sender);
   }
@@ -5302,7 +5302,7 @@ contract Ownable {
 
 // File contracts/Dependencies/CheckContract.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 contract CheckContract {
   /**
@@ -5323,7 +5323,7 @@ contract CheckContract {
 
 // File contracts/StabilityPool.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 /*
  * The Stability Pool holds LUSD tokens deposited by Stability Pool depositors.
@@ -5456,6 +5456,7 @@ pragma solidity 0.6.12;
  */
 contract StabilityPool is LiquityBase, Ownable, CheckContract, IStabilityPool {
   using LiquitySafeMath128 for uint128;
+  using SafeMath for uint256;
 
   string public constant NAME = "StabilityPool";
 
@@ -5542,39 +5543,6 @@ contract StabilityPool is LiquityBase, Ownable, CheckContract, IStabilityPool {
   // Error trackers for the error correction in the offset calculation
   uint256 public lastETHError_Offset;
   uint256 public lastLUSDLossError_Offset;
-
-  // --- Events ---
-
-  event StabilityPoolETHBalanceUpdated(uint256 _newBalance);
-  event StabilityPoolLUSDBalanceUpdated(uint256 _newBalance);
-
-  event BorrowerOperationsAddressChanged(address _newBorrowerOperationsAddress);
-  event TroveManagerAddressChanged(address _newTroveManagerAddress);
-  event ActivePoolAddressChanged(address _newActivePoolAddress);
-  event DefaultPoolAddressChanged(address _newDefaultPoolAddress);
-  event LUSDTokenAddressChanged(address _newLUSDTokenAddress);
-  event SortedTrovesAddressChanged(address _newSortedTrovesAddress);
-  event PriceFeedAddressChanged(address _newPriceFeedAddress);
-  event CommunityIssuanceAddressChanged(address _newCommunityIssuanceAddress);
-
-  event P_Updated(uint256 _P);
-  event S_Updated(uint256 _S, uint128 _epoch, uint128 _scale);
-  event G_Updated(uint256 _G, uint128 _epoch, uint128 _scale);
-  event EpochUpdated(uint128 _currentEpoch);
-  event ScaleUpdated(uint128 _currentScale);
-
-  event FrontEndRegistered(address indexed _frontEnd, uint256 _kickbackRate);
-  event FrontEndTagSet(address indexed _depositor, address indexed _frontEnd);
-
-  event DepositSnapshotUpdated(address indexed _depositor, uint256 _P, uint256 _S, uint256 _G);
-  event FrontEndSnapshotUpdated(address indexed _frontEnd, uint256 _P, uint256 _G);
-  event UserDepositChanged(address indexed _depositor, uint256 _newDeposit);
-  event FrontEndStakeChanged(address indexed _frontEnd, uint256 _newFrontEndStake, address _depositor);
-
-  event ETHGainWithdrawn(address indexed _depositor, uint256 _ETH, uint256 _LUSDLoss);
-  event LQTYPaidToDepositor(address indexed _depositor, uint256 _LQTY);
-  event LQTYPaidToFrontEnd(address indexed _frontEnd, uint256 _LQTY);
-  event EtherSent(address _to, uint256 _amount);
 
   // --- Contract setters ---
 
@@ -6355,7 +6323,7 @@ and then it is deposited into the Trove, not the other way around). */
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface VatLike {
   function urns(bytes32, address) external view returns (uint256, uint256);
@@ -6539,7 +6507,7 @@ contract CropJoin {
 
 // File contracts/B.Protocol/CropJoinAdapter.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 // NOTE! - this is not an ERC20 token. transfer is not supported.
 contract CropJoinAdapter is CropJoin {
@@ -6599,7 +6567,7 @@ contract DummyGem is Dummy {
 
 // File contracts/B.Protocol/PriceFormula.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 contract PriceFormula {
   using SafeMath for uint256;
@@ -6661,7 +6629,7 @@ contract PriceFormula {
 
 // Code from https://github.com/smartcontractkit/chainlink/blob/master/evm-contracts/src/v0.6/interfaces/AggregatorV3Interface.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface AggregatorV3Interface {
   function decimals() external view returns (uint8);
@@ -6698,7 +6666,7 @@ interface AggregatorV3Interface {
 
 // File contracts/B.Protocol/BAMM.sol
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 contract BAMM is CropJoinAdapter, PriceFormula, Ownable {
   using SafeMath for uint256;
@@ -6787,7 +6755,7 @@ contract BAMM is CropJoinAdapter, PriceFormula, Ownable {
       return 0;
     }
 
-    if (chainlinkTimestamp + 1 hours < now) return 0; // price is down
+    if (chainlinkTimestamp + 1 hours < block.timestamp) return 0; // price is down
 
     uint256 chainlinkFactor = 10**chainlinkDecimals;
     return chainlinkLatestAnswer.mul(PRECISION) / chainlinkFactor;
@@ -6910,7 +6878,7 @@ contract BAMM is CropJoinAdapter, PriceFormula, Ownable {
     (bool success, ) = dest.call{ value: ethAmount }(""); // re-entry is fine here
     require(success, "swap: sending ETH failed");
 
-    emit RebalanceSwap(msg.sender, lusdAmount, ethAmount, now);
+    emit RebalanceSwap(msg.sender, lusdAmount, ethAmount, block.timestamp);
 
     return ethAmount;
   }

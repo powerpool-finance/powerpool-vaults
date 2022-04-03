@@ -14,15 +14,19 @@
 
 pragma solidity ^0.7.0;
 
-interface IAuthorizer {
-  /**
-   * @dev Returns true if `account` can perform the action described by `actionId` in the contract `where`.
-     */
-  function canPerform(
-    bytes32 actionId,
-    address account,
-    address where
-  ) external view returns (bool);
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-  function grantRoles(bytes32[] memory roles, address account) external;
+interface IStablePoolFactory {
+  event PoolCreated(address indexed pool);
+
+  function create(
+    string memory name,
+    string memory symbol,
+    IERC20[] memory tokens,
+    address[] memory assetManagers,
+    uint256 amplificationParameter,
+    uint256 swapFeePercentage,
+    address owner
+  ) external returns (address);
+
 }

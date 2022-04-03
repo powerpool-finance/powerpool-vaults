@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/IPancakeMasterChef.sol";
@@ -28,7 +28,7 @@ contract PancakeMasterChefIndexConnector is AbstractStakeRedeemConnector {
 
   /*** OVERRIDES ***/
 
-  function getUnderlyingStaked() external view override returns (uint256) {
+  function getUnderlyingStaked() public view override returns (uint256) {
     if (STAKING == address(0)) {
       return 0;
     }

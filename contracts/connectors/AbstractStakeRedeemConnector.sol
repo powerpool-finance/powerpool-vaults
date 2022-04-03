@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/sushi/IMasterChefV1.sol";
 import "./AbstractConnector.sol";
 
 abstract contract AbstractStakeRedeemConnector is AbstractConnector {
+  using SafeMath for uint256;
+
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
@@ -19,10 +21,22 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     address _underlying,
     address _piToken,
     uint256 _lockedProfitDegradation
-  ) public AbstractConnector(_lockedProfitDegradation) {
+  ) AbstractConnector(_lockedProfitDegradation) {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
+  }
+
+  function getUnderlyingReserve() public view override returns (uint256 amount) {
+    return UNDERLYING.balanceOf(address(PI_TOKEN));
+  }
+
+  function getUnderlyingTotal() external view override returns (uint256) {
+    return getUnderlyingReserve().add(getUnderlyingStaked());
+  }
+
+  function getUnderlyingStaked() public view virtual override returns (uint256) {
+    return 0;
   }
 
   /*** PERMISSIONLESS REWARD CLAIMING AND DISTRIBUTION ***/

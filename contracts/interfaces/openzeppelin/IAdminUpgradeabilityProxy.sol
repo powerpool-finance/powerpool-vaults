@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.6.0 <0.7.0;
+pragma solidity >=0.6.0;
 
 /**
  * @title Interface of the AdminUpgradeabilityProxy contract from the @openzeppelin/upgrades package

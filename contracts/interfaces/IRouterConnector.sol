@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 pragma experimental ABIEncoderV2;
 
@@ -26,6 +26,10 @@ interface IRouterConnector {
   function initRouter(bytes calldata) external;
 
   function getUnderlyingStaked() external view returns (uint256);
+
+  function getUnderlyingReserve() external view returns (uint256);
+
+  function getUnderlyingTotal() external view returns (uint256);
 
   function isClaimAvailable(
     bytes calldata _claimParams,

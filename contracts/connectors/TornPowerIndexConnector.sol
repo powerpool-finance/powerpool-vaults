@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/torn/ITornStaking.sol";
@@ -9,6 +9,8 @@ import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 
 contract TornPowerIndexConnector is AbstractConnector {
+  using SafeMath for uint256;
+
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
@@ -283,6 +285,14 @@ contract TornPowerIndexConnector is AbstractConnector {
       return 0;
     }
     return ITornGovernance(GOVERNANCE).lockedBalance(address(PI_TOKEN));
+  }
+
+  function getUnderlyingReserve() public view override returns (uint256 amount) {
+    return UNDERLYING.balanceOf(address(PI_TOKEN));
+  }
+
+  function getUnderlyingTotal() public view override returns (uint256 amount) {
+    return getUnderlyingStaked().add(getUnderlyingReserve());
   }
 
   function _approveToStaking(uint256 _amount) internal {

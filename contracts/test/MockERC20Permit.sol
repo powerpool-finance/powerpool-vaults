@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "./MockERC20.sol";
 
 contract MockERC20Permit is MockERC20 {
+  using SafeMath for uint256;
   bytes32 public immutable DOMAIN_SEPARATOR;
 
   bytes32 public constant PERMIT_TYPEHASH =

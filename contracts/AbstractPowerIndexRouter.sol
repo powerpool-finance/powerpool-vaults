@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
-import "@powerpool/power-oracle/contracts/interfaces/IPowerPoke.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "./interfaces/IPowerPoke.sol";
 import "./interfaces/IPoolRestrictions.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
@@ -19,6 +20,7 @@ import "./PowerIndexNaiveRouter.sol";
  */
 abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   using SafeERC20 for IERC20;
+  using SafeMath for uint256;
 
   uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
   uint256 public constant HUNDRED_PCT = 1 ether;
@@ -114,7 +116,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     _reward(_reporterId, gasStart, COMPENSATION_PLAN_1_ID, _rewardOpts);
   }
 
-  constructor(address _assetsHolder, address _underlying, BasicConfig memory _basicConfig) public PowerIndexNaiveRouter() Ownable() {
+  constructor(address _assetsHolder, address _underlying, BasicConfig memory _basicConfig) PowerIndexNaiveRouter() Ownable() {
     require(_assetsHolder != address(0), "INVALID_PI_TOKEN");
     require(_basicConfig.reserveRatioUpperBound <= HUNDRED_PCT, "UPPER_RR_GREATER_THAN_100_PCT");
     require(_basicConfig.reserveRatio >= _basicConfig.reserveRatioLowerBound, "RR_LTE_LOWER_RR");

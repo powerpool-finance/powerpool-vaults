@@ -8,15 +8,7 @@ import "./interfaces/balancerV3/IVault.sol";
 
 contract AssetManager is AbstractPowerIndexRouter {
 
-  event SetAssetsHolder(address assetsHolder, bytes32 poolId);
-
-  // RewardsAssetManager manages a single Pool, to which it allocates all rewards that it receives.
-  bytes32 public poolId;
-
-  modifier withCorrectPool(bytes32 pId) {
-    require(pId == poolId, "SinglePoolAssetManager called with incorrect poolId");
-    _;
-  }
+  event SetAssetsHolder(address assetsHolder);
 
   constructor(address _assetsHolder, address _underlying, BasicConfig memory _basicConfig) public AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {
 
@@ -40,9 +32,8 @@ contract AssetManager is AbstractPowerIndexRouter {
     return balance;
   }
 
-  function setAssetsHolder(address _assetsHolder, bytes32 _poolId) external onlyOwner {
+  function setAssetsHolder(address _assetsHolder) external onlyOwner {
     assetsHolder = _assetsHolder;
-    poolId = _poolId;
-    emit SetAssetsHolder(_assetsHolder, _poolId);
+    emit SetAssetsHolder(_assetsHolder);
   }
 }

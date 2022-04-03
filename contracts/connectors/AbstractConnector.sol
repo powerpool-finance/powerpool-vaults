@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 pragma experimental ABIEncoderV2;
 
@@ -43,7 +43,7 @@ abstract contract AbstractConnector is IRouterConnector {
     uint256 performance
   );
 
-  constructor(uint256 _lockedProfitDegradation) public {
+  constructor(uint256 _lockedProfitDegradation) {
     LOCKED_PROFIT_DEGRADATION = _lockedProfitDegradation;
   }
 
