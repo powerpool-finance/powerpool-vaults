@@ -59,7 +59,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await lusd.transfer(deployer, ether(2e6), {from: lusdHolder});
 
   const lusdSecond = web3.utils.toBN(lusdAddress).gt(web3.utils.toBN(ausd.address));
-  const stablePoolFactory = await IStablePoolFactory.at('0xB9650C69D7a4180E3C0135643652C130f819536e');
+  const stablePoolFactory = await IStablePoolFactory.at('0xF1C543b98ACDDC98919FBcCC5d94096bed381f05');
   let res = await stablePoolFactory.create(
     "Balancer PP Stable Pool",
     "bb-p-USD",
@@ -159,12 +159,26 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   console.log('getDepositorETHGain', await stabilityPool.getDepositorETHGain(bammAddress).then(r => r.toString()));
   console.log('fetchPrice', await bamm.fetchPrice().then(r => r.toString()));
 
-  console.log('1 getUnderlyingReserve', await connector.getUnderlyingReserve().then(r => r.toString()));
-  console.log('1 getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
+  let printsNumber = 0;
+  async function printState() {
+    console.log('\n');
+    printsNumber++;
+    console.log(printsNumber + ' getUnderlyingReserve', await connector.getUnderlyingReserve().then(r => r.toString()));
+    console.log(printsNumber + ' getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
+    console.log(printsNumber + ' getUnderlyingStaked', await connector.getUnderlyingStaked().then(r => r.toString()));
+    console.log(printsNumber + ' getPendingRewards', await connector.getPendingRewards().then(r => r.toString()));
+  }
+
+  await printState();
   await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
-  console.log('2 getUnderlyingReserve', await connector.getUnderlyingReserve().then(r => r.toString()));
-  console.log('2 getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
-  console.log('getUnderlyingStaked', await connector.getUnderlyingStaked().then(r => r.toString()));
+  await printState();
+  await increaseTime(60 * 60);
+  await advanceBlocks(1);
+  await printState();
+  await increaseTime(60 * 60);
+  await advanceBlocks(1);
+  await printState();
+
 //
   // console.log('3 wrapper balance', fromEther(await torn.balanceOf(piTorn.address)));
   // const governance = await ITornGovernance.at(TORN_GOVERNANCE);
