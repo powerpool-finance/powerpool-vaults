@@ -26,6 +26,12 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   IERC20 public immutable UNDERLYING;
   bytes32 public immutable PID;
 
+  struct RewardsCheckpoint {
+    uint128 reward; // in ether
+    uint64 rate; // in gwei
+    uint64 timestamp; // in seconds
+  }
+
   constructor(
     address _assetManager,
     address _staking,
@@ -46,31 +52,75 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   // solhint-disable-next-line
   function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
-    external
-    override
-    returns (bytes memory stakeData)
+  external
+  override
+  returns (bytes memory stakeData)
   {
     return new bytes(0);
   }
 
-  function stake(uint256 _amount, DistributeData memory) public override returns (bytes memory result, bool claimed) {
+  function snapshotRewards(bytes memory _stakeData) public view returns (bytes memory) {
+    RewardsCheckpoint[] memory checkpoints;
+    if(_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
+      checkpoints = new RewardsCheckpoint[](6);
+    } else {
+      (checkpoints) = abi.decode(_stakeData, (RewardsCheckpoint[]));
+    }
+
+    uint256 earliestIndex = uint256(-1);
+    for (uint256 i = 0; i < checkpoints.length; i++) {
+      if (earliestIndex == uint256(-1) || checkpoints[i].timestamp < checkpoints[earliestIndex].timestamp) {
+        earliestIndex = i;
+        if (checkpoints[i].timestamp == 0) {
+          break;
+        }
+      }
+    }
+
+    checkpoints[earliestIndex].timestamp = uint64(block.timestamp);
+    checkpoints[earliestIndex].reward = uint128(getPendingRewards());
+    uint256 previousIndex = earliestIndex > 0 ? earliestIndex - 1 : checkpoints.length - 1;
+    if (checkpoints[previousIndex].reward != 0) {
+      checkpoints[earliestIndex].rate = uint64(div(
+        mul(checkpoints[earliestIndex].reward, uint128(1 ether)),
+        checkpoints[previousIndex].reward
+      ));
+    }
+
+    return abi.encode(checkpoints);
+  }
+
+  function mul(uint128 a, uint128 b) internal pure returns (uint128) {
+    if (a == 0) return 0;
+    uint128 c = a * b;
+    require(c / a == b, "SafeMath: multiplication overflow");
+    return c;
+  }
+  function div(uint128 a, uint128 b) internal pure returns (uint128) {
+    require(b > 0, "SafeMath: division by zero");
+    return a / b;
+  }
+
+  function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
     console.log("stake 1");
     _capitalOut(_amount);
     console.log("stake 2");
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
+    result = snapshotRewards(_distributeData.stakeData);
   }
 
-  function redeem(uint256 _amount, DistributeData memory)
-    external
-    override
-    returns (bytes memory result, bool claimed)
+  function redeem(uint256 _amount, DistributeData memory _distributeData)
+  external
+  override
+  returns (bytes memory result, bool claimed)
   {
     console.log("redeem 1");
     _redeemImpl(_amount);
     console.log("redeem 2");
     _capitalIn(_amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
+    result = snapshotRewards(_distributeData.stakeData);
   }
 
   /**
@@ -139,11 +189,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint256 _lastChangeStakeAt
   ) external view virtual override returns (bool) {
     (uint256 paybackDuration, uint256 gasToReinvest) = unpackClaimParams(_claimParams);
-//    (, , uint256 forecastByPending) = getPendingAndForecastReward(
-//      _lastClaimRewardsAt,
-//      _lastChangeStakeAt,
-//      paybackDuration
-//    );
+    //    (, , uint256 forecastByPending) = getPendingAndForecastReward(
+    //      _lastClaimRewardsAt,
+    //      _lastChangeStakeAt,
+    //      paybackDuration
+    //    );
     return false;
   }
 
@@ -165,11 +215,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint24 uniswapWethSwappingFee = 0;
 
     return
-      UniswapV3OracleHelper.getPriceRatioOfTokens(
-        [address(UNDERLYING), UniswapV3OracleHelper.WETH],
-        [uniswapLusdSwappingFee, uniswapWethSwappingFee],
-        uniswapTimePeriod
-      );
+    UniswapV3OracleHelper.getPriceRatioOfTokens(
+      [address(UNDERLYING), UniswapV3OracleHelper.WETH],
+      [uniswapLusdSwappingFee, uniswapWethSwappingFee],
+      uniswapTimePeriod
+    );
   }
 
   /**
@@ -217,9 +267,9 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @notice Unpack claim params from bytes to variables.
    */
   function unpackClaimParams(bytes memory _claimParams)
-    public
-    pure
-    returns (uint256 paybackDuration, uint256 gasToReinvest)
+  public
+  pure
+  returns (uint256 paybackDuration, uint256 gasToReinvest)
   {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
       return (0, 0);
@@ -291,7 +341,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return totalShares * lusdAmount / lusdValueTotal;
   }
 
-  function getPendingRewards() external view returns (uint256) {
+  function getPendingRewards() public view returns (uint256) {
     uint256 crop = IERC20(LQTY_TOKEN).balanceOf(STAKING).sub(IBAMM(STAKING).stock());
     uint256 total = IBAMM(STAKING).total();
     uint256 share = IBAMM(STAKING).share();
