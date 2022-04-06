@@ -4,23 +4,28 @@ require('@nomiclabs/hardhat-ethers');
 task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (__, {ethers, network}) => {
   const {ether, fromEther, zeroAddress, impersonateAccount, gwei, increaseTime, advanceBlocks} = require('../test/helpers');
   const IERC20 = await artifacts.require('@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20');
-  const IVault = await artifacts.require('IVault');
+  const IVault = await artifacts.require('contracts/interfaces/balancerV3/IVault.sol:IVault');
   const MockERC20 = await artifacts.require('MockERC20');
   const AssetManager = await artifacts.require('AssetManager');
   const PowerPoke = await artifacts.require('PowerPoke');
-  const IAuthorizer = await artifacts.require('IAuthorizer');
+  const IAuthorizer = await artifacts.require('contracts/interfaces/balancerV3/IAuthorizer.sol:IAuthorizer');
   const IStablePoolFactory = await artifacts.require('IStablePoolFactory');
-  const IBasePool = await artifacts.require('IBasePool');
+  const IBasePool = await artifacts.require('contracts/interfaces/balancerV3/IBasePool.sol:IBasePool');
   const BAMM = await artifacts.require('BAMM');
   const StabilityPool = await artifacts.require('StabilityPool');
   const BProtocolPowerIndexConnector = await artifacts.require('BProtocolPowerIndexConnector');
+  const StablePoolFactory = await artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
 
   const { web3 } = IERC20;
 
   const [deployer] = await web3.eth.getAccounts();
   const sendOptions = { from: deployer };
 
-  if (process.env.FORK) {
+  if (network.name === 'mainnetfork') {
+    await network.provider.request({
+      method: "hardhat_reset",
+      params: [{ forking: { jsonRpcUrl: process.env.RPC} }],
+    });
     const daoMultisigAddress = '0x10a19e7ee7d7f8a52822f6817de8ea18204f2e4f';
     const roles = ['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'];
     const authorizer = await IAuthorizer.at('0xa331d84ec860bf466b4cdccfb4ac09a1b43f3ae6');
@@ -34,6 +39,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const lqtyAddress = '0x6dea81c8171d0ba574754ef6f8b412f2ed88c54d';
   const bammAddress = '0x00ff66ab8699aafa050ee5ef5041d1503aa0849a';
   const stabilityPoolAddress = '0x66017d22b0f8556afdd19fc67041899eb65a21bb';
+
+  const stablePoolFactory = await StablePoolFactory.new(vaultAddress);
 
   const assetManager = await AssetManager.new(
     vaultAddress,
@@ -59,7 +66,6 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await lusd.transfer(deployer, ether(2e6), {from: lusdHolder});
 
   const lusdSecond = web3.utils.toBN(lusdAddress).gt(web3.utils.toBN(ausd.address));
-  const stablePoolFactory = await IStablePoolFactory.at('0xF1C543b98ACDDC98919FBcCC5d94096bed381f05');
   let res = await stablePoolFactory.create(
     "Balancer PP Stable Pool",
     "bb-p-USD",
@@ -72,7 +78,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   const pool = await IBasePool.at(res.receipt.logs[0].args.pool);
 
-  await assetManager.setAssetsHolder(vaultAddress,await pool.getPoolId());
+  await assetManager.setAssetsHolder(vaultAddress);
 
   // borrowerOperations.openTrove(
   //   ether(1),
