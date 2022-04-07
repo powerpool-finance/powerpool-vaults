@@ -26,12 +26,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   IERC20 public immutable UNDERLYING;
   bytes32 public immutable PID;
 
-  struct RewardsCheckpoint {
-    uint128 reward; // in ether
-    uint64 rate; // in gwei
-    uint64 timestamp; // in seconds
-  }
-
   constructor(
     address _assetManager,
     address _staking,
@@ -59,55 +53,12 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return new bytes(0);
   }
 
-  function snapshotRewards(bytes memory _stakeData) public view returns (bytes memory) {
-    RewardsCheckpoint[] memory checkpoints;
-    if(_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
-      checkpoints = new RewardsCheckpoint[](6);
-    } else {
-      (checkpoints) = abi.decode(_stakeData, (RewardsCheckpoint[]));
-    }
-
-    uint256 earliestIndex = uint256(-1);
-    for (uint256 i = 0; i < checkpoints.length; i++) {
-      if (earliestIndex == uint256(-1) || checkpoints[i].timestamp < checkpoints[earliestIndex].timestamp) {
-        earliestIndex = i;
-        if (checkpoints[i].timestamp == 0) {
-          break;
-        }
-      }
-    }
-
-    checkpoints[earliestIndex].timestamp = uint64(block.timestamp);
-    checkpoints[earliestIndex].reward = uint128(getPendingRewards());
-    uint256 previousIndex = earliestIndex > 0 ? earliestIndex - 1 : checkpoints.length - 1;
-    if (checkpoints[previousIndex].reward != 0) {
-      checkpoints[earliestIndex].rate = uint64(div(
-        mul(checkpoints[earliestIndex].reward, uint128(1 ether)),
-        checkpoints[previousIndex].reward
-      ));
-    }
-
-    return abi.encode(checkpoints);
-  }
-
-  function mul(uint128 a, uint128 b) internal pure returns (uint128) {
-    if (a == 0) return 0;
-    uint128 c = a * b;
-    require(c / a == b, "SafeMath: multiplication overflow");
-    return c;
-  }
-  function div(uint128 a, uint128 b) internal pure returns (uint128) {
-    require(b > 0, "SafeMath: division by zero");
-    return a / b;
-  }
-
   function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
     console.log("stake 1");
     _capitalOut(_amount);
     console.log("stake 2");
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
-    result = snapshotRewards(_distributeData.stakeData);
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData)
@@ -120,7 +71,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     console.log("redeem 2");
     _capitalIn(_amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
-    result = snapshotRewards(_distributeData.stakeData);
   }
 
   /**
@@ -345,10 +295,10 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint256 crop = IERC20(LQTY_TOKEN).balanceOf(STAKING).sub(IBAMM(STAKING).stock());
     uint256 total = IBAMM(STAKING).total();
     uint256 share = IBAMM(STAKING).share();
-    if (total > 0) share = share.add(crop.mul(1 ether).div(total));
+    if (total > 0) share = add(share, rdiv(crop, total));
 
     uint256 amStake = IBAMM(STAKING).stake(ASSET_MANAGER);
-    uint256 curr = amStake.mul(share).div(1 ether);
+    uint256 curr = rmul(amStake, share);
 
     uint256 last = IBAMM(STAKING).crops(ASSET_MANAGER);
     if (curr > last) {
@@ -356,5 +306,32 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     } else {
       return 0;
     }
+  }
+
+  uint256 constant RAY = 10 ** 27;
+
+  function add(uint256 x, uint256 y) public pure returns (uint256 z) {
+    require((z = x + y) >= x, "ds-math-add-overflow");
+  }
+
+  function sub(uint256 x, uint256 y) public pure returns (uint256 z) {
+    require((z = x - y) <= x, "ds-math-sub-underflow");
+  }
+
+  function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
+    require(y == 0 || (z = x * y) / y == x, "ds-math-mul-overflow");
+  }
+
+  function div(uint128 a, uint128 b) internal pure returns (uint128) {
+    require(b > 0, "SafeMath: division by zero");
+    return a / b;
+  }
+
+  function rdiv(uint256 x, uint256 y) internal pure returns (uint256 z) {
+    z = mul(x, RAY) / y;
+  }
+
+  function rmul(uint256 x, uint256 y) public pure returns (uint256 z) {
+    z = mul(x, y) / RAY;
   }
 }
