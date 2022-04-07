@@ -84,7 +84,7 @@ contract TornPowerIndexConnector is AbstractConnector {
 
   /*** VIEWERS ***/
 
-  function getPendingRewards() public view returns (uint256) {
+  function getPendingRewards() external view returns (uint256) {
     return ITornStaking(STAKING).checkReward(address(PI_TOKEN));
   }
 
@@ -224,7 +224,7 @@ contract TornPowerIndexConnector is AbstractConnector {
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(uint256 paybackDuration, uint256 gasToReinvest) public pure returns (bytes memory) {
+  function packClaimParams(uint256 paybackDuration, uint256 gasToReinvest) external pure returns (bytes memory) {
     return abi.encode(paybackDuration, gasToReinvest);
   }
 
