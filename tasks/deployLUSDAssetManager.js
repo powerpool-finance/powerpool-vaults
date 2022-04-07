@@ -175,13 +175,16 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     console.log(printsNumber + ' getPendingRewards   ', await connector.getPendingRewards().then(r => r.toString()));
   }
 
+  const bammDepositer = '0xf35da7a42d92c7919172195aa7bc7a0d43ec866c';
+  await impersonateAccount(ethers, bammDepositer);
+
   await printState();
   await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
   await printState();
   await increaseTime(60 * 60);
-  await advanceBlocks(1);
+  await bamm.withdraw('0', {from: bammDepositer});
   await printState();
   await increaseTime(60 * 60);
-  await advanceBlocks(1);
+  await bamm.withdraw('0', {from: bammDepositer});
   await printState();
 });
