@@ -52,17 +52,10 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @param _lastChangeStakeAt Last stake/unstake action timestamp
    */
   function isClaimAvailable(
-    bytes calldata _stakeData,
     bytes calldata _claimParams
   ) external view virtual override returns (bool) {
     (uint256 minAmount) = unpackClaimParams(_claimParams);
-
-    (, , uint256 forecastByPending) = getPendingAndForecastReward(
-      _lastClaimRewardsAt,
-      _lastChangeStakeAt,
-      paybackDuration
-    );
-    return forecastByPending >= getTornUsedToReinvest(gasToReinvest, tx.gasprice);
+    return UNDERLYING.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minAmount;
   }
 
   // solhint-disable-next-line
@@ -100,30 +93,44 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
     console.log("stake 1");
-    uint256 pendingRewards = getPendingRewards();
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
     _capitalOut(underlyingStaked, _amount);
     console.log("stake 2");
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
-    result = pendingsToStakeData(_distributeData.stakeData, pendingRewards, underlyingStaked, shares, assetsPerShare);
+    result = pendingsToStakeData(_distributeData.stakeData, underlyingStaked, shares, assetsPerShare);
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData)
-  external
-  override
-  returns (bytes memory result, bool claimed)
+    external
+    override
+    returns (bytes memory result, bool claimed)
   {
     console.log("redeem 1");
-    uint256 pendingRewards = getPendingRewards();
-    uint256 amountWithFee = _amount + fee;
-    _redeemImpl(amountWithFee);
+    //TODO: check max ether on BAMM
+
+    // redeem with fee or without
+    uint256 amountToRedeem = _amount;
+    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
+    uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
+    if (underlyingFee >= _distributeData.stakeParams.minUnderlyingFee) {
+      amountToRedeem += underlyingFee;
+    }
+    _redeemImpl(amountToRedeem);
+
+    // capital in amount without fee
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
     console.log("redeem 2");
     _capitalIn(_underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
-    _safeTransfer(fee);
-    result = pendingsToStakeData(_distributeData.stakeData, pendingRewards, underlyingStaked, shares, assetsPerShare);
+
+    // transfer fee to receiver
+    if (amountToRedeem > _amount) {
+      _safeTransfer(_distributeData.performanceFeeReceiver, underlyingFee);
+      underlyingEarned = 0;
+    }
+
+    result = pendingsToStakeData(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare);
   }
 
   /**
