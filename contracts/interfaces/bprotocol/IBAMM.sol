@@ -14,6 +14,8 @@ interface IBAMM {
 
   function stock() external view returns (uint256);
 
+  function nps() public returns (uint256);
+
   function crops(address) external view returns (uint256);
 
   function setParams(uint _A, uint _fee) external;

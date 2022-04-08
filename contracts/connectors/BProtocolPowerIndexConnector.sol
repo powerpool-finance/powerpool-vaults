@@ -46,19 +46,34 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   // solhint-disable-next-line
   function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
-  external
-  override
-  returns (bytes memory stakeData)
+    external
+    override
+    returns (bytes memory stakeData)
   {
     return new bytes(0);
   }
 
+  function pendingsToStakeData(bytes memory _stakeData, uint256 _underlyingStaked, uint256 _depositAmount, uint256 _withdrawAmount) public returns (bytes memory) {
+    (uint256 lastShareRate, uint256 underlyingEarned, uint256 rewardsEarned) = unpackStakeData(_stakeData);
+
+    uint256 amShares = IBAMM(STAKING).stake(ASSET_MANAGER);
+
+    uint256 assetsPerShare = IBAMM(STAKING).nps();
+    uint256 sharesBefore = _underlyingStaked.mul(1 ether).div(assetsPerShare);
+    uint256 underlyingStakedActual = _underlyingStaked.add(_depositAmount).sub(_withdrawAmount);
+    uint256 sharesNow = underlyingStakedActual.mul(1 ether).div(assetsPerShare);
+
+    return packStakeData(lastShareRate, underlyingEarned, rewardsEarned);
+  }
+
   function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
     console.log("stake 1");
-    _capitalOut(_amount);
+    uint256 underlyingStaked = getUnderlyingStaked();
+    _capitalOut(underlyingStaked, _amount);
     console.log("stake 2");
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
+    result = pendingsToStakeData(_distributeData.stakeData, underlyingStaked, _amount, 0);
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData)
@@ -68,23 +83,23 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   {
     console.log("redeem 1");
     _redeemImpl(_amount);
+    uint256 underlyingStaked = getUnderlyingStaked();
     console.log("redeem 2");
-    _capitalIn(_amount);
+    _capitalIn(_underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
+    result = pendingsToStakeData(_distributeData.stakeData, underlyingStaked, 0, _amount);
   }
 
   /**
    * @dev Transfers capital into the asset manager, and then invests it
    * @param amount - the amount of tokens being deposited
    */
-  function _capitalIn(uint256 amount) private {
-    uint256 underlyingStaked = getUnderlyingStaked();
-
+  function _capitalIn(uint256 _underlyingStaked, uint256 _amount) private {
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
-    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, underlyingStaked);
+    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
     // Send funds back to the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.DEPOSIT, PID, UNDERLYING, amount);
+    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.DEPOSIT, PID, UNDERLYING, _amount);
 
     IVault(VAULT).managePoolBalance(ops);
   }
@@ -93,15 +108,14 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @notice Divests capital back to the asset manager and then sends it to the vault
    * @param amount - the amount of tokens to withdraw to the vault
    */
-  function _capitalOut(uint256 amount) private {
-    uint256 underlyingStaked = getUnderlyingStaked();
+  function _capitalOut(uint256 _underlyingStaked, uint256 amount) private {
     (uint256 poolCash,,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
-    console.log("underlyingStaked", underlyingStaked);
+    console.log("underlyingStaked", _underlyingStaked);
     console.log("poolCash", poolCash);
     console.log("amount  ", amount);
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
-    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, underlyingStaked);
+    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
     // Pull funds from the vault
     ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, amount);
 
@@ -197,6 +211,21 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return calcLusdOutByWethInWithRatio(_wethAmount, getLusdPriceRatio());
   }
 
+  function packStakeData(uint256 _lastShareRate, uint256 _underlyingEarned, uint256 _rewardsEarned) public pure returns (bytes memory) {
+    return abi.encode(_lastShareRate, _underlyingEarned, _rewardsEarned);
+  }
+
+  function unpackStakeData(bytes memory _stakeData)
+    public
+    pure
+    returns (uint256 lastShareRate, uint256 underlyingEarned, uint256 rewardsEarned)
+  {
+    if (_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
+      return (0, 0);
+    }
+    (lastShareRate, underlyingEarned, rewardsEarned) = abi.decode(_stakeData, (uint256, uint256, uint256));
+  }
+
   /**
    * @notice Convert WETH amount to LUSD amount with provided ratio
    * @param _wethAmount WETH amount to convert
@@ -217,9 +246,9 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @notice Unpack claim params from bytes to variables.
    */
   function unpackClaimParams(bytes memory _claimParams)
-  public
-  pure
-  returns (uint256 paybackDuration, uint256 gasToReinvest)
+    public
+    pure
+    returns (uint256 paybackDuration, uint256 gasToReinvest)
   {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
       return (0, 0);
