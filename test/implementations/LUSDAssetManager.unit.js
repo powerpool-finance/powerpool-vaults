@@ -25,16 +25,14 @@ const { web3 } = MockERC20;
 const REPORTER_ID = 42;
 
 describe.only('LUSDAssetManager Tests', () => {
-  let deployer, bob, alice, piGov, stub, pvp, pool1, pool2;
+  let deployer, bob, dan, eve, alice, piGov, stub, pvp;
 
   before(async function () {
-    [deployer, bob, alice, piGov, stub, pvp, pool1, pool2] = await web3.eth.getAccounts();
+    [deployer, bob, alice, dan, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
-  let lusd, lqty, weth, troveManager, stabilityPool, activePool, defaultPool, collSurplusPool, borrowerOperations, lqtyStaking, priceFeed, sortedTroves, communityIssuance, authorizer, vault, stablePoolFactory, staking, governance, poolRestrictions, piTorn, assetManager, connector, poke;
+  let lusd, lqty, ausd, weth, troveManager, stabilityPool, activePool, defaultPool, collSurplusPool, borrowerOperations, lqtyStaking, priceFeed, sortedTroves, communityIssuance, authorizer, vault, stablePoolFactory, staking, governance, poolRestrictions, assetManager, connector, poke, pid, lusdSecond;
 
-  const GAS_TO_REINVEST = 1e6;
-  const GAS_PRICE = 100 * 1e9;
   const pauseWindowDuration = 7776000;
   const bufferPeriodDuration = 2592000;
 
@@ -149,7 +147,7 @@ describe.only('LUSDAssetManager Tests', () => {
     );
 
     // mainnet: 0x00ff66ab8699aafa050ee5ef5041d1503aa0849a
-    const bamm = await BAMM.new(
+    staking = await BAMM.new(
       ethUsdPriceOracle.address,
       lusdUsdPriceOracle.address,
       stabilityPool.address,
@@ -159,7 +157,7 @@ describe.only('LUSDAssetManager Tests', () => {
       weth.address, // fake contract
       zeroAddress
     );
-    await bamm.setParams(20, 100);
+    await staking.setParams(20, 100);
 
     // mainnet: 0xa331d84ec860bf466b4cdccfb4ac09a1b43f3ae6
     authorizer = await deployContractWithBytecode('balancerV3/Authorizer', web3, [piGov]);
@@ -180,19 +178,18 @@ describe.only('LUSDAssetManager Tests', () => {
         poolRestrictions.address,
         poke.address,
         constants.ZERO_ADDRESS,
-        bamm.address,
+        staking.address,
         ether('0.2'),
         ether('0.02'),
         ether('0.3'),
         0,
         pvp,
         ether('0.15'),
-        [pool1, pool2],
       ),
     );
 
-    const ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether('10000000'), {from: deployer});
-    const lusdSecond = web3.utils.toBN(lusd.address).gt(web3.utils.toBN(ausd.address));
+    ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), {from: deployer});
+    lusdSecond = web3.utils.toBN(lusd.address).gt(web3.utils.toBN(ausd.address));
     let res = await stablePoolFactory.create(
       "Balancer PP Stable Pool",
       "bb-p-USD",
@@ -212,18 +209,32 @@ describe.only('LUSDAssetManager Tests', () => {
       ether(5e6),
       zeroAddress,
       zeroAddress,
-      {value : ether(4e3)}
+      {value: ether(4e3)}
     );
+    await borrowerOperations.openTrove(
+      ether(1),
+      ether(7e6),
+      zeroAddress,
+      zeroAddress,
+      {value: ether(3e3), from: eve}
+    );
+
+    await ethUsdPriceOracle.setLatestAnswer('190000000000');
+    await troveManager.liquidateTroves(2);
 
     // assertEq(IERC20(liquity.lusd()).balanceOf(DEPLOYER), 5e6 ether);
 
-    ausd.approve(vault.address, ether(2e6));
-    lusd.approve(vault.address, ether(2e6));
+    ausd.approve(vault.address, maxUint256);
+    lusd.approve(vault.address, maxUint256);
 
     // assertEq(IERC20(ausd).balanceOf(DEPLOYER), 1e9 ether);
     // assertEq(IERC20(lusd).balanceOf(DEPLOYER), 5e6 ether);
 
-    await vault.joinPool(await pool.getPoolId(), deployer, deployer, {
+    pid = await pool.getPoolId();
+    console.log('ausd balance', await ausd.balanceOf(deployer));
+    console.log('lusd balance', await lusd.balanceOf(deployer).then(b => b.toString()));
+
+    await vault.joinPool(pid, deployer, deployer, {
       assets: lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
       maxAmountsIn: [ether(2e6), ether(2e6)],
       userData: web3.eth.abi.encodeParameters(
@@ -233,7 +244,7 @@ describe.only('LUSDAssetManager Tests', () => {
       fromInternalBalance: false
     });
 
-    connector = await BProtocolPowerIndexConnector.new(assetManager.address, bamm.address, lusd.address, vault.address, stabilityPool.address, lqty.address, await pool.getPoolId());
+    connector = await BProtocolPowerIndexConnector.new(assetManager.address, staking.address, lusd.address, vault.address, stabilityPool.address, lqty.address, pid);
     await assetManager.setConnectorList([
       {
         connector: connector.address,
@@ -249,127 +260,60 @@ describe.only('LUSDAssetManager Tests', () => {
     assert.equal(await assetManager.owner(), piGov);
   });
 
-  describe('owner methods', async () => {
-    beforeEach(async () => {
-      await assetManager.transferOwnership(piGov, { from: piGov });
-    });
-
-    describe('stake()/redeem()', () => {
-      beforeEach(async () => {
-        await lusd.transfer(alice, ether('10000'));
-        await lusd.approve(piTorn.address, ether('10000'), { from: alice });
-        await piTorn.deposit(ether('10000'), { from: alice });
-
-        await assetManager.pokeFromReporter(REPORTER_ID, false, '0x');
-
-        assert.equal(await lusd.balanceOf(piTorn.address), ether(2000));
-        assert.equal(await lusd.balanceOf(governance.address), ether(8000));
-        assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
-      });
-
-      describe('stake()', () => {
-        it('should allow the owner staking any amount of reserve tokens', async () => {
-          const res = await assetManager.stake('0', ether(2000), { from: piGov });
-          const stake = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
-            l => l.event === 'Stake',
-          )[0];
-          assert.equal(stake.args.sender, piGov);
-          assert.equal(stake.args.amount, ether(2000));
-          assert.equal(await lusd.balanceOf(piTorn.address), ether('0'));
-          assert.equal(await lusd.balanceOf(governance.address), ether(10000));
-          assert.equal(await governance.lockedBalance(piTorn.address), ether(10000));
-        });
-
-        it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(assetManager.stake('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
-        });
-      });
-
-      describe('redeem()', () => {
-        it('should allow the owner redeeming any amount of reserve tokens', async () => {
-          const res = await assetManager.redeem('0', ether(3000), { from: piGov });
-          const redeem = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
-            l => l.event === 'Redeem',
-          )[0];
-          assert.equal(redeem.args.sender, piGov);
-          assert.equal(redeem.args.amount, ether(3000));
-          assert.equal(await lusd.balanceOf(piTorn.address), ether('5000'));
-          assert.equal(await governance.lockedBalance(piTorn.address), ether(5000));
-        });
-
-        it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(assetManager.redeem('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
-        });
-      });
-    });
-  });
-
   describe('reserve management', () => {
     beforeEach(async () => {
-      await lusd.transfer(staking.address, ether('200000'));
-      await staking.addBurnRewards(ether('200000'));
-
-      // alice
-      await lusd.transfer(alice, ether('20000'));
-      await lusd.approve(piTorn.address, ether('10000'), { from: alice });
-      await piTorn.deposit(ether('10000'), { from: alice });
-
-      // bob
-      await lusd.transfer(bob, ether('42000'));
-      await lusd.approve(governance.address, ether('42000'), { from: bob });
-      await governance.lockWithApproval(ether('42000'), { from: bob });
-
-      await assetManager.pokeFromReporter(REPORTER_ID, true, '0x');
-
-      assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
-      assert.equal(await lusd.balanceOf(governance.address), ether(50000));
-      assert.equal(await lusd.balanceOf(piTorn.address), ether(2000));
+      await lusd.transfer(bob, ether(1e6));
+      await lusd.approve(staking.address, ether(1e6), {from: bob});
+      await staking.deposit(ether(1e6), {from: bob});
+      await poke.setMinMaxReportIntervals(time.duration.hours(1), time.duration.hours(2), { from: piGov });
     });
 
-    it('should claim rewards and reinvest', async () => {
-      const reinvestDuration = 60 * 60;
-      const claimParams = await connector.packClaimParams(reinvestDuration, GAS_TO_REINVEST);
-      await assetManager.setClaimParams('0', claimParams, {from: piGov});
+    it.only('should claim rewards and reinvest', async () => {
+      assert.equal(await lusd.balanceOf(vault.address), ether(2e6));
+      const firstStake = await assetManager.pokeFromReporter('1', false, '0x');
+      assert.equal(await assetManager.getUnderlyingStaked(), ether(1.6e6));
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(4e5));
+      assert.equal(await lusd.balanceOf(vault.address), ether(4e5));
+      assert.equal(await assetManager.getUnderlyingTotal(), ether(2e6));
+      await time.increase(time.duration.minutes(59));
+      await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
+      await time.increase(time.duration.minutes(1));
+      let stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
+      assert.equal(stakeAndClaimStatus.diff, '0');
+      assert.equal(stakeAndClaimStatus.status, '0');
+      await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
 
-      await time.increase(time.duration.hours(100));
-      await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
-      await lusd.transfer(staking.address, ether('50000'));
-      await staking.addBurnRewards(ether('50000'));
+      await vault.joinPool(pid, deployer, deployer, {
+        assets: lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
+        maxAmountsIn: [ether(1e6), ether(1e6)],
+        userData: web3.eth.abi.encodeParameters(
+          ['uint256', 'uint256[]'],
+          [1, [ether(1e6), ether(1e6)]],
+        ),
+        fromInternalBalance: false
+      });
 
-      await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(1.4e6));
 
-      const c = await assetManager.connectors('0');
-      const tornNeedToReinvest = await connector.getTornUsedToReinvest(GAS_TO_REINVEST, GAS_PRICE);
-      let {pending, forecastByPending} = await connector.getPendingAndForecastReward(c.lastClaimRewardsAt, c.lastChangeStakeAt, reinvestDuration);
+      stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
+      assert.equal(stakeAndClaimStatus.diff, ether(8e5));
+      assert.equal(stakeAndClaimStatus.status, '2');
 
-      assert.equal(pending, ether('1600'));
-      assert.equal(fromEther(forecastByPending) >= fromEther(tornNeedToReinvest), false);
-      assert.equal(await connector.isClaimAvailable(claimParams, c.lastClaimRewardsAt, c.lastChangeStakeAt, {
-        gasPrice: GAS_PRICE
-      }), false);
+      assert.equal(await connector.getPendingRewards(), '0');
 
-      await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+      const secondStake = await assetManager.pokeFromReporter('1', false, '0x');
+      assert.equal(await assetManager.getUnderlyingStaked(), ether(2.4e6));
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(6e5));
+      assert.equal(await lusd.balanceOf(vault.address), ether(6e5));
+      assert.equal(await assetManager.getUnderlyingTotal(), ether(3e6));
+      console.log('secondStake.receipt.blockNumber - firstStake.receipt.blockNumber', secondStake.receipt.blockNumber - firstStake.receipt.blockNumber)
+      assert.equal(await connector.getPendingRewards(), '0');
 
-      await time.increase(time.duration.hours(100));
-      await lusd.transfer(staking.address, ether('100000'));
-      await staking.addBurnRewards(ether('100000'));
+      let lastWithdrawRes = await staking.withdraw('0', {from: bob});
+      console.log('lastWithdrawRes.receipt.blockNumber - secondStake.receipt.blockNumber', lastWithdrawRes.receipt.blockNumber - secondStake.receipt.blockNumber)
+      assert.equal(await connector.getPendingRewards(), '0');
 
-      await connector.getPendingAndForecastReward(c.lastClaimRewardsAt, c.lastChangeStakeAt, reinvestDuration).then(r => {
-        pending = r.pending;
-        forecastByPending = r.forecastByPending;
-      })
-      assert.equal(fromEther(forecastByPending) >= fromEther(tornNeedToReinvest), true);
-      assert.equal(await connector.isClaimAvailable(claimParams, c.lastClaimRewardsAt, c.lastChangeStakeAt, {
-        gasPrice: GAS_PRICE
-      }), true);
 
-      await assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE});
-
-      assert.equal(fromEther(await governance.lockedBalance(piTorn.address)) > 11300, true);
-
-      assert.equal(fromEther(await assetManager.calculateLockedProfit()) > 3300, true);
-      let rewards = await connector.unpackStakeData(await assetManager.connectors(0).then(r => r.stakeData));
-      assert.equal(fromEther(await rewards.lockedProfit, ether('2.7197990668')) > 3300, true);
     });
 
 

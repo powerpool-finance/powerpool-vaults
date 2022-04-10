@@ -90,13 +90,13 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   // assertEq(IERC20(liquity.lusd()).balanceOf(DEPLOYER), 5e6 ether);
 
-  ausd.approve(vaultAddress, ether(2e6));
-  lusd.approve(vaultAddress, ether(2e6));
+  await ausd.approve(vaultAddress, ether(2e6));
+  await lusd.approve(vaultAddress, ether(2e6));
 
   // assertEq(IERC20(ausd).balanceOf(DEPLOYER), 1e9 ether);
   // assertEq(IERC20(lusd).balanceOf(DEPLOYER), 5e6 ether);
 
-  vault.joinPool(await pool.getPoolId(), deployer, deployer, {
+  await vault.joinPool(await pool.getPoolId(), deployer, deployer, {
     assets: lusdSecond ? [ausd.address, lusdAddress] : [lusdAddress, ausd.address],
     maxAmountsIn: [ether(2e6), ether(2e6)],
     userData: web3.eth.abi.encodeParameters(

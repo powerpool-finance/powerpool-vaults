@@ -95,7 +95,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   struct PokeFromState {
     uint256 minInterval;
     uint256 maxInterval;
-    uint256 piTokenUnderlyingBalance;
+    uint256 assetsHolderUnderlyingBalance;
     bool atLeastOneForceRebalance;
   }
 
@@ -320,8 +320,6 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
 
   function getAssetsHolderUnderlyingBalance() public virtual view returns (uint256);
 
-  function getUnderlyingReserve() public virtual view returns (uint256);
-
   /**
    * @notice Rebalance every connector according to its share in an array.
    * @param _claimAndDistributeRewards Need to claim and distribute rewards.
@@ -331,7 +329,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     PokeFromState memory state = PokeFromState(0, 0, 0, false);
     (state.minInterval, state.maxInterval) = _getMinMaxReportInterval();
 
-    state.piTokenUnderlyingBalance = getAssetsHolderUnderlyingBalance();
+    state.assetsHolderUnderlyingBalance = getAssetsHolderUnderlyingBalance();
     (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
 
     state.atLeastOneForceRebalance = false;
@@ -345,7 +343,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
       }
 
       (StakeStatus status, uint256 diff, bool shouldClaim, bool forceRebalance) = getStakeAndClaimStatus(
-        state.piTokenUnderlyingBalance,
+        state.assetsHolderUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[i],
         _claimAndDistributeRewards,
@@ -407,14 +405,14 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
    * @notice Call redeem in the connector with delegatecall, save result stakeData if not null.
    */
   function _redeem(Connector storage _c, uint256 _diff) internal {
-    _callStakeRedeem("redeem(uint256,(bytes,uint256,address))", _c, _diff);
+    _callStakeRedeem("redeem(uint256,(bytes,bytes,uint256,address))", _c, _diff);
   }
 
   /**
    * @notice Call stake in the connector with delegatecall, save result `stakeData` if not null.
    */
   function _stake(Connector storage _c, uint256 _diff) internal {
-    _callStakeRedeem("stake(uint256,(bytes,uint256,address))", _c, _diff);
+    _callStakeRedeem("stake(uint256,(bytes,bytes,uint256,address))", _c, _diff);
   }
 
   function _callStakeRedeem(
@@ -535,8 +533,26 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     return getStakeStatus(getAssetsHolderUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, _share);
   }
 
+  function getStakeAndClaimStatusByConnectorIndex(uint256 _connectorIndex, bool _claimAndDistributeRewards) external view returns (
+    StakeStatus status,
+    uint256 diff,
+    bool shouldClaim,
+    bool forceRebalance
+  ) {
+    uint256 assetsHolderUnderlyingBalance = getAssetsHolderUnderlyingBalance();
+    (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
+
+    return getStakeAndClaimStatus(
+      assetsHolderUnderlyingBalance,
+      totalStakedBalance,
+      stakedBalanceList[_connectorIndex],
+      _claimAndDistributeRewards,
+      connectors[_connectorIndex]
+    );
+  }
+
   function getStakeAndClaimStatus(
-    uint256 _leftOnPiTokenBalance,
+    uint256 _leftOnAssetsHolderBalance,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
     bool _claimAndDistributeRewards,
@@ -552,7 +568,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     )
   {
     (status, diff, forceRebalance) = getStakeStatus(
-      _leftOnPiTokenBalance,
+      _leftOnAssetsHolderBalance,
       _totalStakedBalance,
       _stakedBalance,
       _c.share
@@ -635,13 +651,13 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   }
 
   function getUnderlyingAvailable() public virtual view returns (uint256) {
-    // _getUnderlyingReserve + getUnderlyingStaked
-    return getUnderlyingReserve().add(getUnderlyingStaked());
+    // getAssetsHolderUnderlyingBalance + getUnderlyingStaked
+    return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked());
   }
 
   function getUnderlyingTotal() external view returns (uint256) {
-    // _getUnderlyingReserve + getUnderlyingStaked
-    return getUnderlyingReserve().add(getUnderlyingStaked());
+    // getAssetsHolderUnderlyingBalance + getUnderlyingStaked
+    return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked());
   }
 
   function getPiEquivalentForUnderlying(uint256 _underlyingAmount, uint256 _piTotalSupply)

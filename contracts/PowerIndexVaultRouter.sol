@@ -42,10 +42,6 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
     return WrappedPiErc20Interface(assetsHolder).getUnderlyingBalance();
   }
 
-  function getUnderlyingReserve() public view override returns (uint256) {
-    return underlying.balanceOf(assetsHolder);
-  }
-
   function calculateLockedProfit() public view returns (uint256) {
     uint256 lockedProfit = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
@@ -56,7 +52,7 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
   }
 
   function getUnderlyingAvailable() public override view returns (uint256) {
-    // _getUnderlyingReserve + getUnderlyingStaked - _calculateLockedProfit
-    return getUnderlyingReserve().add(getUnderlyingStaked()).sub(calculateLockedProfit());
+    // assetsHolderUnderlyingBalance + getUnderlyingStaked - _calculateLockedProfit
+    return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked()).sub(calculateLockedProfit());
   }
 }

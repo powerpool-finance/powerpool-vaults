@@ -18,15 +18,6 @@ contract AssetManager is AbstractPowerIndexRouter {
     uint256 balance = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
-      balance += connectors[i].connector.getUnderlyingTotal();
-    }
-    return balance;
-  }
-
-  function getUnderlyingReserve() public view override returns (uint256) {
-    uint256 balance = 0;
-    for (uint256 i = 0; i < connectors.length; i++) {
-      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
       balance += connectors[i].connector.getUnderlyingReserve();
     }
     return balance;
