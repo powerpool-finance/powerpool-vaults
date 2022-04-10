@@ -33,7 +33,7 @@ abstract contract AbstractProfitDistributionConnector is AbstractConnector, IRou
     uint256 lockedProfit,
     uint256 lastRewardDistribution,
     uint256 performanceFeeDebt
-  ) public virtual pure returns (bytes memory) {
+  ) public pure virtual returns (bytes memory) {
     return abi.encode(lockedProfit, lastRewardDistribution, performanceFeeDebt);
   }
 
@@ -42,8 +42,8 @@ abstract contract AbstractProfitDistributionConnector is AbstractConnector, IRou
    */
   function unpackStakeData(bytes memory _stakeData)
     public
-    virtual
     pure
+    virtual
     returns (
       uint256 lockedProfit,
       uint256 lastRewardDistribution,

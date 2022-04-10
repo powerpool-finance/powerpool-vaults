@@ -5,9 +5,9 @@ pragma solidity ^0.7.0;
 import "../interfaces/AggregatorV3Interface.sol";
 
 contract MockChainLinkPriceOracle is AggregatorV3Interface {
-  uint8 public override constant decimals = 8;
-  uint256 public override constant version = 4;
-  string public override constant description = "buzz";
+  uint8 public constant override decimals = 8;
+  uint256 public constant override version = 4;
+  string public constant override description = "buzz";
   int256 internal _latestAnswer;
   uint80 internal latestRound;
   mapping(uint80 => int256) internal answers;
@@ -24,7 +24,7 @@ contract MockChainLinkPriceOracle is AggregatorV3Interface {
     answers[latestRound] = latestAnswer_;
   }
 
-  function latestAnswer() public returns (int256)  {
+  function latestAnswer() public returns (int256) {
     return answers[latestRound];
   }
 

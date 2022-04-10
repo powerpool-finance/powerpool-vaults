@@ -3,7 +3,7 @@
   "plugins": ["prettier"],
   "rules": {
     "code-complexity": ["error", 10],
-    "compiler-version": ["error", "^0.6.0"],
+    "compiler-version": ["error", "^0.7.0"],
     "constructor-syntax": "error",
     "max-line-length": ["error", 120],
     "max-states-count": ["error", 20],

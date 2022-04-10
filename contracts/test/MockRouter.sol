@@ -9,7 +9,11 @@ import "../WrappedPiErc20.sol";
 contract MockRouter is PowerIndexVaultRouter {
   event MockWrapperCallback(uint256 withdrawAmount);
 
-  constructor(address _piToken, address _underlying, BasicConfig memory _basicConfig) public PowerIndexVaultRouter(_piToken, _underlying, _basicConfig) {}
+  constructor(
+    address _piToken,
+    address _underlying,
+    BasicConfig memory _basicConfig
+  ) public PowerIndexVaultRouter(_piToken, _underlying, _basicConfig) {}
 
   function piTokenCallback(address, uint256 _withdrawAmount) external payable virtual override {
     emit MockWrapperCallback(_withdrawAmount);

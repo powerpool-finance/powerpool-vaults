@@ -8,8 +8,8 @@ import "../interfaces/balancerV3/IVault.sol";
 import "../interfaces/liquidity/IStabilityPool.sol";
 import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
-import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
-import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
+import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 
 import "hardhat/console.sol";
 
@@ -59,10 +59,14 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint256 receivedReward = LQTY_TOKEN.balanceOf(ASSET_MANAGER);
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
-      (
-        ,
-        rewardsToReinvest,
-      ) = _distributePerformanceFee(_distributeData.performanceFee, _distributeData.performanceFeeReceiver, 0, ASSET_MANAGER, UNDERLYING, receivedReward);
+      (, rewardsToReinvest, ) = _distributePerformanceFee(
+        _distributeData.performanceFee,
+        _distributeData.performanceFeeReceiver,
+        0,
+        ASSET_MANAGER,
+        UNDERLYING,
+        receivedReward
+      );
 
       UniswapV3OracleHelper.swapByMiddleWeth(rewardsToReinvest, address(LQTY_TOKEN), address(UNDERLYING));
 
@@ -74,11 +78,22 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return new bytes(0);
   }
 
-  function _transferFeeToReceiver(address _assetManager, IERC20 _underlying, address _feeReceiver, uint256 _amount) internal override {
+  function _transferFeeToReceiver(
+    address,
+    IERC20 _underlying,
+    address _feeReceiver,
+    uint256 _amount
+  ) internal override {
     _underlying.transfer(_feeReceiver, _amount);
   }
 
-  function pendingsToStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned, uint256 _underlyingStaked, uint256 _shares, uint256 _assetsPerShare) public returns (bytes memory) {
+  function pendingsToStakeData(
+    uint256 _lastAssetsPerShare,
+    uint256 _underlyingEarned,
+    uint256 _underlyingStaked,
+    uint256 _shares,
+    uint256 _assetsPerShare
+  ) public returns (bytes memory) {
     uint256 underlyingStakedBefore = _shares.mul(_lastAssetsPerShare).div(1 ether);
     _underlyingEarned = _underlyingEarned.add(_underlyingStaked.sub(underlyingStakedBefore));
     _lastAssetsPerShare = _assetsPerShare;
@@ -86,7 +101,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return packStakeData(_lastAssetsPerShare, _underlyingEarned);
   }
 
-  function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
+  function stake(uint256 _amount, DistributeData memory _distributeData)
+    public
+    override
+    returns (bytes memory result, bool claimed)
+  {
     console.log("stake 1");
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
@@ -158,7 +177,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @param _amount - the amount of tokens to withdraw to the vault
    */
   function _capitalOut(uint256 _underlyingStaked, uint256 _amount) private {
-    (uint256 poolCash,,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
     ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
@@ -182,7 +200,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function initRouter(bytes calldata) external override {
-    UNDERLYING.approve(STAKING, uint(-1));
+    UNDERLYING.approve(STAKING, uint256(-1));
   }
 
   /*** VIEWERS ***/
@@ -191,10 +209,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @notice Checking: is pending rewards in LQTY enough to reinvest
    * @param _claimParams Claim parameters, that stored in PowerIndexRouter
    */
-  function isClaimAvailable(
-    bytes calldata _claimParams
-  ) external view virtual returns (bool) {
-    (uint256 minAmount) = unpackClaimParams(_claimParams);
+  function isClaimAvailable(bytes calldata _claimParams) external view virtual returns (bool) {
+    uint256 minAmount = unpackClaimParams(_claimParams);
     return LQTY_TOKEN.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minAmount;
   }
 
@@ -282,11 +298,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   /**
    * @notice Unpack claim params from bytes to variables.
    */
-  function unpackClaimParams(bytes memory _claimParams)
-    public
-    pure
-    returns (uint256 minAmount)
-  {
+  function unpackClaimParams(bytes memory _claimParams) public pure returns (uint256 minAmount) {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
       return (0);
     }
@@ -334,7 +346,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @dev Returns current amount of LUSD remaining in the Balancer Vault.
    */
   function getUnderlyingReserve() public view override returns (uint256) {
-    (uint256 poolCash,,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
+    (uint256 poolCash, , , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
     return poolCash;
   }
 
@@ -343,25 +355,33 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    *      managed = total - cash
    */
   function getUnderlyingManaged() external view returns (uint256) {
-    (, uint256 poolManaged,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
+    (, uint256 poolManaged, , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
     return poolManaged;
   }
-
 
   /**
    * @dev Returns the actual amount of LUSD managed by this Asset Manager contract and staked to Liquity stability pool.
    *      staked = total - (cash + gain - loss)
    */
-  function getUnderlyingStakedWithShares() public view returns (uint256 staked, uint256 shares, uint256 assetsPerShare) {
+  function getUnderlyingStakedWithShares()
+    public
+    view
+    returns (
+      uint256 staked,
+      uint256 shares,
+      uint256 assetsPerShare
+    )
+  {
     shares = IBAMM(STAKING).stake(ASSET_MANAGER);
     uint256 totalShares = IBAMM(STAKING).total();
     uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
     if (totalShares == 0) {
       return (0, 0, 0);
     }
-    staked = lusdValueTotal * shares / totalShares;
-    assetsPerShare = lusdValueTotal * 1 ether / totalShares;
+    staked = (lusdValueTotal * shares) / totalShares;
+    assetsPerShare = (lusdValueTotal * 1 ether) / totalShares;
   }
+
   /**
    * @dev Returns the actual amount of LUSD managed by this Asset Manager contract and staked to Liquity stability pool.
    *      staked = total - (cash + gain - loss)
@@ -376,11 +396,10 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function getSharesByUnderlying(uint256 lusdAmount) external view returns (uint256) {
-    uint256 amShares = IBAMM(STAKING).stake(ASSET_MANAGER);
     uint256 totalShares = IBAMM(STAKING).total();
     uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
 
-    return totalShares * lusdAmount / lusdValueTotal;
+    return (totalShares * lusdAmount) / lusdValueTotal;
   }
 
   function getPendingRewards() public view returns (uint256) {
@@ -400,7 +419,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     }
   }
 
-  uint256 constant RAY = 10 ** 27;
+  uint256 internal constant RAY = 10**27;
 
   function add(uint256 x, uint256 y) public pure returns (uint256 z) {
     require((z = x + y) >= x, "ds-math-add-overflow");

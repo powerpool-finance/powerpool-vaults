@@ -10,12 +10,16 @@ import "./interfaces/IRouterLockedProfitConnector.sol";
 contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
   using SafeMath for uint256;
 
-  constructor(address _assetsHolder, address _underlying, BasicConfig memory _basicConfig) public AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {}
+  constructor(
+    address _assetsHolder,
+    address _underlying,
+    BasicConfig memory _basicConfig
+  ) public AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {}
 
   /**
-     * @notice Set piERC20 ETH fee for deposit and withdrawal functions.
-     * @param _ethFee Fee amount in ETH.
-     */
+   * @notice Set piERC20 ETH fee for deposit and withdrawal functions.
+   * @param _ethFee Fee amount in ETH.
+   */
   function setPiTokenEthFee(uint256 _ethFee) external onlyOwner {
     require(_ethFee <= 0.1 ether, "ETH_FEE_OVER_THE_LIMIT");
     WrappedPiErc20Interface(assetsHolder).setEthFee(_ethFee);
@@ -46,12 +50,14 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
     uint256 lockedProfit = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
-      lockedProfit += IRouterLockedProfitConnector(address(connectors[i].connector)).calculateLockedProfit(connectors[i].stakeData);
+      lockedProfit += IRouterLockedProfitConnector(address(connectors[i].connector)).calculateLockedProfit(
+        connectors[i].stakeData
+      );
     }
     return lockedProfit;
   }
 
-  function getUnderlyingAvailable() public override view returns (uint256) {
+  function getUnderlyingAvailable() public view override returns (uint256) {
     // assetsHolderUnderlyingBalance + getUnderlyingStaked - _calculateLockedProfit
     return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked()).sub(calculateLockedProfit());
   }

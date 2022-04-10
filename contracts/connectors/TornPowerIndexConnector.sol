@@ -43,7 +43,12 @@ contract TornPowerIndexConnector is AbstractProfitDistributionConnector {
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
-      (rewardsToReinvest, stakeData) = _distributeReward(_distributeData, address(PI_TOKEN), UNDERLYING, receivedReward);
+      (rewardsToReinvest, stakeData) = _distributeReward(
+        _distributeData,
+        address(PI_TOKEN),
+        UNDERLYING,
+        receivedReward
+      );
       _approveToStaking(rewardsToReinvest);
       _stakeImpl(rewardsToReinvest);
       return stakeData;

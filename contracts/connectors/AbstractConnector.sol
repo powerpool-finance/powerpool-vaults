@@ -101,10 +101,14 @@ abstract contract AbstractConnector is IRouterConnector {
     }
   }
 
-  function _transferFeeToReceiver(address _assetManager, IERC20 _underlying, address _feeReceiver, uint256 _amount) internal virtual {
+  function _transferFeeToReceiver(
+    address _assetManager,
+    IERC20 _underlying,
+    address _feeReceiver,
+    uint256 _amount
+  ) internal virtual {
     _safeTransfer(WrappedPiErc20Interface(_assetManager), _underlying, _feeReceiver, _amount);
   }
-
 
   /**
    * @notice Transfer token amount from piToken(piERC20) to destination.

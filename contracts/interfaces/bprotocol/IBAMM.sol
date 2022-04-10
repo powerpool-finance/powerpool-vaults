@@ -16,11 +16,15 @@ interface IBAMM {
 
   function crops(address) external view returns (uint256);
 
-  function setParams(uint _A, uint _fee) external;
+  function setParams(uint256 _A, uint256 _fee) external;
 
-  function deposit(uint lusdAmount) external;
+  function deposit(uint256 lusdAmount) external;
 
-  function withdraw(uint numShares) external;
+  function withdraw(uint256 numShares) external;
 
-  function swap(uint lusdAmount, uint minEthReturn, address payable dest) external returns(uint);
+  function swap(
+    uint256 lusdAmount,
+    uint256 minEthReturn,
+    address payable dest
+  ) external returns (uint256);
 }

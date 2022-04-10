@@ -28,5 +28,4 @@ interface IStablePoolFactory {
     uint256 swapFeePercentage,
     address owner
   ) external returns (address);
-
 }

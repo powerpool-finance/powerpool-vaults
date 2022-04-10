@@ -118,7 +118,11 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     _reward(_reporterId, gasStart, COMPENSATION_PLAN_1_ID, _rewardOpts);
   }
 
-  constructor(address _assetsHolder, address _underlying, BasicConfig memory _basicConfig) PowerIndexNaiveRouter() Ownable() {
+  constructor(
+    address _assetsHolder,
+    address _underlying,
+    BasicConfig memory _basicConfig
+  ) PowerIndexNaiveRouter() Ownable() {
     require(_assetsHolder != address(0), "INVALID_PI_TOKEN");
     require(_basicConfig.reserveRatioUpperBound <= HUNDRED_PCT, "UPPER_RR_GREATER_THAN_100_PCT");
     require(_basicConfig.reserveRatio >= _basicConfig.reserveRatioLowerBound, "RR_LTE_LOWER_RR");
@@ -190,7 +194,17 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
 
       if (c.newConnector) {
         connectors.push(
-          Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, 0, new bytes(0), new bytes(0), new bytes(0), new bytes(0))
+          Connector(
+            c.connector,
+            c.share,
+            c.callBeforeAfterPoke,
+            0,
+            0,
+            new bytes(0),
+            new bytes(0),
+            new bytes(0),
+            new bytes(0)
+          )
         );
         c.connectorIndex = connectors.length - 1;
       } else {
@@ -318,7 +332,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     return _lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
   }
 
-  function getAssetsHolderUnderlyingBalance() public virtual view returns (uint256);
+  function getAssetsHolderUnderlyingBalance() public view virtual returns (uint256);
 
   /**
    * @notice Rebalance every connector according to its share in an array.
@@ -533,22 +547,27 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     return getStakeStatus(getAssetsHolderUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, _share);
   }
 
-  function getStakeAndClaimStatusByConnectorIndex(uint256 _connectorIndex, bool _claimAndDistributeRewards) external view returns (
-    StakeStatus status,
-    uint256 diff,
-    bool shouldClaim,
-    bool forceRebalance
-  ) {
+  function getStakeAndClaimStatusByConnectorIndex(uint256 _connectorIndex, bool _claimAndDistributeRewards)
+    external
+    view
+    returns (
+      StakeStatus status,
+      uint256 diff,
+      bool shouldClaim,
+      bool forceRebalance
+    )
+  {
     uint256 assetsHolderUnderlyingBalance = getAssetsHolderUnderlyingBalance();
     (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
 
-    return getStakeAndClaimStatus(
-      assetsHolderUnderlyingBalance,
-      totalStakedBalance,
-      stakedBalanceList[_connectorIndex],
-      _claimAndDistributeRewards,
-      connectors[_connectorIndex]
-    );
+    return
+      getStakeAndClaimStatus(
+        assetsHolderUnderlyingBalance,
+        totalStakedBalance,
+        stakedBalanceList[_connectorIndex],
+        _claimAndDistributeRewards,
+        connectors[_connectorIndex]
+      );
   }
 
   function getStakeAndClaimStatus(
@@ -650,7 +669,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     return (underlyingStakedList, total);
   }
 
-  function getUnderlyingAvailable() public virtual view returns (uint256) {
+  function getUnderlyingAvailable() public view virtual returns (uint256) {
     // getAssetsHolderUnderlyingBalance + getUnderlyingStaked
     return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked());
   }

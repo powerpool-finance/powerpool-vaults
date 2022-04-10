@@ -202,8 +202,6 @@ describe.only('LUSDAssetManager Tests', () => {
 
     const pool = await StablePool.at(res.receipt.logs[0].args.pool);
 
-    await assetManager.setAssetsHolder(pool.address);
-
     await borrowerOperations.openTrove(
       ether(1),
       ether(5e6),

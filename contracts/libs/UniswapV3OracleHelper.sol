@@ -6,7 +6,7 @@ pragma abicoder v2;
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import { OracleLibrary } from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import { IUniswapV3Factory } from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
-import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
+import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IERC20Decimals {
@@ -101,17 +101,20 @@ library UniswapV3OracleHelper {
       getPriceOfTokenInWETH(tokens[1], fees[1], period);
   }
 
-  function swapByMiddleWeth(uint256 _amountIn, address _tokenFrom, address _tokenTo) internal returns (uint256 amountOut) {
+  function swapByMiddleWeth(
+    uint256 _amountIn,
+    address _tokenFrom,
+    address _tokenTo
+  ) internal returns (uint256 amountOut) {
     IERC20(_tokenFrom).approve(address(UniswapV3Router), _amountIn);
 
-    ISwapRouter.ExactInputParams memory params =
-      ISwapRouter.ExactInputParams({
-        path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, _tokenTo),
-        recipient: msg.sender,
-        deadline: block.timestamp,
-        amountIn: _amountIn,
-        amountOutMinimum: 0
-      });
+    ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+      path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, _tokenTo),
+      recipient: msg.sender,
+      deadline: block.timestamp,
+      amountIn: _amountIn,
+      amountOutMinimum: 0
+    });
 
     // Executes the swap.
     amountOut = UniswapV3Router.exactInput(params);
