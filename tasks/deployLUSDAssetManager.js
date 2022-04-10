@@ -51,7 +51,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
       reserveRatio: ether(0.1),
       reserveRatioLowerBound: ether(0.01),
       reserveRatioUpperBound: ether(0.2),
-      claimRewardsInterval: '604800',
+      claimRewardsInterval: '3600',
       performanceFeeReceiver: '0xd132973eaebbd6d7ca7b88e9170f2cca058de430',
       performanceFee: ether(0.003)
     }
@@ -178,6 +178,9 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const bammDepositer = '0xf35da7a42d92c7919172195aa7bc7a0d43ec866c';
   await impersonateAccount(ethers, bammDepositer);
 
+  await assetManager.setClaimParams('0', await connector.packClaimParams(ether('10')), {from: OWNER});
+  await assetManager.setStakeParams('0', await connector.packStakeParams(ether('0.1'), ether('10000')), {from: OWNER});
+
   await printState();
   await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
   await printState();
@@ -187,6 +190,11 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await increaseTime(60 * 60);
   await bamm.withdraw('0', {from: bammDepositer});
   await printState();
-  await increaseTime(MIN_REPORT_INTERVAL);
-  await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
+  console.log('stake 1', await bamm.stake(assetManager.address).then(a => a.toString()));
+  console.log('isClaimAvailable', await connector.isClaimAvailable(await connector.packClaimParams(ether('10'))));
+  console.log('getStakeAndClaimStatusByConnectorIndex', await assetManager.getStakeAndClaimStatusByConnectorIndex('0', true));
+  await assetManager.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
+  console.log('stake 2', await bamm.stake(assetManager.address).then(a => a.toString()));
+// await increaseTime(MIN_REPORT_INTERVAL);
+  // await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
 });

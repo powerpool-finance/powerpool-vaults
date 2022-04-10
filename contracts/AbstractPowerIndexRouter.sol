@@ -577,10 +577,10 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
 
     if (shouldClaim && _c.claimParams.length != 0) {
       shouldClaim = _c.connector.isClaimAvailable(_c.claimParams, _c.lastClaimRewardsAt, _c.lastChangeStakeAt);
-    }
-
-    if (status == StakeStatus.EQUILIBRIUM && shouldClaim) {
-      forceRebalance = true;
+      if (shouldClaim && !forceRebalance) {
+        forceRebalance = true;
+        status = StakeStatus.EQUILIBRIUM;
+      }
     }
   }
 

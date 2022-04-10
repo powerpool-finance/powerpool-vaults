@@ -220,7 +220,6 @@ describe.only('LUSDAssetManager Tests', () => {
     );
 
     await ethUsdPriceOracle.setLatestAnswer('190000000000');
-    await troveManager.liquidateTroves(2);
 
     // assertEq(IERC20(liquity.lusd()).balanceOf(DEPLOYER), 5e6 ether);
 
@@ -271,6 +270,11 @@ describe.only('LUSDAssetManager Tests', () => {
     it.only('should claim rewards and reinvest', async () => {
       assert.equal(await lusd.balanceOf(vault.address), ether(2e6));
       const firstStake = await assetManager.pokeFromReporter('1', false, '0x');
+      console.log('stability pool ETH balance before', await web3.eth.getBalance(stabilityPool.address));
+      const res = await troveManager.liquidateTroves(2);
+      console.log('stability pool ETH balance after', await web3.eth.getBalance(stabilityPool.address));
+      console.log('liquidateTroves', res.receipt.logs);
+      return;
       assert.equal(await assetManager.getUnderlyingStaked(), ether(1.6e6));
       assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(4e5));
       assert.equal(await lusd.balanceOf(vault.address), ether(4e5));
