@@ -187,4 +187,6 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await increaseTime(60 * 60);
   await bamm.withdraw('0', {from: bammDepositer});
   await printState();
+  await increaseTime(MIN_REPORT_INTERVAL);
+  await assetManager.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
 });

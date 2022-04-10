@@ -9,7 +9,8 @@ const AssetManager = artifacts.require('AssetManager');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
-const IBasePool = artifacts.require('IBasePool');
+const StablePoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
+const StablePool = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePool');
 
 const MockChainLinkPriceOracle = artifacts.require('MockChainLinkPriceOracle');
 const BAMM = artifacts.require('BAMM');
@@ -30,7 +31,7 @@ describe.only('LUSDAssetManager Tests', () => {
     [deployer, bob, alice, piGov, stub, pvp, pool1, pool2] = await web3.eth.getAccounts();
   });
 
-  let lusd, lqty, weth, troveManager, stabilityPool, activePool, defaultPool, collSurplusPool, borrowerOperations, lqtyStaking, priceFeed, sortedTroves, communityIssuance, authorizer, vault, stablePoolFactory, staking, governance, poolRestrictions, piTorn, myRouter, connector, poke;
+  let lusd, lqty, weth, troveManager, stabilityPool, activePool, defaultPool, collSurplusPool, borrowerOperations, lqtyStaking, priceFeed, sortedTroves, communityIssuance, authorizer, vault, stablePoolFactory, staking, governance, poolRestrictions, piTorn, assetManager, connector, poke;
 
   const GAS_TO_REINVEST = 1e6;
   const GAS_PRICE = 100 * 1e9;
@@ -165,21 +166,21 @@ describe.only('LUSDAssetManager Tests', () => {
     // mainnet: 0xba12222222228d8ba445958a75a0704d566bf2c8
     vault = await deployContractWithBytecode('balancerV3/Vault', web3, [authorizer.address, weth.address, pauseWindowDuration, bufferPeriodDuration]);
     // mainnet: 0xc66Ba2B6595D3613CCab350C886aCE23866EDe24
-    stablePoolFactory = await deployContractWithBytecode('balancerV3/StablePoolFactory', web3, [piGov]);
+    stablePoolFactory = await StablePoolFactory.new(vault.address);
 
     await authorizer.grantRoles(['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'], deployer, {from: piGov});
 
     poolRestrictions = await MockPoolRestrictions.new();
 
     poke = await MockPoke.new(true);
-    myRouter = await AssetManager.new(
-      zeroAddress,
-      piTorn.address,
+    assetManager = await AssetManager.new(
+      vault.address,
+      lusd.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
         poke.address,
         constants.ZERO_ADDRESS,
-        staking.address,
+        bamm.address,
         ether('0.2'),
         ether('0.02'),
         ether('0.3'),
@@ -191,21 +192,22 @@ describe.only('LUSDAssetManager Tests', () => {
     );
 
     const ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether('10000000'), {from: deployer});
-    let res = stablePoolFactory.create(
+    const lusdSecond = web3.utils.toBN(lusd.address).gt(web3.utils.toBN(ausd.address));
+    let res = await stablePoolFactory.create(
       "Balancer PP Stable Pool",
       "bb-p-USD",
-      [lusd.address, ausd.address],
-      [myRouter.address, zeroAddress],
+      lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
+      lusdSecond ? [zeroAddress, assetManager.address] : [assetManager.address, zeroAddress],
       200,
       5e14,
       deployer
     );
 
-    const pool = await IBasePool.at(res.receipt.logs[0].args.pool);
+    const pool = await StablePool.at(res.receipt.logs[0].args.pool);
 
-    await myRouter.setAssetsHolder(pool.address);
+    await assetManager.setAssetsHolder(pool.address);
 
-    borrowerOperations.openTrove(
+    await borrowerOperations.openTrove(
       ether(1),
       ether(5e6),
       zeroAddress,
@@ -221,15 +223,18 @@ describe.only('LUSDAssetManager Tests', () => {
     // assertEq(IERC20(ausd).balanceOf(DEPLOYER), 1e9 ether);
     // assertEq(IERC20(lusd).balanceOf(DEPLOYER), 5e6 ether);
 
-    vault.joinPool(await pool.getPoolId(), deployer, deployer, {
-      assets: [lusd.address, ausd.address],
+    await vault.joinPool(await pool.getPoolId(), deployer, deployer, {
+      assets: lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
       maxAmountsIn: [ether(2e6), ether(2e6)],
-      userData: abi.encode(0, [ether(2e6), ether(2e6)]),
+      userData: web3.eth.abi.encodeParameters(
+        ['uint256', 'uint256[]'],
+        [0, [ether(2e6), ether(2e6)]],
+      ),
       fromInternalBalance: false
     });
 
-    connector = await BProtocolPowerIndexConnector.new(staking.address, lusd.address, piTorn.address, governance.address);
-    await myRouter.setConnectorList([
+    connector = await BProtocolPowerIndexConnector.new(assetManager.address, bamm.address, lusd.address, vault.address, stabilityPool.address, lqty.address, await pool.getPoolId());
+    await assetManager.setConnectorList([
       {
         connector: connector.address,
         share: ether(1),
@@ -239,14 +244,14 @@ describe.only('LUSDAssetManager Tests', () => {
       },
     ]);
 
-    await myRouter.initRouterByConnector('0', '0x');
-    await myRouter.transferOwnership(piGov);
-    assert.equal(await myRouter.owner(), piGov);
+    await assetManager.initRouterByConnector('0', '0x');
+    await assetManager.transferOwnership(piGov);
+    assert.equal(await assetManager.owner(), piGov);
   });
 
   describe('owner methods', async () => {
     beforeEach(async () => {
-      await myRouter.transferOwnership(piGov, { from: piGov });
+      await assetManager.transferOwnership(piGov, { from: piGov });
     });
 
     describe('stake()/redeem()', () => {
@@ -255,7 +260,7 @@ describe.only('LUSDAssetManager Tests', () => {
         await lusd.approve(piTorn.address, ether('10000'), { from: alice });
         await piTorn.deposit(ether('10000'), { from: alice });
 
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
+        await assetManager.pokeFromReporter(REPORTER_ID, false, '0x');
 
         assert.equal(await lusd.balanceOf(piTorn.address), ether(2000));
         assert.equal(await lusd.balanceOf(governance.address), ether(8000));
@@ -264,7 +269,7 @@ describe.only('LUSDAssetManager Tests', () => {
 
       describe('stake()', () => {
         it('should allow the owner staking any amount of reserve tokens', async () => {
-          const res = await myRouter.stake('0', ether(2000), { from: piGov });
+          const res = await assetManager.stake('0', ether(2000), { from: piGov });
           const stake = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
             l => l.event === 'Stake',
           )[0];
@@ -276,13 +281,13 @@ describe.only('LUSDAssetManager Tests', () => {
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(myRouter.stake('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(assetManager.stake('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
 
       describe('redeem()', () => {
         it('should allow the owner redeeming any amount of reserve tokens', async () => {
-          const res = await myRouter.redeem('0', ether(3000), { from: piGov });
+          const res = await assetManager.redeem('0', ether(3000), { from: piGov });
           const redeem = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
             l => l.event === 'Redeem',
           )[0];
@@ -293,7 +298,7 @@ describe.only('LUSDAssetManager Tests', () => {
         });
 
         it('should deny non-owner staking any amount of reserve tokens', async () => {
-          await expectRevert(myRouter.redeem('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
+          await expectRevert(assetManager.redeem('0', ether(1), { from: alice }), 'Ownable: caller is not the owner');
         });
       });
     });
@@ -314,7 +319,7 @@ describe.only('LUSDAssetManager Tests', () => {
       await lusd.approve(governance.address, ether('42000'), { from: bob });
       await governance.lockWithApproval(ether('42000'), { from: bob });
 
-      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+      await assetManager.pokeFromReporter(REPORTER_ID, true, '0x');
 
       assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
       assert.equal(await lusd.balanceOf(governance.address), ether(50000));
@@ -324,16 +329,16 @@ describe.only('LUSDAssetManager Tests', () => {
     it('should claim rewards and reinvest', async () => {
       const reinvestDuration = 60 * 60;
       const claimParams = await connector.packClaimParams(reinvestDuration, GAS_TO_REINVEST);
-      await myRouter.setClaimParams('0', claimParams, {from: piGov});
+      await assetManager.setClaimParams('0', claimParams, {from: piGov});
 
       await time.increase(time.duration.hours(100));
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+      await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
       await lusd.transfer(staking.address, ether('50000'));
       await staking.addBurnRewards(ether('50000'));
 
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+      await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
 
-      const c = await myRouter.connectors('0');
+      const c = await assetManager.connectors('0');
       const tornNeedToReinvest = await connector.getTornUsedToReinvest(GAS_TO_REINVEST, GAS_PRICE);
       let {pending, forecastByPending} = await connector.getPendingAndForecastReward(c.lastClaimRewardsAt, c.lastChangeStakeAt, reinvestDuration);
 
@@ -343,7 +348,7 @@ describe.only('LUSDAssetManager Tests', () => {
         gasPrice: GAS_PRICE
       }), false);
 
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
+      await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE}), 'NOTHING_TO_DO');
 
       await time.increase(time.duration.hours(100));
       await lusd.transfer(staking.address, ether('100000'));
@@ -358,19 +363,19 @@ describe.only('LUSDAssetManager Tests', () => {
         gasPrice: GAS_PRICE
       }), true);
 
-      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE});
+      await assetManager.pokeFromReporter(REPORTER_ID, true, '0x', {gasPrice: GAS_PRICE});
 
       assert.equal(fromEther(await governance.lockedBalance(piTorn.address)) > 11300, true);
 
-      assert.equal(fromEther(await myRouter.calculateLockedProfit()) > 3300, true);
-      let rewards = await connector.unpackStakeData(await myRouter.connectors(0).then(r => r.stakeData));
+      assert.equal(fromEther(await assetManager.calculateLockedProfit()) > 3300, true);
+      let rewards = await connector.unpackStakeData(await assetManager.connectors(0).then(r => r.stakeData));
       assert.equal(fromEther(await rewards.lockedProfit, ether('2.7197990668')) > 3300, true);
     });
 
 
     describe('on poke', async () => {
       it('should do nothing when nothing has changed', async () => {
-        await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
+        await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
       });
 
       it('should increase reserve if required', async () => {
@@ -383,7 +388,7 @@ describe.only('LUSDAssetManager Tests', () => {
         assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
         assert.equal(await lusd.balanceOf(piTorn.address), ether(3000));
 
-        const res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+        const res = await assetManager.pokeFromReporter(REPORTER_ID, true, '0x');
         const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
           l => l.event === 'DistributeReward',
         )[0];
@@ -391,17 +396,17 @@ describe.only('LUSDAssetManager Tests', () => {
 
         assert.equal(await lusd.balanceOf(governance.address), ether(52160));
         assert.equal(await governance.lockedBalance(piTorn.address), ether(10160));
-        assert.equal(await myRouter.getUnderlyingStaked(), ether(10160));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether('2200'));
-        assert.equal(await myRouter.getUnderlyingAvailable(), ether(11000));
-        assert.equal(await myRouter.getUnderlyingTotal(), ether('12360'));
-        assert.equal(await myRouter.calculateLockedProfit(), ether('1360'));
+        assert.equal(await assetManager.getUnderlyingStaked(), ether(10160));
+        assert.equal(await assetManager.getUnderlyingReserve(), ether('2200'));
+        assert.equal(await assetManager.getUnderlyingAvailable(), ether(11000));
+        assert.equal(await assetManager.getUnderlyingTotal(), ether('12360'));
+        assert.equal(await assetManager.calculateLockedProfit(), ether('1360'));
         assert.equal(await lusd.balanceOf(piTorn.address), ether('2200'));
 
         await time.increase(time.duration.hours(10));
-        assert.equal(await myRouter.calculateLockedProfit(), ether(0));
-        assert.equal(await myRouter.getUnderlyingAvailable(), ether('12360'));
-        assert.equal(await myRouter.getUnderlyingTotal(), ether('12360'));
+        assert.equal(await assetManager.calculateLockedProfit(), ether(0));
+        assert.equal(await assetManager.getUnderlyingAvailable(), ether('12360'));
+        assert.equal(await assetManager.getUnderlyingTotal(), ether('12360'));
       });
     });
   });
