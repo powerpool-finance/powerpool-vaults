@@ -5,8 +5,10 @@ pragma experimental ABIEncoderV2;
 
 import "./AbstractPowerIndexRouter.sol";
 import "./interfaces/WrappedPiErc20Interface.sol";
+import "./interfaces/IRouterLockedProfitConnector.sol";
 
 contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
+  using SafeMath for uint256;
 
   constructor(address _assetsHolder, address _underlying, BasicConfig memory _basicConfig) public AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {}
 
@@ -42,5 +44,19 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
 
   function getUnderlyingReserve() public view override returns (uint256) {
     return underlying.balanceOf(assetsHolder);
+  }
+
+  function calculateLockedProfit() public view returns (uint256) {
+    uint256 lockedProfit = 0;
+    for (uint256 i = 0; i < connectors.length; i++) {
+      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
+      lockedProfit += IRouterLockedProfitConnector(address(connectors[i].connector)).calculateLockedProfit(connectors[i].stakeData);
+    }
+    return lockedProfit;
+  }
+
+  function getUnderlyingAvailable() public override view returns (uint256) {
+    // _getUnderlyingReserve + getUnderlyingStaked - _calculateLockedProfit
+    return getUnderlyingReserve().add(getUnderlyingStaked()).sub(calculateLockedProfit());
   }
 }

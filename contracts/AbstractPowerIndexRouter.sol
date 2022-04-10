@@ -28,13 +28,14 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   event SetReserveConfig(uint256 ratio, uint256 ratioLowerBound, uint256 ratioUpperBound, uint256 claimRewardsInterval);
   event SetPerformanceFee(uint256 performanceFee);
   event SetConnector(
-    IRouterConnector indexed connector,
+    address indexed connector,
     uint256 share,
     bool callBeforeAfterPoke,
     uint256 indexed connectorIndex,
     bool indexed isNewConnector
   );
   event SetConnectorClaimParams(address connector, bytes claimParams);
+  event SetConnectorStakeParams(address connector, bytes stakeParams);
 
   struct BasicConfig {
     address poolRestrictions;
@@ -79,6 +80,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     uint256 lastChangeStakeAt;
     bytes stakeData;
     bytes pokeData;
+    bytes stakeParams;
     bytes claimParams;
   }
 
@@ -188,7 +190,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
 
       if (c.newConnector) {
         connectors.push(
-          Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, 0, new bytes(0), new bytes(0), new bytes(0))
+          Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, 0, new bytes(0), new bytes(0), new bytes(0), new bytes(0))
         );
         c.connectorIndex = connectors.length - 1;
       } else {
@@ -197,7 +199,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
         connectors[c.connectorIndex].callBeforeAfterPoke = c.callBeforeAfterPoke;
       }
 
-      emit SetConnector(c.connector, c.share, c.callBeforeAfterPoke, c.connectorIndex, c.newConnector);
+      emit SetConnector(address(c.connector), c.share, c.callBeforeAfterPoke, c.connectorIndex, c.newConnector);
     }
     _checkConnectorsTotalShare();
   }
@@ -210,6 +212,16 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   function setClaimParams(uint256 _connectorIndex, bytes memory _claimParams) external onlyOwner {
     connectors[_connectorIndex].claimParams = _claimParams;
     emit SetConnectorClaimParams(address(connectors[_connectorIndex].connector), _claimParams);
+  }
+
+  /**
+   * @notice Set connectors stake params to pass it to connector.
+   * @param _connectorIndex Index of connector
+   * @param _stakeParams Claim params
+   */
+  function setStakeParams(uint256 _connectorIndex, bytes memory _stakeParams) external onlyOwner {
+    connectors[_connectorIndex].stakeParams = _stakeParams;
+    emit SetConnectorStakeParams(address(connectors[_connectorIndex].connector), _stakeParams);
   }
 
   /**
@@ -622,18 +634,9 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     return (underlyingStakedList, total);
   }
 
-  function calculateLockedProfit() public view returns (uint256) {
-    uint256 lockedProfit = 0;
-    for (uint256 i = 0; i < connectors.length; i++) {
-      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
-      lockedProfit += connectors[i].connector.calculateLockedProfit(connectors[i].stakeData);
-    }
-    return lockedProfit;
-  }
-
-  function getUnderlyingAvailable() public view returns (uint256) {
-    // _getUnderlyingReserve + getUnderlyingStaked - _calculateLockedProfit
-    return getUnderlyingReserve().add(getUnderlyingStaked()).sub(calculateLockedProfit());
+  function getUnderlyingAvailable() public virtual view returns (uint256) {
+    // _getUnderlyingReserve + getUnderlyingStaked
+    return getUnderlyingReserve().add(getUnderlyingStaked());
   }
 
   function getUnderlyingTotal() external view returns (uint256) {
@@ -761,7 +764,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   }
 
   function _getDistributeData(Connector storage c) internal view returns (IRouterConnector.DistributeData memory) {
-    return IRouterConnector.DistributeData(c.stakeData, performanceFee, performanceFeeReceiver);
+    return IRouterConnector.DistributeData(c.stakeData, c.stakeParams, performanceFee, performanceFeeReceiver);
   }
 
   function _checkConnectorsTotalShare() internal view {

@@ -8,6 +8,8 @@ import "../interfaces/balancerV3/IVault.sol";
 import "../interfaces/liquidity/IStabilityPool.sol";
 import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
+import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
+import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
 
 import "hardhat/console.sol";
 
@@ -21,8 +23,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   address public immutable ASSET_MANAGER;
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
-  address public immutable LQTY_TOKEN;
   address public immutable VAULT;
+  IERC20 public immutable LQTY_TOKEN;
   IERC20 public immutable UNDERLYING;
   bytes32 public immutable PID;
 
@@ -34,28 +36,14 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _stabilityPool,
     address _lqtyToken,
     bytes32 _pId
-  ) public AbstractConnector(46e14) {
+  ) public AbstractConnector() {
     ASSET_MANAGER = _assetManager;
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     VAULT = _vault;
     STABILITY_POOL = _stabilityPool;
-    LQTY_TOKEN = _lqtyToken;
+    LQTY_TOKEN = IERC20(_lqtyToken);
     PID = _pId;
-  }
-
-  // solhint-disable-next-line
-  /**
-   * @notice Checking: is pending rewards in TORN enough to cover transaction cost to reinvest
-   * @param _claimParams Claim parameters, that stored in PowerIndexRouter
-   * @param _lastClaimRewardsAt Last claim action timestamp
-   * @param _lastChangeStakeAt Last stake/unstake action timestamp
-   */
-  function isClaimAvailable(
-    bytes calldata _claimParams
-  ) external view virtual override returns (bool) {
-    (uint256 minAmount) = unpackClaimParams(_claimParams);
-    return UNDERLYING.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minAmount;
   }
 
   // solhint-disable-next-line
@@ -68,11 +56,16 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     if (pending > 0) {
       _claimImpl();
     }
-    uint256 receivedReward = UNDERLYING.balanceOf(ASSET_MANAGER);
+    uint256 receivedReward = LQTY_TOKEN.balanceOf(ASSET_MANAGER);
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
-      (rewardsToReinvest, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
-      //TODO: swap lqty to lusd
+      (
+        ,
+        rewardsToReinvest,
+      ) = _distributePerformanceFee(_distributeData.performanceFee, _distributeData.performanceFeeReceiver, 0, ASSET_MANAGER, UNDERLYING, receivedReward);
+
+      UniswapV3OracleHelper.swapByMiddleWeth(rewardsToReinvest, address(LQTY_TOKEN), address(UNDERLYING));
+
       _stakeImpl(rewardsToReinvest);
       return stakeData;
     }
@@ -81,24 +74,28 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return new bytes(0);
   }
 
-  function pendingsToStakeData(bytes memory _stakeData, uint256 _pendingRewards, uint256 _underlyingStaked, uint256 _shares, uint256 _assetsPerShare) public returns (bytes memory) {
-    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_stakeData);
+  function _transferFeeToReceiver(address _assetManager, IERC20 _underlying, address _feeReceiver, uint256 _amount) internal override {
+    _underlying.transfer(_feeReceiver, _amount);
+  }
 
-    uint256 underlyingStakedBefore = _shares.mul(lastAssetsPerShare).div(1 ether);
-    underlyingEarned = underlyingEarned.add(_underlyingStaked.sub(underlyingStakedBefore));
-    lastAssetsPerShare = _assetsPerShare;
+  function pendingsToStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned, uint256 _underlyingStaked, uint256 _shares, uint256 _assetsPerShare) public returns (bytes memory) {
+    uint256 underlyingStakedBefore = _shares.mul(_lastAssetsPerShare).div(1 ether);
+    _underlyingEarned = _underlyingEarned.add(_underlyingStaked.sub(underlyingStakedBefore));
+    _lastAssetsPerShare = _assetsPerShare;
 
-    return packStakeData(lastAssetsPerShare, underlyingEarned);
+    return packStakeData(_lastAssetsPerShare, _underlyingEarned);
   }
 
   function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory result, bool claimed) {
     console.log("stake 1");
+    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
     _capitalOut(underlyingStaked, _amount);
     console.log("stake 2");
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
-    result = pendingsToStakeData(_distributeData.stakeData, underlyingStaked, shares, assetsPerShare);
+    result = pendingsToStakeData(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare);
+    claimed = true;
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData)
@@ -107,35 +104,43 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     returns (bytes memory result, bool claimed)
   {
     console.log("redeem 1");
-    //TODO: check max ether on BAMM
+    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
+    uint256 minLUSDToDistribute;
+    {
+      uint256 maxETHOnStaking;
+      (maxETHOnStaking, minLUSDToDistribute) = unpackStakeParams(_distributeData.stakeParams);
+      uint256 ethBalanceOnBamm = STAKING.balance.mul(shares).div(1 ether);
+      require(ethBalanceOnBamm <= maxETHOnStaking, "MAX_ETHER_ON_BAMM");
+    }
 
     // redeem with fee or without
     uint256 amountToRedeem = _amount;
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
-    if (underlyingFee >= _distributeData.stakeParams.minUnderlyingFee) {
+    if (underlyingFee >= minLUSDToDistribute) {
       amountToRedeem += underlyingFee;
     }
     _redeemImpl(amountToRedeem);
 
     // capital in amount without fee
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
     console.log("redeem 2");
-    _capitalIn(_underlyingStaked, _amount);
+    _capitalIn(underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
 
     // transfer fee to receiver
     if (amountToRedeem > _amount) {
-      _safeTransfer(_distributeData.performanceFeeReceiver, underlyingFee);
+      IERC20(UNDERLYING).transfer(_distributeData.performanceFeeReceiver, underlyingFee);
       underlyingEarned = 0;
     }
 
     result = pendingsToStakeData(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare);
+    claimed = true;
   }
 
   /**
    * @dev Transfers capital into the asset manager, and then invests it
-   * @param amount - the amount of tokens being deposited
+   * @param _underlyingStaked - staked balance
+   * @param _amount - the amount of tokens being deposited
    */
   function _capitalIn(uint256 _underlyingStaked, uint256 _amount) private {
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
@@ -149,18 +154,16 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   /**
    * @notice Divests capital back to the asset manager and then sends it to the vault
-   * @param amount - the amount of tokens to withdraw to the vault
+   * @param _underlyingStaked - staked balance
+   * @param _amount - the amount of tokens to withdraw to the vault
    */
-  function _capitalOut(uint256 _underlyingStaked, uint256 amount) private {
+  function _capitalOut(uint256 _underlyingStaked, uint256 _amount) private {
     (uint256 poolCash,,,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
-    console.log("underlyingStaked", _underlyingStaked);
-    console.log("poolCash", poolCash);
-    console.log("amount  ", amount);
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
     ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
     // Pull funds from the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, amount);
+    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, _amount);
 
     IVault(VAULT).managePoolBalance(ops);
   }
@@ -185,23 +188,14 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   /*** VIEWERS ***/
 
   /**
-   * @notice Checking: is pending rewards in LUSD enough to cover transaction cost to reinvest
+   * @notice Checking: is pending rewards in LQTY enough to reinvest
    * @param _claimParams Claim parameters, that stored in PowerIndexRouter
-   * @param _lastClaimRewardsAt Last claim action timestamp
-   * @param _lastChangeStakeAt Last stake/unstake action timestamp
    */
   function isClaimAvailable(
-    bytes calldata _claimParams,
-    uint256 _lastClaimRewardsAt,
-    uint256 _lastChangeStakeAt
-  ) external view virtual override returns (bool) {
-    (uint256 paybackDuration, uint256 gasToReinvest) = unpackClaimParams(_claimParams);
-    //    (, , uint256 forecastByPending) = getPendingAndForecastReward(
-    //      _lastClaimRewardsAt,
-    //      _lastChangeStakeAt,
-    //      paybackDuration
-    //    );
-    return false;
+    bytes calldata _claimParams
+  ) external view virtual returns (bool) {
+    (uint256 minAmount) = unpackClaimParams(_claimParams);
+    return LQTY_TOKEN.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minAmount;
   }
 
   /**
@@ -222,11 +216,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint24 uniswapWethSwappingFee = 0;
 
     return
-    UniswapV3OracleHelper.getPriceRatioOfTokens(
-      [address(UNDERLYING), UniswapV3OracleHelper.WETH],
-      [uniswapLusdSwappingFee, uniswapWethSwappingFee],
-      uniswapTimePeriod
-    );
+      UniswapV3OracleHelper.getPriceRatioOfTokens(
+        [address(UNDERLYING), UniswapV3OracleHelper.WETH],
+        [uniswapLusdSwappingFee, uniswapWethSwappingFee],
+        uniswapTimePeriod
+      );
   }
 
   /**
@@ -254,19 +248,19 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return calcLusdOutByWethInWithRatio(_wethAmount, getLusdPriceRatio());
   }
 
-  function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned, uint256 _rewardsEarned) public pure returns (bytes memory) {
-    return abi.encode(_lastAssetsPerShare, _underlyingEarned, _rewardsEarned);
+  function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) public pure returns (bytes memory) {
+    return abi.encode(_lastAssetsPerShare, _underlyingEarned);
   }
 
   function unpackStakeData(bytes memory _stakeData)
     public
     pure
-    returns (uint256 lastAssetsPerShare, uint256 underlyingEarned, uint256 rewardsEarned)
+    returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
   {
     if (_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
       return (0, 0);
     }
-    (lastAssetsPerShare, underlyingEarned, rewardsEarned) = abi.decode(_stakeData, (uint256, uint256, uint256));
+    (lastAssetsPerShare, underlyingEarned) = abi.decode(_stakeData, (uint256, uint256));
   }
 
   /**
@@ -281,8 +275,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(uint256 minAmount) public pure returns (bytes memory) {
-    return abi.encode(minAmount);
+  function packClaimParams(uint256 _minAmount) public pure returns (bytes memory) {
+    return abi.encode(_minAmount);
   }
 
   /**
@@ -294,9 +288,30 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     returns (uint256 minAmount)
   {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
-      return (0, 0);
+      return (0);
     }
     (minAmount) = abi.decode(_claimParams, (uint256));
+  }
+
+  /**
+   * @notice Pack claim params to bytes.
+   */
+  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute) public pure returns (bytes memory) {
+    return abi.encode(_maxETHOnStaking, _minLUSDToDistribute);
+  }
+
+  /**
+   * @notice Unpack claim params from bytes to variables.
+   */
+  function unpackStakeParams(bytes memory _stakeParams)
+    public
+    pure
+    returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
+  {
+    if (_stakeParams.length == 0 || keccak256(_stakeParams) == keccak256("")) {
+      return (0, 0);
+    }
+    (maxETHOnStaking, minLUSDToDistribute) = abi.decode(_stakeParams, (uint256, uint256));
   }
 
   /*** OVERRIDES ***/
@@ -337,15 +352,12 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @dev Returns the actual amount of LUSD managed by this Asset Manager contract and staked to Liquity stability pool.
    *      staked = total - (cash + gain - loss)
    */
-  function getUnderlyingStakedWithShares() public view override returns (uint256 staked, uint256 shares, uint256 assetsPerShare) {
+  function getUnderlyingStakedWithShares() public view returns (uint256 staked, uint256 shares, uint256 assetsPerShare) {
     shares = IBAMM(STAKING).stake(ASSET_MANAGER);
-    console.log("shares", shares);
     uint256 totalShares = IBAMM(STAKING).total();
-    console.log("totalShares", totalShares);
     uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
-    console.log("lusdValueTotal", lusdValueTotal);
     if (totalShares == 0) {
-      return 0;
+      return (0, 0, 0);
     }
     staked = lusdValueTotal * shares / totalShares;
     assetsPerShare = lusdValueTotal * 1 ether / totalShares;
@@ -372,7 +384,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function getPendingRewards() public view returns (uint256) {
-    uint256 crop = IERC20(LQTY_TOKEN).balanceOf(STAKING).sub(IBAMM(STAKING).stock());
+    uint256 crop = LQTY_TOKEN.balanceOf(STAKING).sub(IBAMM(STAKING).stock());
     uint256 total = IBAMM(STAKING).total();
     uint256 share = IBAMM(STAKING).share();
     if (total > 0) share = add(share, rdiv(crop, total));

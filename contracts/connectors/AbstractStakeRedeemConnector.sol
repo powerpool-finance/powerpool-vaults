@@ -4,9 +4,9 @@ pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/sushi/IMasterChefV1.sol";
-import "./AbstractConnector.sol";
+import "./AbstractProfitDistributionConnector.sol";
 
-abstract contract AbstractStakeRedeemConnector is AbstractConnector {
+abstract contract AbstractStakeRedeemConnector is AbstractProfitDistributionConnector {
   using SafeMath for uint256;
 
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
@@ -21,7 +21,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     address _underlying,
     address _piToken,
     uint256 _lockedProfitDegradation
-  ) AbstractConnector(_lockedProfitDegradation) {
+  ) AbstractProfitDistributionConnector(_lockedProfitDegradation) {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
@@ -52,7 +52,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
       _claimImpl();
       uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
       if (receivedReward > 0) {
-        (, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+        (, stakeData) = _distributeReward(_distributeData, address(PI_TOKEN), UNDERLYING, receivedReward);
         return stakeData;
       }
     }
@@ -75,7 +75,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).add(_amount).sub(balanceBefore);
 
     if (receivedReward > 0) {
-      (, result) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (, result) = _distributeReward(_distributeData, address(PI_TOKEN), UNDERLYING, receivedReward);
       claimed = true;
     }
 
@@ -94,7 +94,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(_amount).sub(balanceBefore);
 
     if (receivedReward > 0) {
-      (, result) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (, result) = _distributeReward(_distributeData, address(PI_TOKEN), UNDERLYING, receivedReward);
       claimed = true;
     }
 
@@ -102,6 +102,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   }
 
   /*** INTERNALS ***/
+
   function _approveToStaking(uint256 _amount) internal virtual {
     PI_TOKEN.approveUnderlying(STAKING, _amount);
   }

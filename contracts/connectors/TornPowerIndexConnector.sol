@@ -5,10 +5,10 @@ pragma experimental ABIEncoderV2;
 
 import "../interfaces/torn/ITornStaking.sol";
 import "../interfaces/torn/ITornGovernance.sol";
-import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
+import "./AbstractProfitDistributionConnector.sol";
 
-contract TornPowerIndexConnector is AbstractConnector {
+contract TornPowerIndexConnector is AbstractProfitDistributionConnector {
   using SafeMath for uint256;
 
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
@@ -25,7 +25,7 @@ contract TornPowerIndexConnector is AbstractConnector {
     address _underlying,
     address _piToken,
     address _governance
-  ) public AbstractConnector(46e14) {
+  ) public AbstractProfitDistributionConnector(46e14) {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
@@ -43,7 +43,7 @@ contract TornPowerIndexConnector is AbstractConnector {
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
-      (rewardsToReinvest, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (rewardsToReinvest, stakeData) = _distributeReward(_distributeData, address(PI_TOKEN), UNDERLYING, receivedReward);
       _approveToStaking(rewardsToReinvest);
       _stakeImpl(rewardsToReinvest);
       return stakeData;
