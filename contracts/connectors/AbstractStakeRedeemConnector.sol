@@ -6,7 +6,7 @@ pragma experimental ABIEncoderV2;
 import "../interfaces/sushi/IMasterChefV1.sol";
 import "./AbstractConnector.sol";
 
-abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
+abstract contract AbstractStakeRedeemConnector is AbstractConnector {
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
@@ -17,9 +17,9 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
   constructor(
     address _staking,
     address _underlying,
-    address _piToken
-  ) public AbstractConnector(46e12) {
-    // 6 hours with 13ms block
+    address _piToken,
+    uint256 _lockedProfitDegradation
+  ) public AbstractConnector(_lockedProfitDegradation) {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
@@ -29,52 +29,70 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
 
   function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
     external
+    virtual
     override
-    returns (bytes memory)
+    returns (bytes memory stakeData)
   {
     if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
-      return stake(0, _distributeData);
+      uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
+      _claimImpl();
+      uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
+      if (receivedReward > 0) {
+        (, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+        return stakeData;
+      }
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
     return new bytes(0);
   }
 
-  /*** INTERNALS ***/
+  function stake(uint256 _amount, DistributeData memory _distributeData)
+    public
+    override
+    returns (bytes memory result, bool claimed)
+  {
+    uint256 balanceBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
-  function stake(uint256 _amount, DistributeData memory _distributeData) public override returns (bytes memory) {
-    uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
-
-    PI_TOKEN.approveUnderlying(STAKING, _amount);
+    _approveToStaking(_amount);
 
     _stakeImpl(_amount);
 
-    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore.sub(_amount));
+    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).add(_amount).sub(balanceBefore);
 
-    bytes memory result = new bytes(0);
     if (receivedReward > 0) {
-      result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (, result) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      claimed = true;
     }
 
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
-    return result;
   }
 
-  function redeem(uint256 _amount, DistributeData memory _distributeData) external override returns (bytes memory) {
-    uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
+  function redeem(uint256 _amount, DistributeData memory _distributeData)
+    external
+    override
+    returns (bytes memory result, bool claimed)
+  {
+    uint256 balanceBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
 
     _redeemImpl(_amount);
 
-    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore).sub(_amount);
+    uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(_amount).sub(balanceBefore);
 
-    bytes memory result = new bytes(0);
     if (receivedReward > 0) {
-      result = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (, result) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      claimed = true;
     }
 
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
-    return result;
   }
+
+  /*** INTERNALS ***/
+  function _approveToStaking(uint256 _amount) internal virtual {
+    PI_TOKEN.approveUnderlying(STAKING, _amount);
+  }
+
+  function _claimImpl() internal virtual;
 
   function _stakeImpl(uint256 _amount) internal virtual;
 
@@ -92,4 +110,6 @@ abstract contract AbstractMasterChefIndexConnector is AbstractConnector {
   ) external override returns (bytes memory) {
     return new bytes(0);
   }
+
+  function initRouter(bytes calldata) external override {}
 }

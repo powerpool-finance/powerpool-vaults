@@ -10,10 +10,11 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/PowerIndexNaiveRouterInterface.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/WrappedPiErc20Interface.sol";
+import "./interfaces/IPermitERC20.sol";
 
 contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   using SafeMath for uint256;
-  using SafeERC20 for IERC20;
+  using SafeERC20 for IPermitERC20;
 
   bytes32 public constant PERMIT_TYPEHASH =
     keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
@@ -21,9 +22,10 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   bytes32 internal constant EIP712_DOMAIN =
     keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
-  IERC20 public immutable underlying;
+  IPermitERC20 public immutable underlying;
   bytes32 public immutable DOMAIN_SEPARATOR;
   address public router;
+  bool public routerCallbackEnabled;
   uint256 public ethFee;
   mapping(address => bool) public noFeeWhitelist;
   mapping(address => uint256) public nonces;
@@ -32,6 +34,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   event Withdraw(address indexed account, uint256 underlyingWithdrawn, uint256 piBurned);
   event Approve(address indexed to, uint256 amount);
   event ChangeRouter(address indexed newRouter);
+  event EnableRouterCallback(bool indexed enabled);
   event SetEthFee(uint256 newEthFee);
   event SetNoFee(address indexed addr, bool noFee);
   event WithdrawEthFee(uint256 value);
@@ -48,7 +51,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     string memory _name,
     string memory _symbol
   ) public ERC20(_name, _symbol) {
-    underlying = IERC20(_token);
+    underlying = IPermitERC20(_token);
     router = _router;
 
     uint256 chainId;
@@ -63,10 +66,29 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   }
 
   /**
+   * @notice Deposits underlying ERC20 token to the piToken(piERC20) with permit params
+   * @param _amount The amount to deposit in underlying ERC20 tokens.
+   * @param _deadline Deadline timestamp of permit
+   * @param _v param of permit
+   * @param _r param of permit
+   * @param _s param of permit
+   */
+  function depositWithPermit(
+    uint256 _amount,
+    uint256 _deadline,
+    uint8 _v,
+    bytes32 _r,
+    bytes32 _s
+  ) public virtual {
+    underlying.permit(msg.sender, address(this), _amount, _deadline, _v, _r, _s);
+    deposit(_amount);
+  }
+
+  /**
    * @notice Deposits underlying ERC20 token to the piToken(piERC20).
    * @param _depositAmount The amount to deposit in underlying ERC20 tokens.
    */
-  function deposit(uint256 _depositAmount) external payable override nonReentrant returns (uint256) {
+  function deposit(uint256 _depositAmount) public payable override nonReentrant returns (uint256) {
     if (noFeeWhitelist[msg.sender]) {
       require(msg.value == 0, "NO_FEE_FOR_WL");
     } else {
@@ -83,7 +105,9 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
 
     emit Deposit(msg.sender, _depositAmount, mintAmount);
 
-    PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, 0);
+    if (routerCallbackEnabled) {
+      PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, 0);
+    }
 
     return mintAmount;
   }
@@ -102,7 +126,9 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
 
     require(_withdrawAmount > 0, "ZERO_WITHDRAWAL");
 
-    PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, _withdrawAmount);
+    if (routerCallbackEnabled) {
+      PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, _withdrawAmount);
+    }
 
     uint256 burnAmount = getPiEquivalentForUnderlying(_withdrawAmount);
     require(burnAmount > 0, "ZERO_PI_FOR_BURN");
@@ -160,6 +186,11 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
   function changeRouter(address _newRouter) external override onlyRouter {
     router = _newRouter;
     emit ChangeRouter(router);
+  }
+
+  function enableRouterCallback(bool _enable) external override onlyRouter {
+    routerCallbackEnabled = _enable;
+    emit EnableRouterCallback(_enable);
   }
 
   function setNoFee(address _for, bool _noFee) external override onlyRouter {

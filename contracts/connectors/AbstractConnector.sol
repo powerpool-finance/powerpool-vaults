@@ -70,21 +70,21 @@ abstract contract AbstractConnector is IRouterConnector {
    * @param _piToken piToken(piERC20) address.
    * @param _token ERC20 Token address to distribute reward.
    * @param _totalReward Total reward received
-   * @return rewardsData Result packed rewards data.
+   * @return lockedProfitReward Rewards that locked in vesting.
+   * @return stakeData Result packed rewards data.
    */
   function _distributeReward(
     DistributeData memory _distributeData,
     WrappedPiErc20Interface _piToken,
     IERC20 _token,
     uint256 _totalReward
-  ) internal returns (bytes memory rewardsData) {
-    (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackRewardsData(
-      _distributeData.rewardsData
+  ) internal returns (uint256 lockedProfitReward, bytes memory stakeData) {
+    (uint256 lockedProfit, uint256 lastRewardDistribution, uint256 performanceFeeDebt) = unpackStakeData(
+      _distributeData.stakeData
     );
     uint256 pvpReward;
-    uint256 piTokenReward;
     // Step #1. Distribute pvpReward
-    (pvpReward, piTokenReward, performanceFeeDebt) = _distributePerformanceFee(
+    (pvpReward, lockedProfitReward, performanceFeeDebt) = _distributePerformanceFee(
       _distributeData.performanceFee,
       _distributeData.performanceFeeReceiver,
       performanceFeeDebt,
@@ -92,18 +92,25 @@ abstract contract AbstractConnector is IRouterConnector {
       _token,
       _totalReward
     );
-    require(piTokenReward > 0, "NO_POOL_REWARDS_UNDERLYING");
+    require(lockedProfitReward > 0, "NO_POOL_REWARDS_UNDERLYING");
 
     // Step #2 Reset lockedProfit
     uint256 lockedProfitBefore = calculateLockedProfit(lockedProfit, lastRewardDistribution);
-    uint256 lockedProfitAfter = lockedProfitBefore.add(piTokenReward);
+    uint256 lockedProfitAfter = lockedProfitBefore.add(lockedProfitReward);
     lockedProfit = lockedProfitAfter;
 
     lastRewardDistribution = block.timestamp;
 
-    emit DistributeReward(msg.sender, _totalReward, pvpReward, piTokenReward, lockedProfitBefore, lockedProfitAfter);
+    emit DistributeReward(
+      msg.sender,
+      _totalReward,
+      pvpReward,
+      lockedProfitReward,
+      lockedProfitBefore,
+      lockedProfitAfter
+    );
 
-    return packRewardsData(lockedProfit, lastRewardDistribution, performanceFeeDebt);
+    return (lockedProfitReward, packStakeData(lockedProfit, lastRewardDistribution, performanceFeeDebt));
   }
 
   /**
@@ -159,9 +166,9 @@ abstract contract AbstractConnector is IRouterConnector {
   }
 
   /**
-   * @notice Pack reward data to bytes.
+   * @notice Pack stake data to bytes.
    */
-  function packRewardsData(
+  function packStakeData(
     uint256 lockedProfit,
     uint256 lastRewardDistribution,
     uint256 performanceFeeDebt
@@ -170,9 +177,9 @@ abstract contract AbstractConnector is IRouterConnector {
   }
 
   /**
-   * @notice Unpack reward data from bytes to variables.
+   * @notice Unpack stake data from bytes to variables.
    */
-  function unpackRewardsData(bytes memory _rewardsData)
+  function unpackStakeData(bytes memory _stakeData)
     public
     pure
     returns (
@@ -181,17 +188,17 @@ abstract contract AbstractConnector is IRouterConnector {
       uint256 performanceFeeDebt
     )
   {
-    if (_rewardsData.length == 0 || keccak256(_rewardsData) == keccak256("")) {
+    if (_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
       return (0, 0, 0);
     }
-    (lockedProfit, lastRewardDistribution, performanceFeeDebt) = abi.decode(_rewardsData, (uint256, uint256, uint256));
+    (lockedProfit, lastRewardDistribution, performanceFeeDebt) = abi.decode(_stakeData, (uint256, uint256, uint256));
   }
 
   /**
-   * @notice Calculate locked profit from packed _rewardsData.
+   * @notice Calculate locked profit from packed _stakeData.
    */
-  function calculateLockedProfit(bytes memory _rewardsData) external view override returns (uint256) {
-    (uint256 lockedProfit, uint256 lastRewardDistribution, ) = unpackRewardsData(_rewardsData);
+  function calculateLockedProfit(bytes memory _stakeData) external view override returns (uint256) {
+    (uint256 lockedProfit, uint256 lastRewardDistribution, ) = unpackStakeData(_stakeData);
     return calculateLockedProfit(lockedProfit, lastRewardDistribution);
   }
 
@@ -236,5 +243,13 @@ abstract contract AbstractConnector is IRouterConnector {
       // Return data is optional
       require(abi.decode(response, (bool)), "ERC20 operation did not succeed");
     }
+  }
+
+  function isClaimAvailable(
+    bytes calldata _claimParams, // solhint-disable-line
+    uint256 _lastClaimRewardsAt, // solhint-disable-line
+    uint256 _lastChangeStakeAt // solhint-disable-line
+  ) external view virtual override returns (bool) {
+    return true;
   }
 }

@@ -181,14 +181,14 @@ describe('PancakeMasterChefRouter Tests', () => {
       assert.equal(await myRouter.calculateLockedProfit(), ether(0));
       await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
       let data = await myRouter.connectors(0);
-      let rewards = await connector.unpackRewardsData(data.stakeData);
+      let rewards = await connector.unpackStakeData(data.stakeData);
       assert.equal(await rewards.lockedProfit, ether('2.7197990668'));
 
       await time.increase(time.duration.years(1));
       assert.equal(await myRouter.calculateLockedProfit(), ether(0));
       await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
       data = await myRouter.connectors(0);
-      rewards = await connector.unpackRewardsData(data.stakeData);
+      rewards = await connector.unpackStakeData(data.stakeData);
       assert.equal(await rewards.lockedProfit, ether('2.7197990668'));
     });
 
@@ -270,11 +270,7 @@ describe('PancakeMasterChefRouter Tests', () => {
 
     describe('on poke', async () => {
       it('should do nothing when nothing has changed', async () => {
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
-
-        assert.equal(await cake.balanceOf(masterChef.address), ether(50000));
-        assert.equal((await masterChef.userInfo(0, piCake.address)).amount, ether(8000));
-        assert.equal(await cake.balanceOf(piCake.address), ether(2000));
+        await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
       });
 
       it('should increase reserve if required', async () => {

@@ -19,6 +19,10 @@ contract PowerIndexNaiveRouter is PowerIndexNaiveRouterInterface, Ownable {
     WrappedPiErc20Interface(_piToken).changeRouter(_newRouter);
   }
 
+  function enableRouterCallback(address _piToken, bool _enable) public override onlyOwner {
+    WrappedPiErc20Interface(_piToken).enableRouterCallback(_enable);
+  }
+
   function piTokenCallback(address sender, uint256 _withdrawAmount) external payable virtual override {
     // DO NOTHING
   }

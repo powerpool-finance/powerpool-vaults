@@ -24,6 +24,8 @@ interface WrappedPiErc20Interface is IERC20 {
 
   function changeRouter(address _newRouter) external;
 
+  function enableRouterCallback(bool _enable) external;
+
   function setNoFee(address _for, bool _noFee) external;
 
   function setEthFee(uint256 _newEthFee) external;

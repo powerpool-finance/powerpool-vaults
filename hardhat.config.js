@@ -4,6 +4,7 @@ require('@nomiclabs/hardhat-etherscan');
 require('solidity-coverage');
 require('hardhat-contract-sizer');
 require('hardhat-gas-reporter');
+require('./tasks/deployTornVault');
 
 const fs = require('fs');
 const homeDir = require('os').homedir();
@@ -66,7 +67,7 @@ const config = {
     },
     mainnetfork: {
       url: 'http://127.0.0.1:8545/',
-      gasPrice: 36 * 10 ** 9,
+      gasPrice: process.env.GAS_PRICE ? parseInt(process.env.GAS_PRICE) * 10 ** 9 : 20 * 10 ** 9,
       // accounts: getAccounts('mainnet'),
       gasMultiplier: 1.2,
       timeout: 2000000,
