@@ -8,6 +8,8 @@ interface IBAMM {
 
   function stake(address) external view returns (uint256);
 
+  function getDepositorLQTYGain(address _depositor) external view returns (uint256);
+
   function total() external view returns (uint256);
 
   function share() external view returns (uint256);

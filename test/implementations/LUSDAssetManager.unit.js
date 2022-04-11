@@ -272,7 +272,6 @@ describe.only('LUSDAssetManager Tests', () => {
       const res = await troveManager.liquidateTroves(2);
       console.log('stability pool ETH balance after', await web3.eth.getBalance(stabilityPool.address));
       console.log('liquidateTroves', res.receipt.logs);
-      return;
       assert.equal(await assetManager.getUnderlyingStaked(), ether(1.6e6));
       assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(4e5));
       assert.equal(await lusd.balanceOf(vault.address), ether(4e5));
@@ -311,9 +310,12 @@ describe.only('LUSDAssetManager Tests', () => {
       console.log('secondStake.receipt.blockNumber - firstStake.receipt.blockNumber', secondStake.receipt.blockNumber - firstStake.receipt.blockNumber)
       assert.equal(await connector.getPendingRewards(), '0');
 
+      await time.increase(time.duration.minutes(60));
+
       let lastWithdrawRes = await staking.withdraw('0', {from: bob});
       console.log('lastWithdrawRes.receipt.blockNumber - secondStake.receipt.blockNumber', lastWithdrawRes.receipt.blockNumber - secondStake.receipt.blockNumber)
       assert.equal(await connector.getPendingRewards(), '0');
+      assert.equal(await staking.getDepositorLQTYGain(assetManager.address), '0');
 
 
     });

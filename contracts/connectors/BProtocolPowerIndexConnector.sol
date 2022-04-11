@@ -84,6 +84,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _feeReceiver,
     uint256 _amount
   ) internal override {
+    //TODO: check that underlying LUSD or LQTY
     _underlying.transfer(_feeReceiver, _amount);
   }
 
@@ -106,11 +107,9 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     override
     returns (bytes memory result, bool claimed)
   {
-    console.log("stake 1");
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
     _capitalOut(underlyingStaked, _amount);
-    console.log("stake 2");
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
     result = pendingsToStakeData(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare);
@@ -122,7 +121,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     override
     returns (bytes memory result, bool claimed)
   {
-    console.log("redeem 1");
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
     uint256 minLUSDToDistribute;
     {
@@ -137,12 +135,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
     if (underlyingFee >= minLUSDToDistribute) {
-      amountToRedeem += underlyingFee;
+      amountToRedeem = amountToRedeem.add(underlyingFee);
     }
     _redeemImpl(amountToRedeem);
 
     // capital in amount without fee
-    console.log("redeem 2");
     _capitalIn(underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
 
@@ -214,56 +211,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     return LQTY_TOKEN.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minAmount;
   }
 
-  /**
-   * @notice Get reinvest transaction cost in LUSD
-   * @param _gasUsed Gas used for reinvest transaction
-   * @param _gasPrice Gas price
-   */
-  function getLusdUsedToReinvest(uint256 _gasUsed, uint256 _gasPrice) public view returns (uint256) {
-    return calcLusdOutByWethIn(_gasUsed.mul(_gasPrice));
-  }
-
-  /**
-   * @notice Get Uniswap V3 LUSD price ratio
-   */
-  function getLusdPriceRatio() public view virtual returns (uint256) {
-    uint32 uniswapTimePeriod = 5400;
-    uint24 uniswapLusdSwappingFee = 10000;
-    uint24 uniswapWethSwappingFee = 0;
-
-    return
-      UniswapV3OracleHelper.getPriceRatioOfTokens(
-        [address(UNDERLYING), UniswapV3OracleHelper.WETH],
-        [uniswapLusdSwappingFee, uniswapWethSwappingFee],
-        uniswapTimePeriod
-      );
-  }
-
-  /**
-   * @notice Convert LUSD amount to WETH amount with built in ratio
-   * @param _tornAmountIn LUSD amount to convert
-   */
-  function calcWethOutByLusdIn(uint256 _tornAmountIn) external view returns (uint256) {
-    return calcWethOutByLusdInWithRatio(_tornAmountIn, getLusdPriceRatio());
-  }
-
-  /**
-   * @notice Convert LUSD amount to WETH amount by provided rario
-   * @param _tornAmount LUSD amount to convert
-   * @param _ratio Uniswap V3 ratio
-   */
-  function calcWethOutByLusdInWithRatio(uint256 _tornAmount, uint256 _ratio) public pure returns (uint256) {
-    return _tornAmount.mul(_ratio).div(UniswapV3OracleHelper.RATIO_DIVIDER);
-  }
-
-  /**
-   * @notice Convert WETH amount to LUSD amount with built in ratio
-   * @param _wethAmount WETH amount to convert
-   */
-  function calcLusdOutByWethIn(uint256 _wethAmount) public view returns (uint256) {
-    return calcLusdOutByWethInWithRatio(_wethAmount, getLusdPriceRatio());
-  }
-
   function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) public pure returns (bytes memory) {
     return abi.encode(_lastAssetsPerShare, _underlyingEarned);
   }
@@ -277,15 +224,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
       return (0, 0);
     }
     (lastAssetsPerShare, underlyingEarned) = abi.decode(_stakeData, (uint256, uint256));
-  }
-
-  /**
-   * @notice Convert WETH amount to LUSD amount with provided ratio
-   * @param _wethAmount WETH amount to convert
-   * @param _ratio Uniswap V3 ratio
-   */
-  function calcLusdOutByWethInWithRatio(uint256 _wethAmount, uint256 _ratio) public pure returns (uint256) {
-    return _wethAmount.mul(UniswapV3OracleHelper.RATIO_DIVIDER).div(_ratio);
   }
 
   /**

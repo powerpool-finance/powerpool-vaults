@@ -653,7 +653,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     uint256 underlyingStaked = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
-      underlyingStaked += connectors[i].connector.getUnderlyingStaked();
+      underlyingStaked = underlyingStaked.add(connectors[i].connector.getUnderlyingStaked());
     }
     return underlyingStaked;
   }
@@ -664,7 +664,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
       underlyingStakedList[i] = connectors[i].connector.getUnderlyingStaked();
-      total += underlyingStakedList[i];
+      total = total.add(underlyingStakedList[i]);
     }
     return (underlyingStakedList, total);
   }
