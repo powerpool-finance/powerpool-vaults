@@ -2,14 +2,13 @@ require('@nomiclabs/hardhat-truffle5');
 require('@nomiclabs/hardhat-ethers');
 
 task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (__, {ethers, network}) => {
-  const {ether, fromEther, zeroAddress, impersonateAccount, gwei, increaseTime, advanceBlocks} = require('../test/helpers');
+  const {ether, zeroAddress, impersonateAccount, gwei, increaseTime} = require('../test/helpers');
   const IERC20 = await artifacts.require('@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20');
   const IVault = await artifacts.require('contracts/interfaces/balancerV3/IVault.sol:IVault');
   const MockERC20 = await artifacts.require('MockERC20');
   const AssetManager = await artifacts.require('AssetManager');
   const PowerPoke = await artifacts.require('PowerPoke');
   const IAuthorizer = await artifacts.require('contracts/interfaces/balancerV3/IAuthorizer.sol:IAuthorizer');
-  const IStablePoolFactory = await artifacts.require('IStablePoolFactory');
   const IBasePool = await artifacts.require('contracts/interfaces/balancerV3/IBasePool.sol:IBasePool');
   const BAMM = await artifacts.require('BAMM');
   const StabilityPool = await artifacts.require('StabilityPool');
@@ -19,11 +18,10 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const { web3 } = IERC20;
 
   const [deployer] = await web3.eth.getAccounts();
-  const sendOptions = { from: deployer };
 
   if (network.name === 'mainnetfork') {
     await network.provider.request({
-      method: "hardhat_reset",
+      method: 'hardhat_reset',
       params: [{ forking: { jsonRpcUrl: process.env.RPC} }],
     });
     const daoMultisigAddress = '0x10a19e7ee7d7f8a52822f6817de8ea18204f2e4f';
@@ -67,8 +65,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   const lusdSecond = web3.utils.toBN(lusdAddress).gt(web3.utils.toBN(ausd.address));
   let res = await stablePoolFactory.create(
-    "Balancer PP Stable Pool",
-    "bb-p-USD",
+    'Balancer PP Stable Pool',
+    'bb-p-USD',
     lusdSecond ? [ausd.address, lusdAddress] : [lusdAddress, ausd.address],
     lusdSecond ? [zeroAddress, assetManager.address] : [assetManager.address, zeroAddress],
     200,

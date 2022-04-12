@@ -1,5 +1,5 @@
 const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
-const { ether, zeroAddress, maxUint256, fromEther, deployContractWithBytecode } = require('./../helpers');
+const { ether, zeroAddress, maxUint256, deployContractWithBytecode } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
@@ -19,22 +19,28 @@ MockERC20.numberFormat = 'String';
 BProtocolPowerIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 AssetManager.numberFormat = 'String';
+BProtocolPowerIndexConnector.numberFormat = 'String';
 
 const { web3 } = MockERC20;
+const {toBN} = web3.utils;
 
-const REPORTER_ID = 42;
-
-describe.only('LUSDAssetManager Tests', () => {
-  let deployer, bob, dan, eve, alice, piGov, stub, pvp;
+describe('LUSDAssetManager Tests', () => {
+  let deployer, bob, eve, piGov, stub, pvp;
 
   before(async function () {
-    [deployer, bob, alice, dan, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
+    [deployer, bob, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
-  let lusd, lqty, ausd, weth, troveManager, stabilityPool, activePool, defaultPool, collSurplusPool, borrowerOperations, lqtyStaking, priceFeed, sortedTroves, communityIssuance, authorizer, vault, stablePoolFactory, staking, governance, poolRestrictions, assetManager, connector, poke, pid, lusdSecond;
+  let lusd, lqty, ausd, weth, troveManager, stabilityPool, activePool, defaultPool, collSurplusPool, borrowerOperations, lqtyStaking, priceFeed, sortedTroves, communityIssuance, authorizer, vault, stablePoolFactory, staking, poolRestrictions, assetManager, connector, poke, pid, lusdSecond;
 
   const pauseWindowDuration = 7776000;
   const bufferPeriodDuration = 2592000;
+
+  function approximatelyEqual(num1, num2) {
+    num1 = toBN(num1.toString(10));
+    num2 = toBN(num2.toString(10));
+    assert.equal((num1.gt(num2) ? num1.mul(toBN(ether(1))).div(num2) : num2.mul(toBN(ether(1))).div(num1)).lt(toBN(ether(1.001))), true);
+  }
 
   beforeEach(async function () {
     weth = await MockWETH.new();
@@ -191,8 +197,8 @@ describe.only('LUSDAssetManager Tests', () => {
     ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), {from: deployer});
     lusdSecond = web3.utils.toBN(lusd.address).gt(web3.utils.toBN(ausd.address));
     let res = await stablePoolFactory.create(
-      "Balancer PP Stable Pool",
-      "bb-p-USD",
+      'Balancer PP Stable Pool',
+      'bb-p-USD',
       lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
       lusdSecond ? [zeroAddress, assetManager.address] : [assetManager.address, zeroAddress],
       200,
@@ -307,55 +313,15 @@ describe.only('LUSDAssetManager Tests', () => {
       assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(6e5));
       assert.equal(await lusd.balanceOf(vault.address), ether(6e5));
       assert.equal(await assetManager.getUnderlyingTotal(), ether(3e6));
-      console.log('secondStake.receipt.blockNumber - firstStake.receipt.blockNumber', secondStake.receipt.blockNumber - firstStake.receipt.blockNumber)
+      const timeSpent1 = (await web3.eth.getBlock(secondStake.receipt.blockNumber)).timestamp - (await web3.eth.getBlock(firstStake.receipt.blockNumber)).timestamp;
       assert.equal(await connector.getPendingRewards(), '0');
 
       await time.increase(time.duration.minutes(60));
 
       let lastWithdrawRes = await staking.withdraw('0', {from: bob});
-      console.log('lastWithdrawRes.receipt.blockNumber - secondStake.receipt.blockNumber', lastWithdrawRes.receipt.blockNumber - secondStake.receipt.blockNumber)
-      assert.equal(await connector.getPendingRewards(), '0');
-      assert.equal(await staking.getDepositorLQTYGain(assetManager.address), '0');
-
-
-    });
-
-
-    describe('on poke', async () => {
-      it('should do nothing when nothing has changed', async () => {
-        await expectRevert(assetManager.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
-      });
-
-      it('should increase reserve if required', async () => {
-        await lusd.transfer(staking.address, ether('50000'));
-        await staking.addBurnRewards(ether('50000'));
-
-        await lusd.transfer(piTorn.address, ether(1000), { from: alice });
-
-        assert.equal(await lusd.balanceOf(governance.address), ether(50000));
-        assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
-        assert.equal(await lusd.balanceOf(piTorn.address), ether(3000));
-
-        const res = await assetManager.pokeFromReporter(REPORTER_ID, true, '0x');
-        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
-          l => l.event === 'DistributeReward',
-        )[0];
-        assert.equal(distributeRewards.args.totalReward, ether('1600'));
-
-        assert.equal(await lusd.balanceOf(governance.address), ether(52160));
-        assert.equal(await governance.lockedBalance(piTorn.address), ether(10160));
-        assert.equal(await assetManager.getUnderlyingStaked(), ether(10160));
-        assert.equal(await assetManager.getUnderlyingReserve(), ether('2200'));
-        assert.equal(await assetManager.getUnderlyingAvailable(), ether(11000));
-        assert.equal(await assetManager.getUnderlyingTotal(), ether('12360'));
-        assert.equal(await assetManager.calculateLockedProfit(), ether('1360'));
-        assert.equal(await lusd.balanceOf(piTorn.address), ether('2200'));
-
-        await time.increase(time.duration.hours(10));
-        assert.equal(await assetManager.calculateLockedProfit(), ether(0));
-        assert.equal(await assetManager.getUnderlyingAvailable(), ether('12360'));
-        assert.equal(await assetManager.getUnderlyingTotal(), ether('12360'));
-      });
+      const timeSpent2 = (await web3.eth.getBlock(lastWithdrawRes.receipt.blockNumber)).timestamp - (await web3.eth.getBlock(secondStake.receipt.blockNumber)).timestamp;
+      const lqtyPerSecond = ether('0.24796911366025507');
+      approximatelyEqual(await connector.getPendingRewards(), toBN(lqtyPerSecond).mul(toBN((timeSpent1 + timeSpent2).toString())));
     });
   });
 });
