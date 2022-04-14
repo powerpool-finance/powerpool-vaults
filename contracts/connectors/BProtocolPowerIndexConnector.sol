@@ -22,7 +22,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
   address public immutable VAULT;
-  IERC20 public immutable LQTY_TOKEN;
+  IERC20 public immutable REWARDS_TOKEN;
   IERC20 public immutable UNDERLYING;
   bytes32 public immutable PID;
 
@@ -32,7 +32,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _underlying,
     address _vault,
     address _stabilityPool,
-    address _lqtyToken,
+    address _rewardsToken,
     bytes32 _pId
   ) public AbstractConnector() {
     ASSET_MANAGER = _assetManager;
@@ -40,7 +40,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     UNDERLYING = IERC20(_underlying);
     VAULT = _vault;
     STABILITY_POOL = _stabilityPool;
-    LQTY_TOKEN = IERC20(_lqtyToken);
+    REWARDS_TOKEN = IERC20(_rewardsToken);
     PID = _pId;
   }
 
@@ -54,7 +54,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     if (pending > 0) {
       _claimImpl();
     }
-    uint256 receivedReward = LQTY_TOKEN.balanceOf(ASSET_MANAGER);
+    uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
       (, rewardsToReinvest, ) = _distributePerformanceFee(
@@ -66,14 +66,22 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
         receivedReward
       );
 
-      UniswapV3OracleHelper.swapByMiddleWeth(rewardsToReinvest, address(LQTY_TOKEN), address(UNDERLYING));
+      _swapRewardsToUnderlying(rewardsToReinvest);
 
-      _stakeImpl(rewardsToReinvest);
+      _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
       return stakeData;
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
     return new bytes(0);
+  }
+
+  function _swapRewardsToUnderlying(uint256 _rewardsAmount) internal virtual {
+    UniswapV3OracleHelper.swapByMiddleWeth(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
+  }
+
+  function getSwapperAddress() public virtual returns (address) {
+    return address(UniswapV3OracleHelper.UniswapV3Router);
   }
 
   function _transferFeeToReceiver(
@@ -218,17 +226,18 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   function initRouter(bytes calldata) external override {
     UNDERLYING.approve(STAKING, uint256(-1));
     UNDERLYING.approve(VAULT, uint256(-1));
+    REWARDS_TOKEN.approve(getSwapperAddress(), uint256(-1));
   }
 
   /*** VIEWERS ***/
 
   /**
-   * @notice Checking: is pending rewards in LQTY enough to reinvest
+   * @notice Checking: is pending rewards enough to reinvest
    * @param _claimParams Claim parameters, that stored in PowerIndexRouter
    */
   function isClaimAvailable(bytes calldata _claimParams) external view virtual returns (bool) {
-    uint256 minAmount = unpackClaimParams(_claimParams);
-    return LQTY_TOKEN.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minAmount;
+    uint256 minClaimAmount = unpackClaimParams(_claimParams);
+    return REWARDS_TOKEN.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minClaimAmount;
   }
 
   function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) public pure returns (bytes memory) {
@@ -256,11 +265,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   /**
    * @notice Unpack claim params from bytes to variables.
    */
-  function unpackClaimParams(bytes memory _claimParams) public pure returns (uint256 minAmount) {
+  function unpackClaimParams(bytes memory _claimParams) public pure returns (uint256 minClaimAmount) {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
       return (0);
     }
-    (minAmount) = abi.decode(_claimParams, (uint256));
+    (minClaimAmount) = abi.decode(_claimParams, (uint256));
   }
 
   /**
@@ -358,7 +367,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function getPendingRewards() public view returns (uint256) {
-    uint256 crop = LQTY_TOKEN.balanceOf(STAKING).sub(IBAMM(STAKING).stock());
+    uint256 crop = REWARDS_TOKEN.balanceOf(STAKING).sub(IBAMM(STAKING).stock());
     uint256 total = IBAMM(STAKING).total();
     uint256 share = IBAMM(STAKING).share();
     if (total > 0) share = add(share, rdiv(crop, total));

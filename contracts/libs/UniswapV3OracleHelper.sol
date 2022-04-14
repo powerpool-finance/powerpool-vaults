@@ -16,10 +16,10 @@ interface IERC20Decimals {
 library UniswapV3OracleHelper {
   using SafeMath for uint256;
 
-  IUniswapV3Factory internal constant UniswapV3Factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
-  ISwapRouter internal constant UniswapV3Router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-  address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-  uint256 internal constant RATIO_DIVIDER = 1e18;
+  IUniswapV3Factory public constant UniswapV3Factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+  ISwapRouter public constant UniswapV3Router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+  address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+  uint256 public constant RATIO_DIVIDER = 1e18;
   uint24 public constant poolFee = 3000;
 
   /**

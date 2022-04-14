@@ -4,7 +4,8 @@ const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
 const MockWETH = artifacts.require('MockWETH');
-const BProtocolPowerIndexConnector = artifacts.require('BProtocolPowerIndexConnector');
+const MockSwapper = artifacts.require('MockSwapper');
+const BProtocolPowerIndexConnector = artifacts.require('MockBProtocolConnector');
 const AssetManager = artifacts.require('AssetManager');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
@@ -55,7 +56,8 @@ describe('LUSDAssetManager Tests', () => {
     poke,
     pid,
     lusdSecond,
-    ethUsdPriceOracle;
+    ethUsdPriceOracle,
+    swapper;
 
   const pauseWindowDuration = 7776000;
   const bufferPeriodDuration = 2592000;
@@ -107,6 +109,8 @@ describe('LUSDAssetManager Tests', () => {
       stub,
       piGov,
     ]);
+
+    await time.increase(await lqty.ONE_YEAR_IN_SECONDS());
 
     await troveManager.setAddresses(
       borrowerOperations.address,
@@ -164,6 +168,8 @@ describe('LUSDAssetManager Tests', () => {
       activePool.address,
     );
 
+    swapper = await MockSwapper.new();
+    await swapper.setRatio(lqty.address, lusd.address, ether(0.5));
     ethUsdPriceOracle = await MockChainLinkPriceOracle.new(300000000000);
     const lusdUsdPriceOracle = await MockChainLinkPriceOracle.new(100400000);
 
@@ -246,17 +252,10 @@ describe('LUSDAssetManager Tests', () => {
     });
     await borrowerOperations.openTrove(ether(1), ether(7e3), zeroAddress, zeroAddress, { value: ether(3), from: eve });
 
-    // assertEq(IERC20(liquity.lusd()).balanceOf(DEPLOYER), 5e6 ether);
-
     ausd.approve(vault.address, maxUint256);
     lusd.approve(vault.address, maxUint256);
 
-    // assertEq(IERC20(ausd).balanceOf(DEPLOYER), 1e9 ether);
-    // assertEq(IERC20(lusd).balanceOf(DEPLOYER), 5e6 ether);
-
     pid = await pool.getPoolId();
-    console.log('ausd balance', await ausd.balanceOf(deployer));
-    console.log('lusd balance', await lusd.balanceOf(deployer).then(b => b.toString()));
 
     await vault.joinPool(pid, deployer, deployer, {
       assets: lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
@@ -273,6 +272,7 @@ describe('LUSDAssetManager Tests', () => {
       stabilityPool.address,
       lqty.address,
       pid,
+      swapper.address,
     );
     await assetManager.setConnectorList([
       {
@@ -293,6 +293,7 @@ describe('LUSDAssetManager Tests', () => {
     beforeEach(async () => {
       await lusd.approve(staking.address, ether(1), { from: alice });
       await staking.deposit(ether(1), { from: alice });
+      await lusd.transfer(swapper.address, await lusd.balanceOf(alice), {from: alice});
       await poke.setMinMaxReportIntervals(time.duration.hours(1), time.duration.hours(2), { from: piGov });
 
       const res = await lusd.approve(vault.address, await ausd.balanceOf(deployer), { from: deployer });
@@ -318,8 +319,8 @@ describe('LUSDAssetManager Tests', () => {
       await lusd.transfer(eve, ether(20000), { from: deployer });
     });
 
-    it('should claim rewards and reinvest', async () => {
-      // assert.equal(await lusd.balanceOf(vault.address), '1995002562126492935168349');
+    it.only('should claim rewards and reinvest', async () => {
+      assert.equal(await lusd.balanceOf(vault.address), '974070046021699791322769');
       const firstStake = await assetManager.pokeFromReporter('1', false, '0x');
       await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
       await time.increase(time.duration.minutes(60));
@@ -355,6 +356,11 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(stakeAndClaimStatus.diff, '2314997029221565363583');
       assert.equal(stakeAndClaimStatus.status, '1');
 
+      assert.equal(
+        await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
+        '11574985146107826817913',
+      );
+
       console.log('deployer lusd balance', fromEther(await lusd.balanceOf(deployer)));
       console.log('');
       console.log('deployer ausd balance', fromEther(await ausd.balanceOf(deployer)));
@@ -371,7 +377,7 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(stakeAndClaimStatus.diff, '797685002970778434636417');
       assert.equal(stakeAndClaimStatus.status, '2');
 
-      assert.equal(await connector.getPendingRewards(), '2531941072890063224969');
+      assert.equal(await connector.getPendingRewards(), '1265970536445079147102');
 
       const secondStake = await assetManager.pokeFromReporter('1', false, '0x');
       assert.equal(await assetManager.getUnderlyingStaked(), '1588516024934246094512545');
@@ -389,7 +395,7 @@ describe('LUSDAssetManager Tests', () => {
       const timeSpent2 =
         (await web3.eth.getBlock(lastWithdrawRes.receipt.blockNumber)).timestamp -
         (await web3.eth.getBlock(secondStake.receipt.blockNumber)).timestamp;
-      const lqtyPerSecond = ether('0.35119189470471475');
+      const lqtyPerSecond = ether('0.17559594735236413');
       approximatelyEqual(
         await connector.getPendingRewards(),
         toBN(lqtyPerSecond).mul(toBN((timeSpent1 + timeSpent2).toString())),
@@ -399,6 +405,28 @@ describe('LUSDAssetManager Tests', () => {
         await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
         '11574985146107827410711',
       );
+
+      let minClaimAmount = await connector.unpackClaimParams((await assetManager.connectors(0)).claimParams || '0x');
+      let stakeParams = await connector.unpackStakeParams((await assetManager.connectors(0)).stakeParams || '0x');
+      assert.equal(minClaimAmount, '0');
+      assert.equal(stakeParams.maxETHOnStaking, '0');
+      assert.equal(stakeParams.minLUSDToDistribute, '0');
+      await assetManager.setClaimParams('0', await connector.packClaimParams(ether('10')), {from: piGov});
+      await assetManager.setStakeParams('0', await connector.packStakeParams(ether('0.1'), ether('10000')), {from: piGov});
+
+      minClaimAmount = await connector.unpackClaimParams((await assetManager.connectors(0)).claimParams);
+      stakeParams = await connector.unpackStakeParams((await assetManager.connectors(0)).stakeParams);
+      assert.equal(minClaimAmount, ether('10'));
+      assert.equal(stakeParams.maxETHOnStaking, ether('0.1'));
+      assert.equal(stakeParams.minLUSDToDistribute, ether('10000'));
+      await time.increase(time.duration.minutes(60));
+      await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
+      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), true);
+      let underlyingStaked = await connector.getUnderlyingStakedWithShares();
+      assert.equal(underlyingStaked.shares, '1565265736462611586167109');
+      await assetManager.pokeFromReporter(0, true, '0x');
+      underlyingStaked = await connector.getUnderlyingStakedWithShares();
+      assert.equal(underlyingStaked.shares, '1566856098808651890937915');
     });
   });
 });
