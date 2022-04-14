@@ -299,7 +299,7 @@ describe('MDXMasterChefRouter Tests', () => {
         assert.equal(await mdx.balanceOf(piMdx.address), ether('2203.264'));
 
         assert.equal(await myRouter.getUnderlyingStaked(), ether(8800));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether('2203.2640'));
+        assert.equal(await myRouter.getAssetsHolderUnderlyingBalance(), ether('2203.2640'));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether(11000));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('11003.264'));
         assert.equal(await myRouter.calculateLockedProfit(), ether('3.264'));

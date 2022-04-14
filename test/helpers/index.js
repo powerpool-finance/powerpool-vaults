@@ -459,13 +459,13 @@ const zeroAddress = '0x0000000000000000000000000000000000000000';
 const maxUint256 = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
 function getFileContent(fileName) {
-  return fs.readFileSync('contracts/test/' + fileName, {encoding: 'utf8'});
+  return fs.readFileSync('contracts/test/' + fileName, { encoding: 'utf8' });
 }
 
 async function deployContractWithBytecode(name, web3, args) {
   const CrvStackingContract = await TruffleContract({
-    abi: getFileContent( name + 'Abi.json'),
-    bytecode: '0x' + getFileContent(name, {encoding: 'utf8'}).replace(/(?:\r\n|\r|\n)/g, '')
+    abi: getFileContent(name + 'Abi.json'),
+    bytecode: '0x' + getFileContent(name, { encoding: 'utf8' }).replace(/(?:\r\n|\r|\n)/g, ''),
   });
 
   CrvStackingContract.setProvider(web3.currentProvider);

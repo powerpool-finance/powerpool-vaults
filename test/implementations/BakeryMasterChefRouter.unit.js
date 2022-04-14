@@ -283,7 +283,7 @@ describe('BakeryMasterChefRouter Tests', () => {
         assert.equal(await bake.balanceOf(piBake.address), ether('2307.9365079364'));
 
         assert.equal(await myRouter.getUnderlyingStaked(), ether(8800));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether('2307.9365079364'));
+        assert.equal(await myRouter.getAssetsHolderUnderlyingBalance(), ether('2307.9365079364'));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether(11000));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('11107.9365079364'));
         assert.equal(await myRouter.calculateLockedProfit(), ether('107.9365079364'));

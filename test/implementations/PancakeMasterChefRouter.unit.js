@@ -290,7 +290,7 @@ describe('PancakeMasterChefRouter Tests', () => {
         assert.equal(await cake.balanceOf(masterChef.address), ether(50800));
         assert.equal((await masterChef.userInfo(0, piCake.address)).amount, ether(8800));
         assert.equal(await myRouter.getUnderlyingStaked(), ether(8800));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether('2202.7197990668'));
+        assert.equal(await myRouter.getAssetsHolderUnderlyingBalance(), ether('2202.7197990668'));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether(11000));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('11002.7197990668'));
         assert.equal(await myRouter.calculateLockedProfit(), ether('2.7197990668'));
