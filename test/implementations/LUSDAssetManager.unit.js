@@ -22,16 +22,40 @@ AssetManager.numberFormat = 'String';
 BProtocolPowerIndexConnector.numberFormat = 'String';
 
 const { web3 } = MockERC20;
-const {toBN} = web3.utils;
+const { toBN } = web3.utils;
 
 describe('LUSDAssetManager Tests', () => {
-  let deployer, alice, bob, charlie, eve, piGov, stub, pvp;
+  let deployer, alice, bob, charlie, dan, eve, piGov, stub, pvp;
 
   before(async function () {
-    [deployer, alice, bob, charlie, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
+    [deployer, alice, bob, charlie, dan, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
-  let lusd, lqty, ausd, weth, troveManager, stabilityPool, activePool, defaultPool, collSurplusPool, borrowerOperations, lqtyStaking, priceFeed, sortedTroves, communityIssuance, authorizer, vault, stablePoolFactory, staking, poolRestrictions, assetManager, connector, poke, pid, lusdSecond, ethUsdPriceOracle;
+  let lusd,
+    lqty,
+    ausd,
+    weth,
+    troveManager,
+    stabilityPool,
+    activePool,
+    defaultPool,
+    collSurplusPool,
+    borrowerOperations,
+    lqtyStaking,
+    priceFeed,
+    sortedTroves,
+    communityIssuance,
+    authorizer,
+    vault,
+    stablePoolFactory,
+    staking,
+    poolRestrictions,
+    assetManager,
+    connector,
+    poke,
+    pid,
+    lusdSecond,
+    ethUsdPriceOracle;
 
   const pauseWindowDuration = 7776000;
   const bufferPeriodDuration = 2592000;
@@ -39,7 +63,10 @@ describe('LUSDAssetManager Tests', () => {
   function approximatelyEqual(num1, num2) {
     num1 = toBN(num1.toString(10));
     num2 = toBN(num2.toString(10));
-    assert.equal((num1.gt(num2) ? num1.mul(toBN(ether(1))).div(num2) : num2.mul(toBN(ether(1))).div(num1)).lt(toBN(ether(1.001))), true);
+    assert.equal(
+      (num1.gt(num2) ? num1.mul(toBN(ether(1))).div(num2) : num2.mul(toBN(ether(1))).div(num1)).lt(toBN(ether(1.001))),
+      true,
+    );
   }
 
   beforeEach(async function () {
@@ -66,9 +93,20 @@ describe('LUSDAssetManager Tests', () => {
     // mainnet: 0xd8c9d9071123a059c6e0a945cf0e0c82b508d816
     communityIssuance = await deployContractWithBytecode('liquidity/CommunityIssuance', web3, []);
     // mainnet: 0x5f98805a4e8be255a32880fdec7f6728c6568ba0
-    lusd = await deployContractWithBytecode('liquidity/LUSDToken', web3, [troveManager.address, stabilityPool.address, borrowerOperations.address]);
+    lusd = await deployContractWithBytecode('liquidity/LUSDToken', web3, [
+      troveManager.address,
+      stabilityPool.address,
+      borrowerOperations.address,
+    ]);
     // mainnet: 0x6dea81c8171d0ba574754ef6f8b412f2ed88c54d                                                                          // fake contract
-    lqty = await deployContractWithBytecode('liquidity/LqtyToken', web3, [communityIssuance.address, lqtyStaking.address, weth.address, stub, stub, piGov]);
+    lqty = await deployContractWithBytecode('liquidity/LqtyToken', web3, [
+      communityIssuance.address,
+      lqtyStaking.address,
+      weth.address,
+      stub,
+      stub,
+      piGov,
+    ]);
 
     await troveManager.setAddresses(
       borrowerOperations.address,
@@ -81,7 +119,7 @@ describe('LUSDAssetManager Tests', () => {
       lusd.address,
       sortedTroves.address,
       lqty.address,
-      lqtyStaking.address
+      lqtyStaking.address,
     );
 
     await borrowerOperations.setAddresses(
@@ -94,7 +132,7 @@ describe('LUSDAssetManager Tests', () => {
       priceFeed.address,
       sortedTroves.address,
       lusd.address,
-      lqtyStaking.address
+      lqtyStaking.address,
     );
 
     await stabilityPool.setAddresses(
@@ -104,33 +142,26 @@ describe('LUSDAssetManager Tests', () => {
       lusd.address,
       sortedTroves.address,
       priceFeed.address,
-      communityIssuance.address
+      communityIssuance.address,
     );
 
     await activePool.setAddresses(
       borrowerOperations.address,
       troveManager.address,
       stabilityPool.address,
-      defaultPool.address
+      defaultPool.address,
     );
 
-    await defaultPool.setAddresses(
-      troveManager.address,
-      activePool.address
-    );
+    await defaultPool.setAddresses(troveManager.address, activePool.address);
 
-    await collSurplusPool.setAddresses(
-      borrowerOperations.address,
-      troveManager.address,
-      activePool.address
-    );
+    await collSurplusPool.setAddresses(borrowerOperations.address, troveManager.address, activePool.address);
 
     await lqtyStaking.setAddresses(
       lqty.address,
       lusd.address,
       troveManager.address,
       borrowerOperations.address,
-      activePool.address
+      activePool.address,
     );
 
     ethUsdPriceOracle = await MockChainLinkPriceOracle.new(300000000000);
@@ -141,16 +172,9 @@ describe('LUSDAssetManager Tests', () => {
       weth.address, // fake contract
     );
 
-    await sortedTroves.setParams(
-      maxUint256,
-      troveManager.address,
-      borrowerOperations.address
-    );
+    await sortedTroves.setParams(maxUint256, troveManager.address, borrowerOperations.address);
 
-    await communityIssuance.setAddresses(
-      lqty.address,
-      stabilityPool.address
-    );
+    await communityIssuance.setAddresses(lqty.address, stabilityPool.address);
 
     // mainnet: 0x00ff66ab8699aafa050ee5ef5041d1503aa0849a
     staking = await BAMM.new(
@@ -161,18 +185,25 @@ describe('LUSDAssetManager Tests', () => {
       lqty.address,
       400,
       weth.address, // fake contract
-      zeroAddress
+      zeroAddress,
     );
     await staking.setParams(20, 100);
 
     // mainnet: 0xa331d84ec860bf466b4cdccfb4ac09a1b43f3ae6
     authorizer = await deployContractWithBytecode('balancerV3/Authorizer', web3, [piGov]);
     // mainnet: 0xba12222222228d8ba445958a75a0704d566bf2c8
-    vault = await deployContractWithBytecode('balancerV3/Vault', web3, [authorizer.address, weth.address, pauseWindowDuration, bufferPeriodDuration]);
+    vault = await deployContractWithBytecode('balancerV3/Vault', web3, [
+      authorizer.address,
+      weth.address,
+      pauseWindowDuration,
+      bufferPeriodDuration,
+    ]);
     // mainnet: 0xc66Ba2B6595D3613CCab350C886aCE23866EDe24
     stablePoolFactory = await StablePoolFactory.new(vault.address);
 
-    await authorizer.grantRoles(['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'], deployer, {from: piGov});
+    await authorizer.grantRoles(['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'], deployer, {
+      from: piGov,
+    });
 
     poolRestrictions = await MockPoolRestrictions.new();
 
@@ -194,7 +225,7 @@ describe('LUSDAssetManager Tests', () => {
       ),
     );
 
-    ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), {from: deployer});
+    ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), { from: deployer });
     lusdSecond = web3.utils.toBN(lusd.address).gt(web3.utils.toBN(ausd.address));
     let res = await stablePoolFactory.create(
       'Balancer PP Stable Pool',
@@ -203,32 +234,17 @@ describe('LUSDAssetManager Tests', () => {
       lusdSecond ? [zeroAddress, assetManager.address] : [assetManager.address, zeroAddress],
       200,
       5e14,
-      deployer
+      deployer,
     );
 
     const pool = await StablePool.at(res.receipt.logs[0].args.pool);
 
-    await borrowerOperations.openTrove(
-      ether(1),
-      ether(2e6),
-      zeroAddress,
-      zeroAddress,
-      {value: ether(3e3)}
-    );
-    await borrowerOperations.openTrove(
-      ether(1),
-      ether(5e3),
-      zeroAddress,
-      zeroAddress,
-      {value: ether(4), from: alice}
-    );
-    await borrowerOperations.openTrove(
-      ether(1),
-      ether(7e3),
-      zeroAddress,
-      zeroAddress,
-      {value: ether(3), from: eve}
-    );
+    await borrowerOperations.openTrove(ether(1), ether(2e6), zeroAddress, zeroAddress, { value: ether(3e3) });
+    await borrowerOperations.openTrove(ether(1), ether(5e3), zeroAddress, zeroAddress, {
+      value: ether(4),
+      from: alice,
+    });
+    await borrowerOperations.openTrove(ether(1), ether(7e3), zeroAddress, zeroAddress, { value: ether(3), from: eve });
 
     // assertEq(IERC20(liquity.lusd()).balanceOf(DEPLOYER), 5e6 ether);
 
@@ -245,14 +261,19 @@ describe('LUSDAssetManager Tests', () => {
     await vault.joinPool(pid, deployer, deployer, {
       assets: lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
       maxAmountsIn: [ether(2e6), ether(2e6)],
-      userData: web3.eth.abi.encodeParameters(
-        ['uint256', 'uint256[]'],
-        [0, [ether(2e6), ether(2e6)]],
-      ),
-      fromInternalBalance: false
+      userData: web3.eth.abi.encodeParameters(['uint256', 'uint256[]'], [0, [ether(2e6), ether(2e6)]]),
+      fromInternalBalance: false,
     });
 
-    connector = await BProtocolPowerIndexConnector.new(assetManager.address, staking.address, lusd.address, vault.address, stabilityPool.address, lqty.address, pid);
+    connector = await BProtocolPowerIndexConnector.new(
+      assetManager.address,
+      staking.address,
+      lusd.address,
+      vault.address,
+      stabilityPool.address,
+      lqty.address,
+      pid,
+    );
     await assetManager.setConnectorList([
       {
         connector: connector.address,
@@ -270,98 +291,114 @@ describe('LUSDAssetManager Tests', () => {
 
   describe('reserve management', () => {
     beforeEach(async () => {
-      await lusd.approve(staking.address, ether(1), {from: alice});
-      await staking.deposit(ether(1), {from: alice});
+      await lusd.approve(staking.address, ether(1), { from: alice });
+      await staking.deposit(ether(1), { from: alice });
       await poke.setMinMaxReportIntervals(time.duration.hours(1), time.duration.hours(2), { from: piGov });
 
-      const res = await lusd.approve(vault.address, await ausd.balanceOf(deployer), {from: deployer});
-      await vault.swap({
-        poolId: pid,
-        kind: '0',
-        assetIn: ausd.address,
-        assetOut: lusd.address,
-        amount: ether(7000),
-        userData: '0x'
-      }, {
-        sender: deployer,
-        fromInternalBalance: false,
-        recipient: eve,
-        toInternalBalance: false
-      }, '0', (await web3.eth.getBlock(res.receipt.blockNumber)).timestamp + 100);
+      const res = await lusd.approve(vault.address, await ausd.balanceOf(deployer), { from: deployer });
+      await vault.swap(
+        {
+          poolId: pid,
+          kind: '0',
+          assetIn: ausd.address,
+          assetOut: lusd.address,
+          amount: ether(1030000),
+          userData: '0x',
+        },
+        {
+          sender: deployer,
+          fromInternalBalance: false,
+          recipient: deployer,
+          toInternalBalance: false,
+        },
+        '0',
+        (await web3.eth.getBlock(res.receipt.blockNumber)).timestamp + 100,
+      );
+
+      await lusd.transfer(eve, ether(20000), { from: deployer });
     });
 
-    async function logPools(postfix) {
-      console.log('\n');
-      const pools = [['stability', stabilityPool], ['active', activePool], ['collSurplus', collSurplusPool], ['default', defaultPool], ['bamm', staking]];
-      for (let i = 0; i < pools.length; i++) {
-        console.log('\n');
-        console.log(pools[i][0] + ' pool ETH balance ' + postfix, fromEther(await web3.eth.getBalance(pools[i][1].address)));
-      }
-    }
-
-    it.only('should claim rewards and reinvest', async () => {
+    it('should claim rewards and reinvest', async () => {
       // assert.equal(await lusd.balanceOf(vault.address), '1995002562126492935168349');
       const firstStake = await assetManager.pokeFromReporter('1', false, '0x');
-      await logPools('before');
-      console.log('lusd on stability before', await lusd.balanceOf(stabilityPool.address));
-      console.log('getUnderlyingStakedWithShares before', await connector.getUnderlyingStakedWithShares());
-      await ethUsdPriceOracle.setLatestAnswer('190000000000');
-      const res = await troveManager.liquidateTroves(2);
-      await lusd.approve(staking.address, await lusd.balanceOf(eve), {from: eve});
-      console.log('ethBammBalance', await connector.ethBammBalance());
-      await staking.swap(ether(9000), 0, eve, {from: eve});
-      await logPools('after');
-      console.log('lusd on stability after', await lusd.balanceOf(stabilityPool.address));
-      console.log('getUnderlyingStakedWithShares after', await connector.getUnderlyingStakedWithShares());
-      console.log('ethBammBalance', await connector.ethBammBalance());
-      return;
-      console.log('liquidateTroves', res.receipt.logs);
-      assert.equal(await assetManager.getUnderlyingStaked(), ether(1.6e6));
-      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(4e5));
-      assert.equal(await lusd.balanceOf(vault.address), ether(4e5));
-      assert.equal(await assetManager.getUnderlyingTotal(), ether(2e6));
-      await time.increase(time.duration.minutes(59));
       await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
-      await time.increase(time.duration.minutes(1));
-      let stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
-      assert.equal(stakeAndClaimStatus.diff, '0');
-      assert.equal(stakeAndClaimStatus.status, '0');
+      await time.increase(time.duration.minutes(60));
       await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
 
+      await ethUsdPriceOracle.setLatestAnswer('190000000000');
+      await troveManager.liquidateTroves(2);
+      await lusd.approve(staking.address, await lusd.balanceOf(eve), { from: eve });
+      // await staking.swap(ether(9000), 0, eve, {from: eve});
+      await staking.swap(ether(19000), 0, eve, { from: eve });
+      // await borrowerOperations.openTrove(
+      //   ether(1),
+      //   ether(6e3),
+      //   zeroAddress,
+      //   zeroAddress,
+      //   {value: ether(4), from: charlie}
+      // );
+      // await borrowerOperations.openTrove(
+      //   ether(1),
+      //   ether(6e3),
+      //   zeroAddress,
+      //   zeroAddress,
+      //   {value: ether(4), from: dan}
+      // );
+      // await ethUsdPriceOracle.setLatestAnswer('1000000000');
+      // await troveManager.liquidateTroves(2);
+      // await staking.swap(ether(9000), 0, eve, {from: eve});
+      assert.equal(await assetManager.getUnderlyingStaked(), '790831021963467659876128');
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), '194814009204339958264554');
+      assert.equal(await lusd.balanceOf(vault.address), '194814009204339958264554');
+      assert.equal(await assetManager.getUnderlyingTotal(), '985645031167807618140682');
+      let stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
+      assert.equal(stakeAndClaimStatus.diff, '2314997029221565363583');
+      assert.equal(stakeAndClaimStatus.status, '1');
+
+      console.log('deployer lusd balance', fromEther(await lusd.balanceOf(deployer)));
+      console.log('');
+      console.log('deployer ausd balance', fromEther(await ausd.balanceOf(deployer)));
       await vault.joinPool(pid, deployer, deployer, {
         assets: lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
         maxAmountsIn: [ether(1e6), ether(1e6)],
-        userData: web3.eth.abi.encodeParameters(
-          ['uint256', 'uint256[]'],
-          [1, [ether(1e6), ether(1e6)]],
-        ),
-        fromInternalBalance: false
+        userData: web3.eth.abi.encodeParameters(['uint256', 'uint256[]'], [1, [ether(1e6), ether(1e6)]]),
+        fromInternalBalance: false,
       });
 
-      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(1.4e6));
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), '1194814009204339958264554');
 
       stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
-      assert.equal(stakeAndClaimStatus.diff, ether(8e5));
+      assert.equal(stakeAndClaimStatus.diff, '797685002970778434636417');
       assert.equal(stakeAndClaimStatus.status, '2');
 
-      assert.equal(await connector.getPendingRewards(), '0');
+      assert.equal(await connector.getPendingRewards(), '2531941072890063224969');
 
       const secondStake = await assetManager.pokeFromReporter('1', false, '0x');
-      assert.equal(await assetManager.getUnderlyingStaked(), ether(2.4e6));
-      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(6e5));
-      assert.equal(await lusd.balanceOf(vault.address), ether(6e5));
-      assert.equal(await assetManager.getUnderlyingTotal(), ether(3e6));
-      const timeSpent1 = (await web3.eth.getBlock(secondStake.receipt.blockNumber)).timestamp - (await web3.eth.getBlock(firstStake.receipt.blockNumber)).timestamp;
+      assert.equal(await assetManager.getUnderlyingStaked(), '1588516024934246094512545');
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), '397129006233561523628137');
+      assert.equal(await lusd.balanceOf(vault.address), '397129006233561523628137');
+      assert.equal(await assetManager.getUnderlyingTotal(), '1985645031167807618140682');
+      const timeSpent1 =
+        (await web3.eth.getBlock(secondStake.receipt.blockNumber)).timestamp -
+        (await web3.eth.getBlock(firstStake.receipt.blockNumber)).timestamp;
       assert.equal(await connector.getPendingRewards(), '0');
 
       await time.increase(time.duration.minutes(60));
 
-      let lastWithdrawRes = await staking.withdraw('0', {from: alice});
-      const timeSpent2 = (await web3.eth.getBlock(lastWithdrawRes.receipt.blockNumber)).timestamp - (await web3.eth.getBlock(secondStake.receipt.blockNumber)).timestamp;
-      const lqtyPerSecond = ether('0.24796911366025507');
-      approximatelyEqual(await connector.getPendingRewards(), toBN(lqtyPerSecond).mul(toBN((timeSpent1 + timeSpent2).toString())));
+      let lastWithdrawRes = await staking.withdraw('0', { from: alice });
+      const timeSpent2 =
+        (await web3.eth.getBlock(lastWithdrawRes.receipt.blockNumber)).timestamp -
+        (await web3.eth.getBlock(secondStake.receipt.blockNumber)).timestamp;
+      const lqtyPerSecond = ether('0.35119189470471475');
+      approximatelyEqual(
+        await connector.getPendingRewards(),
+        toBN(lqtyPerSecond).mul(toBN((timeSpent1 + timeSpent2).toString())),
+      );
 
-      console.log('getActualUnderlyingEarnedByStakeData', await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)))
+      assert.equal(
+        await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
+        '11574985146107827410711',
+      );
     });
   });
 });

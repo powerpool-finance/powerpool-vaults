@@ -7,11 +7,9 @@ import "../interfaces/bprotocol/IBAMM.sol";
 import "../interfaces/balancerV3/IVault.sol";
 import "../interfaces/liquidity/IStabilityPool.sol";
 import "./AbstractConnector.sol";
-import {UniswapV3OracleHelper} from "../libs/UniswapV3OracleHelper.sol";
+import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
-
-import "hardhat/console.sol";
 
 contract BProtocolPowerIndexConnector is AbstractConnector {
   using SafeMath for uint256;
@@ -48,9 +46,9 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   // solhint-disable-next-line
   function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
-  external
-  override
-  returns (bytes memory stakeData)
+    external
+    override
+    returns (bytes memory stakeData)
   {
     uint256 pending = getPendingRewards();
     if (pending > 0) {
@@ -59,7 +57,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint256 receivedReward = LQTY_TOKEN.balanceOf(ASSET_MANAGER);
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
-      (, rewardsToReinvest,) = _distributePerformanceFee(
+      (, rewardsToReinvest, ) = _distributePerformanceFee(
         _distributeData.performanceFee,
         _distributeData.performanceFeeReceiver,
         0,
@@ -112,6 +110,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   {
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
+    require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
     _capitalOut(underlyingStaked, _amount);
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
@@ -139,12 +138,20 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
       uint256 ethBalanceOnBamm = ethBammBalance().mul(shares).div(1 ether);
       require(ethBalanceOnBamm <= maxETHOnStaking, "MAX_ETHER_ON_BAMM");
     }
+    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
+    require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
+
+    underlyingEarned = getActualUnderlyingEarned(
+      lastAssetsPerShare,
+      underlyingEarned,
+      underlyingStaked,
+      shares,
+      assetsPerShare
+    );
 
     // redeem with fee or without
-    uint256 amountToRedeem = _amount;
-    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
-    underlyingEarned = getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare);
     uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
+    uint256 amountToRedeem = _amount;
     if (underlyingFee >= minLUSDToDistribute) {
       amountToRedeem = amountToRedeem.add(underlyingFee);
       underlyingEarned = 0;
@@ -209,7 +216,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function initRouter(bytes calldata) external override {
-    UNDERLYING.approve(STAKING, uint256(- 1));
+    UNDERLYING.approve(STAKING, uint256(-1));
+    UNDERLYING.approve(VAULT, uint256(-1));
   }
 
   /*** VIEWERS ***/
@@ -228,9 +236,9 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function unpackStakeData(bytes memory _stakeData)
-  public
-  pure
-  returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
+    public
+    pure
+    returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
   {
     if (_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
       return (0, 0);
@@ -266,9 +274,9 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @notice Unpack claim params from bytes to variables.
    */
   function unpackStakeParams(bytes memory _stakeParams)
-  public
-  pure
-  returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
+    public
+    pure
+    returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
   {
     if (_stakeParams.length == 0 || keccak256(_stakeParams) == keccak256("")) {
       return (0, 0);
@@ -293,7 +301,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @dev Returns current amount of LUSD remaining in the Balancer Vault.
    */
   function getUnderlyingReserve() public view override returns (uint256) {
-    (uint256 poolCash, , ,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
+    (uint256 poolCash, , , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
     return poolCash;
   }
 
@@ -302,7 +310,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    *      managed = total - cash
    */
   function getUnderlyingManaged() external view returns (uint256) {
-    (, uint256 poolManaged, ,) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
+    (, uint256 poolManaged, , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
     return poolManaged;
   }
 
@@ -311,13 +319,13 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    *      staked = total - (cash + gain - loss)
    */
   function getUnderlyingStakedWithShares()
-  public
-  view
-  returns (
-    uint256 staked,
-    uint256 shares,
-    uint256 assetsPerShare
-  )
+    public
+    view
+    returns (
+      uint256 staked,
+      uint256 shares,
+      uint256 assetsPerShare
+    )
   {
     shares = IBAMM(STAKING).stake(ASSET_MANAGER);
     uint256 totalShares = IBAMM(STAKING).total();
@@ -334,7 +342,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    *      staked = total - (cash + gain - loss)
    */
   function getUnderlyingStaked() public view override returns (uint256 staked) {
-    (staked,,) = getUnderlyingStakedWithShares();
+    (staked, , ) = getUnderlyingStakedWithShares();
   }
 
   function getUnderlyingTotal() external view override returns (uint256) {
@@ -366,7 +374,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     }
   }
 
-  uint256 internal constant RAY = 10 ** 27;
+  uint256 internal constant RAY = 10**27;
 
   function add(uint256 x, uint256 y) public pure returns (uint256 z) {
     require((z = x + y) >= x, "ds-math-add-overflow");
