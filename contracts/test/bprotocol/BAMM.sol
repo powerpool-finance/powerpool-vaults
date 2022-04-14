@@ -6868,6 +6868,7 @@ contract BAMM is CropJoinAdapter, PriceFormula, Ownable {
     address payable dest
   ) public returns (uint256) {
     (uint256 ethAmount, uint256 feeAmount) = getSwapEthAmount(lusdAmount);
+    console.log("ethAmount", ethAmount);
 
     require(ethAmount >= minEthReturn, "swap: low return");
 
