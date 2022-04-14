@@ -55,7 +55,7 @@ abstract contract AbstractConnector is IRouterConnector {
    * @param _performanceFeeReceiver Receiver of performance fee.
    * @param _performanceFeeDebt Performance fee amount left from last distribution.
    * @param _assetsManager Assets manager address.
-   * @param _underlying Underlying ERC20 token.
+   * @param _token Underlying ERC20 token.
    * @param _totalReward Total reward amount.
    * @return performance Fee amount calculated to distribute.
    * @return remainder Diff between total reward amount and performance fee.
@@ -67,7 +67,7 @@ abstract contract AbstractConnector is IRouterConnector {
     address _performanceFeeReceiver,
     uint256 _performanceFeeDebt,
     address _assetsManager,
-    IERC20 _underlying,
+    IERC20 _token,
     uint256 _totalReward
   )
     internal
@@ -86,13 +86,13 @@ abstract contract AbstractConnector is IRouterConnector {
       remainder = _totalReward.sub(performance);
 
       uint256 performanceFeeDebtBefore = _performanceFeeDebt;
-      uint256 underlyingBalance = _underlying.balanceOf(address(_assetsManager));
+      uint256 underlyingBalance = _token.balanceOf(address(_assetsManager));
       uint256 totalFeeToPayOut = performance.add(performanceFeeDebtBefore);
       if (underlyingBalance >= totalFeeToPayOut) {
-        _transferFeeToReceiver(_assetsManager, _underlying, _performanceFeeReceiver, totalFeeToPayOut);
+        _transferFeeToReceiver(_assetsManager, _token, _performanceFeeReceiver, totalFeeToPayOut);
       } else {
         resultPerformanceFeeDebt = totalFeeToPayOut.sub(underlyingBalance);
-        _transferFeeToReceiver(_assetsManager, _underlying, _performanceFeeReceiver, underlyingBalance);
+        _transferFeeToReceiver(_assetsManager, _token, _performanceFeeReceiver, underlyingBalance);
       }
 
       emit DistributePerformanceFee(performanceFeeDebtBefore, resultPerformanceFeeDebt, underlyingBalance, performance);

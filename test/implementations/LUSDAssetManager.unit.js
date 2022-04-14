@@ -1,5 +1,5 @@
 const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
-const { ether, fromEther, zeroAddress, maxUint256, deployContractWithBytecode } = require('./../helpers');
+const { ether, zeroAddress, maxUint256, deployContractWithBytecode } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
@@ -26,10 +26,10 @@ const { web3 } = MockERC20;
 const { toBN } = web3.utils;
 
 describe('LUSDAssetManager Tests', () => {
-  let deployer, alice, bob, charlie, dan, eve, piGov, stub, pvp;
+  let deployer, alice, eve, piGov, stub, pvp;
 
   before(async function () {
-    [deployer, alice, bob, charlie, dan, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
+    [deployer, alice, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
   let lusd,
@@ -319,7 +319,7 @@ describe('LUSDAssetManager Tests', () => {
       await lusd.transfer(eve, ether(20000), { from: deployer });
     });
 
-    it.only('should claim rewards and reinvest', async () => {
+    it('should claim rewards and reinvest', async () => {
       assert.equal(await lusd.balanceOf(vault.address), '974070046021699791322769');
       const firstStake = await assetManager.pokeFromReporter('1', false, '0x');
       await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
@@ -361,9 +361,6 @@ describe('LUSDAssetManager Tests', () => {
         '11574985146107826817913',
       );
 
-      console.log('deployer lusd balance', fromEther(await lusd.balanceOf(deployer)));
-      console.log('');
-      console.log('deployer ausd balance', fromEther(await ausd.balanceOf(deployer)));
       await vault.joinPool(pid, deployer, deployer, {
         assets: lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
         maxAmountsIn: [ether(1e6), ether(1e6)],
@@ -412,21 +409,68 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(stakeParams.maxETHOnStaking, '0');
       assert.equal(stakeParams.minLUSDToDistribute, '0');
       await assetManager.setClaimParams('0', await connector.packClaimParams(ether('10')), {from: piGov});
-      await assetManager.setStakeParams('0', await connector.packStakeParams(ether('0.1'), ether('10000')), {from: piGov});
+      await assetManager.setStakeParams('0', await connector.packStakeParams(ether('0.1'), ether('1000')), {from: piGov});
 
       minClaimAmount = await connector.unpackClaimParams((await assetManager.connectors(0)).claimParams);
       stakeParams = await connector.unpackStakeParams((await assetManager.connectors(0)).stakeParams);
       assert.equal(minClaimAmount, ether('10'));
       assert.equal(stakeParams.maxETHOnStaking, ether('0.1'));
-      assert.equal(stakeParams.minLUSDToDistribute, ether('10000'));
+      assert.equal(stakeParams.minLUSDToDistribute, ether('1000'));
       await time.increase(time.duration.minutes(60));
       await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
       assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), true);
+
       let underlyingStaked = await connector.getUnderlyingStakedWithShares();
       assert.equal(underlyingStaked.shares, '1565265736462611586167109');
-      await assetManager.pokeFromReporter(0, true, '0x');
+      assert.equal(await lqty.balanceOf(pvp), '0');
+      const res = await assetManager.pokeFromReporter(0, true, '0x');
       underlyingStaked = await connector.getUnderlyingStakedWithShares();
       assert.equal(underlyingStaked.shares, '1566856098808651890937915');
+      assert.equal(await lqty.balanceOf(pvp), '569641911827476325685');
+      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), false);
+
+      await vault.swap(
+        {
+          poolId: pid,
+          kind: '0',
+          assetIn: ausd.address,
+          assetOut: lusd.address,
+          amount: ether(100),
+          userData: '0x',
+        },
+        {
+          sender: deployer,
+          fromInternalBalance: false,
+          recipient: deployer,
+          toInternalBalance: false,
+        },
+        '0',
+        (await web3.eth.getBlock(res.receipt.blockNumber)).timestamp + 100,
+      );
+
+      await time.increase(time.duration.minutes(60));
+      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), false);
+
+      assert.equal(
+        await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
+        '11574985146107827411314',
+      );
+
+      stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', true);
+      assert.equal(stakeAndClaimStatus.status, '1');
+      assert.equal(stakeAndClaimStatus.diff, '402413009079281972718');
+
+      assert.equal(await lusd.balanceOf(pvp), '0');
+      await assetManager.pokeFromReporter(0, true, '0x');
+      underlyingStaked = await connector.getUnderlyingStakedWithShares();
+      assert.equal(underlyingStaked.shares, '1564717438027656434853500');
+      assert.equal(await lusd.balanceOf(pvp), '1736247771916174111697');
+      assert.equal(await lqty.balanceOf(pvp), '569641911827476325685');
+
+      assert.equal(
+        await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
+        '592592',
+      );
     });
   });
 });

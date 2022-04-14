@@ -62,7 +62,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
         _distributeData.performanceFeeReceiver,
         0,
         ASSET_MANAGER,
-        UNDERLYING,
+        REWARDS_TOKEN,
         receivedReward
       );
 
@@ -158,8 +158,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     );
 
     // redeem with fee or without
-    uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
     uint256 amountToRedeem = _amount;
+    uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
     if (underlyingFee >= minLUSDToDistribute) {
       amountToRedeem = amountToRedeem.add(underlyingFee);
       underlyingEarned = 0;
