@@ -389,17 +389,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     require((z = x + y) >= x, "ds-math-add-overflow");
   }
 
-  function sub(uint256 x, uint256 y) public pure returns (uint256 z) {
-    require((z = x - y) <= x, "ds-math-sub-underflow");
-  }
-
   function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
     require(y == 0 || (z = x * y) / y == x, "ds-math-mul-overflow");
-  }
-
-  function div(uint128 a, uint128 b) internal pure returns (uint128) {
-    require(b > 0, "SafeMath: division by zero");
-    return a / b;
   }
 
   function rdiv(uint256 x, uint256 y) internal pure returns (uint256 z) {
