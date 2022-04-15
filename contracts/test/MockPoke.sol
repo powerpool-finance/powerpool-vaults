@@ -11,7 +11,7 @@ contract MockPoke {
 
   bool simpleImpl;
 
-  constructor(bool _simpleImpl) public {
+  constructor(bool _simpleImpl) {
     simpleImpl = _simpleImpl;
   }
 

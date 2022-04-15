@@ -34,7 +34,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _stabilityPool,
     address _rewardsToken,
     bytes32 _pId
-  ) public AbstractConnector() {
+  ) AbstractConnector() {
     ASSET_MANAGER = _assetManager;
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);

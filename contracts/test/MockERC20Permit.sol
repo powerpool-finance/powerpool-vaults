@@ -21,7 +21,7 @@ contract MockERC20Permit is MockERC20 {
     string memory _symbol,
     uint8 _decimals,
     uint256 supply
-  ) public MockERC20(_name, _symbol, _decimals, supply) {
+  ) MockERC20(_name, _symbol, _decimals, supply) {
     DOMAIN_SEPARATOR = keccak256(
       abi.encode(
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),

@@ -50,7 +50,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     address _router,
     string memory _name,
     string memory _symbol
-  ) public ERC20(_name, _symbol) {
+  ) ERC20(_name, _symbol) {
     underlying = IERC20Permit(_token);
     router = _router;
 

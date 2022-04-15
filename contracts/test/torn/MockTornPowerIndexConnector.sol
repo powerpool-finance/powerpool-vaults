@@ -9,7 +9,7 @@ contract MockTornPowerIndexConnector is TornPowerIndexConnector {
     address _underlying,
     address _piToken,
     address _governance
-  ) public TornPowerIndexConnector(_staking, _underlying, _piToken, _governance) {}
+  ) TornPowerIndexConnector(_staking, _underlying, _piToken, _governance) {}
 
   function getTornPriceRatio() public view override returns (uint256) {
     return 15000000000000000;

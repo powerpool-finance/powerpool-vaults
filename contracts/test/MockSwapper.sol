@@ -11,7 +11,7 @@ contract MockSwapper {
 
   mapping(address => mapping(address => uint256)) public ratio;
 
-  constructor() public {}
+  constructor() {}
 
   function setRatio(
     address _tokenFrom,

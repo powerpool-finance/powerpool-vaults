@@ -25,7 +25,7 @@ contract TornPowerIndexConnector is AbstractProfitDistributionConnector {
     address _underlying,
     address _piToken,
     address _governance
-  ) public AbstractProfitDistributionConnector(46e14) {
+  ) AbstractProfitDistributionConnector(46e14) {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);

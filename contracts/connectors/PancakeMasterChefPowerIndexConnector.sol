@@ -18,7 +18,7 @@ contract PancakeMasterChefIndexConnector is AbstractStakeRedeemConnector {
     address _staking,
     address _underlying,
     address _piToken
-  ) public AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e12) {} //6 hours with 13ms block
+  ) AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e12) {} //6 hours with 13ms block
 
   /*** VIEWERS ***/
 

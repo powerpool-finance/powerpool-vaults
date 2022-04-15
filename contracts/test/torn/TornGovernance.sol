@@ -25,7 +25,7 @@ contract TornGovernance {
     _;
   }
 
-  constructor(address _torn) public {
+  constructor(address _torn) {
     torn = IERC20(_torn);
   }
 

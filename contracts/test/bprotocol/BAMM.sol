@@ -6384,7 +6384,7 @@ contract CropJoin {
     bytes32 ilk_,
     address gem_,
     address bonus_
-  ) public {
+  ) {
     vat = VatLike(vat_);
     ilk = ilk_;
     gem = ERC20(gem_);
@@ -6703,7 +6703,7 @@ contract BAMM is CropJoinAdapter, PriceFormula, Ownable {
     uint256 _maxDiscount,
     address payable _feePool,
     address _fronEndTag
-  ) public CropJoinAdapter(_LQTY) {
+  ) CropJoinAdapter(_LQTY) {
     priceAggregator = AggregatorV3Interface(_priceAggregator);
     lusd2UsdPriceAggregator = AggregatorV3Interface(_lusd2UsdPriceAggregator);
     LUSD = IERC20(_LUSD);

@@ -13,7 +13,7 @@ contract AssetManager is AbstractPowerIndexRouter {
     address _assetsHolder,
     address _underlying,
     BasicConfig memory _basicConfig
-  ) public AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {}
+  ) AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {}
 
   function getAssetsHolderUnderlyingBalance() public view override returns (uint256) {
     uint256 balance = 0;
