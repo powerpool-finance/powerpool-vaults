@@ -30,7 +30,7 @@ contract MockBProtocolConnector is BProtocolPowerIndexConnector {
     swapper.swap(address(REWARDS_TOKEN), address(UNDERLYING), _rewardsAmount);
   }
 
-  function getSwapperAddress() public override returns (address) {
+  function getSwapperAddress() public view override returns (address) {
     return address(swapper);
   }
 }

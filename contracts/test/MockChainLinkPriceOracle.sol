@@ -24,7 +24,7 @@ contract MockChainLinkPriceOracle is AggregatorV3Interface {
     answers[latestRound] = latestAnswer_;
   }
 
-  function latestAnswer() public returns (int256) {
+  function latestAnswer() public view returns (int256) {
     return answers[latestRound];
   }
 

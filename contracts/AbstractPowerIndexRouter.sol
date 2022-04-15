@@ -747,7 +747,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     uint256 _share
   )
     public
-    view
+    pure
     returns (
       StakeStatus status,
       uint256 diff,

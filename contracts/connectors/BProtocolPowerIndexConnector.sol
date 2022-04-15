@@ -106,7 +106,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     uint256 _underlyingStaked,
     uint256 _shares,
     uint256 _assetsPerShare
-  ) public view returns (uint256) {
+  ) public pure returns (uint256) {
     uint256 underlyingStakedBefore = _shares.mul(_lastAssetsPerShare).div(1 ether);
     return _lastUnderlyingEarned.add(_underlyingStaked.sub(underlyingStakedBefore));
   }
