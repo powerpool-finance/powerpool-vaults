@@ -45,11 +45,10 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   // solhint-disable-next-line
-  function claimRewards(PowerIndexRouterInterface.StakeStatus /*_status*/, DistributeData memory _distributeData)
-    external
-    override
-    returns (bytes memory stakeData)
-  {
+  function claimRewards(
+    PowerIndexRouterInterface.StakeStatus, /*_status*/
+    DistributeData memory _distributeData
+  ) external override returns (bytes memory stakeData) {
     uint256 pending = getPendingRewards();
     if (pending > 0) {
       _claimImpl();
@@ -96,7 +95,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   function getActualUnderlyingEarnedByStakeData(bytes calldata _stakeData) external view returns (uint256) {
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_stakeData);
-    (uint256 underlyingStaked, uint256 shares, /*uint256 assetsPerShare*/) = getUnderlyingStakedWithShares();
+    (
+      uint256 underlyingStaked,
+      uint256 shares, /*uint256 assetsPerShare*/
+
+    ) = getUnderlyingStakedWithShares();
     return getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
   }
 
@@ -148,12 +151,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
 
-    underlyingEarned = getActualUnderlyingEarned(
-      lastAssetsPerShare,
-      underlyingEarned,
-      underlyingStaked,
-      shares
-    );
+    underlyingEarned = getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
 
     // redeem with fee or without
     uint256 amountToRedeem = _amount;

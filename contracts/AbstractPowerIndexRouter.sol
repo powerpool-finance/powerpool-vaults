@@ -619,7 +619,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
       bool forceRebalance
     )
   {
-    (status, diff,) = getStakeStatusPure(
+    (status, diff, ) = getStakeStatusPure(
       reserveRatio,
       _leftOnPiTokenBalance,
       _totalStakedBalance,

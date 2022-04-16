@@ -33,11 +33,10 @@ contract TornPowerIndexConnector is AbstractProfitDistributionConnector {
   }
 
   // solhint-disable-next-line
-  function claimRewards(PowerIndexRouterInterface.StakeStatus /*_status*/, DistributeData memory _distributeData)
-    external
-    override
-    returns (bytes memory stakeData)
-  {
+  function claimRewards(
+    PowerIndexRouterInterface.StakeStatus, /*_status*/
+    DistributeData memory _distributeData
+  ) external override returns (bytes memory stakeData) {
     uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
     _claimImpl();
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
