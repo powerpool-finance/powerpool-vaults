@@ -33,7 +33,7 @@ contract TornPowerIndexConnector is AbstractProfitDistributionConnector {
   }
 
   // solhint-disable-next-line
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
+  function claimRewards(PowerIndexRouterInterface.StakeStatus /*_status*/, DistributeData memory _distributeData)
     external
     override
     returns (bytes memory stakeData)

@@ -137,9 +137,9 @@ abstract contract AbstractConnector is IRouterConnector {
   }
 
   function isClaimAvailable(
-    bytes calldata _claimParams, // solhint-disable-line
-    uint256 _lastClaimRewardsAt, // solhint-disable-line
-    uint256 _lastChangeStakeAt // solhint-disable-line
+    bytes calldata /*_claimParams*/, // solhint-disable-line
+    uint256 /*_lastClaimRewardsAt*/, // solhint-disable-line
+    uint256 /*_lastChangeStakeAt*/ // solhint-disable-line
   ) external view virtual override returns (bool) {
     return true;
   }
