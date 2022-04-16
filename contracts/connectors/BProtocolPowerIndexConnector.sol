@@ -96,16 +96,15 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   function getActualUnderlyingEarnedByStakeData(bytes calldata _stakeData) external view returns (uint256) {
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_stakeData);
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
-    return getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare);
+    (uint256 underlyingStaked, uint256 shares, /*uint256 assetsPerShare*/) = getUnderlyingStakedWithShares();
+    return getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
   }
 
   function getActualUnderlyingEarned(
     uint256 _lastAssetsPerShare,
     uint256 _lastUnderlyingEarned,
     uint256 _underlyingStaked,
-    uint256 _shares,
-    uint256 _assetsPerShare
+    uint256 _shares
   ) public pure returns (uint256) {
     uint256 underlyingStakedBefore = _shares.mul(_lastAssetsPerShare).div(1 ether);
     return _lastUnderlyingEarned.add(_underlyingStaked.sub(underlyingStakedBefore));
@@ -124,7 +123,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
     result = packStakeData(
       assetsPerShare,
-      getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare)
+      getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares)
     );
     claimed = true;
   }
@@ -153,8 +152,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
       lastAssetsPerShare,
       underlyingEarned,
       underlyingStaked,
-      shares,
-      assetsPerShare
+      shares
     );
 
     // redeem with fee or without
