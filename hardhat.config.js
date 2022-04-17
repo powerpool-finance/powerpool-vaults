@@ -51,7 +51,7 @@ const config = {
       // accounts: testAccounts,
       allowUnlimitedContractSize: true,
       gas: 12000000,
-      loggingEnabled: true,
+      loggingEnabled: false,
       blockGasLimit: 12000000,
     },
     ganache: {

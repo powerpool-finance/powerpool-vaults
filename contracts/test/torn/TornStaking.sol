@@ -40,7 +40,7 @@ contract TornStaking {
     _;
   }
 
-  constructor(address governanceAddress, address tornAddress) public {
+  constructor(address governanceAddress, address tornAddress) {
     Governance = ITornGovernance(governanceAddress);
     torn = IERC20(tornAddress);
     ratioConstant = IERC20(tornAddress).totalSupply();

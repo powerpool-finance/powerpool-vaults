@@ -52,7 +52,7 @@ contract MockPoolRestrictions is IPoolRestrictions, Ownable {
   /** @dev Public records of operators, who doesn't pay community fee */
   mapping(address => bool) public withoutFeeAddresses;
 
-  constructor() public Ownable() {}
+  constructor() Ownable() {}
 
   /* ==========  Configuration Actions  ========== */
 

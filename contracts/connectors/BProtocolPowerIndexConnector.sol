@@ -34,7 +34,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _stabilityPool,
     address _rewardsToken,
     bytes32 _pId
-  ) public AbstractConnector() {
+  ) AbstractConnector() {
     ASSET_MANAGER = _assetManager;
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
@@ -45,11 +45,10 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   // solhint-disable-next-line
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
-    external
-    override
-    returns (bytes memory stakeData)
-  {
+  function claimRewards(
+    PowerIndexRouterInterface.StakeStatus, /*_status*/
+    DistributeData memory _distributeData
+  ) external override returns (bytes memory stakeData) {
     uint256 pending = getPendingRewards();
     if (pending > 0) {
       _claimImpl();
@@ -96,17 +95,20 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   function getActualUnderlyingEarnedByStakeData(bytes calldata _stakeData) external view returns (uint256) {
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_stakeData);
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
-    return getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare);
+    (
+      uint256 underlyingStaked,
+      uint256 shares, /*uint256 assetsPerShare*/
+
+    ) = getUnderlyingStakedWithShares();
+    return getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
   }
 
   function getActualUnderlyingEarned(
     uint256 _lastAssetsPerShare,
     uint256 _lastUnderlyingEarned,
     uint256 _underlyingStaked,
-    uint256 _shares,
-    uint256 _assetsPerShare
-  ) public view returns (uint256) {
+    uint256 _shares
+  ) public pure returns (uint256) {
     uint256 underlyingStakedBefore = _shares.mul(_lastAssetsPerShare).div(1 ether);
     return _lastUnderlyingEarned.add(_underlyingStaked.sub(underlyingStakedBefore));
   }
@@ -124,7 +126,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
     result = packStakeData(
       assetsPerShare,
-      getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares, assetsPerShare)
+      getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares)
     );
     claimed = true;
   }
@@ -149,13 +151,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
 
-    underlyingEarned = getActualUnderlyingEarned(
-      lastAssetsPerShare,
-      underlyingEarned,
-      underlyingStaked,
-      shares,
-      assetsPerShare
-    );
+    underlyingEarned = getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
 
     // redeem with fee or without
     uint256 amountToRedeem = _amount;
@@ -390,17 +386,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     require((z = x + y) >= x, "ds-math-add-overflow");
   }
 
-  function sub(uint256 x, uint256 y) public pure returns (uint256 z) {
-    require((z = x - y) <= x, "ds-math-sub-underflow");
-  }
-
   function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
     require(y == 0 || (z = x * y) / y == x, "ds-math-mul-overflow");
-  }
-
-  function div(uint128 a, uint128 b) internal pure returns (uint128) {
-    require(b > 0, "SafeMath: division by zero");
-    return a / b;
   }
 
   function rdiv(uint256 x, uint256 y) internal pure returns (uint256 z) {
