@@ -26,10 +26,7 @@ contract MockSwapper {
     address _tokenTo,
     uint256 _tokenFromAmount
   ) public {
-    console.log("swap", ratio[_tokenFrom][_tokenTo]);
     IERC20(_tokenFrom).transferFrom(msg.sender, address(this), _tokenFromAmount);
-    console.log("IERC20(_tokenTo).transfer ", _tokenFromAmount.mul(ratio[_tokenFrom][_tokenTo]).div(1 ether));
-    console.log("IERC20(_tokenTo).balanceOf", IERC20(_tokenTo).balanceOf(address(this)));
     IERC20(_tokenTo).transfer(msg.sender, _tokenFromAmount.mul(ratio[_tokenFrom][_tokenTo]).div(1 ether));
   }
 }
