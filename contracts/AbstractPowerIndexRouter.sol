@@ -123,7 +123,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     address _underlying,
     BasicConfig memory _basicConfig
   ) PowerIndexNaiveRouter() Ownable() {
-    require(_assetsHolder != address(0), "INVALID_PI_TOKEN");
+    require(_assetsHolder != address(0), "INVALID_ASSET_HOLDER");
     require(_basicConfig.reserveRatioUpperBound <= HUNDRED_PCT, "UPPER_RR_GREATER_THAN_100_PCT");
     require(_basicConfig.reserveRatio >= _basicConfig.reserveRatioLowerBound, "RR_LTE_LOWER_RR");
     require(_basicConfig.reserveRatio <= _basicConfig.reserveRatioUpperBound, "RR_GTE_UPPER_RR");
@@ -219,7 +219,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   }
 
   /**
-   * @notice Set connectors claim params to pass it to connector.
+   * @notice Set connector claim params to pass it to connector.
    * @param _connectorIndex Index of connector
    * @param _claimParams Claim params
    */
@@ -229,7 +229,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   }
 
   /**
-   * @notice Set connectors stake params to pass it to connector.
+   * @notice Set connector stake params to pass it to connector.
    * @param _connectorIndex Index of connector
    * @param _stakeParams Claim params
    */
