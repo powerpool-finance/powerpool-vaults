@@ -463,13 +463,13 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(await lusd.balanceOf(pvp), '0');
       await assetManager.pokeFromReporter(0, true, '0x');
       underlyingStaked = await connector.getUnderlyingStakedWithShares();
-      assert.equal(underlyingStaked.shares, '1564717438027656434853500');
+      assert.equal(underlyingStaked.shares, '1564748740500732319476838');
       assert.equal(await lusd.balanceOf(pvp), '1736247771916174111697');
       assert.equal(await lqty.balanceOf(pvp), '569641911827476325685');
 
       assert.equal(
         await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
-        '592592',
+        '592603',
       );
     });
   });

@@ -164,7 +164,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
       amountToRedeem = amountToRedeem.add(underlyingFee);
       underlyingEarned = 0;
     }
-    _redeemImpl(amountToRedeem);
+    // redeem amount will be converted to shares
+    _redeemImpl(amountToRedeem, assetsPerShare);
 
     // capital in amount without fee
     _capitalIn(underlyingStaked, _amount);
@@ -302,8 +303,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     IBAMM(STAKING).deposit(_amount);
   }
 
-  function _redeemImpl(uint256 _amount) internal {
-    IBAMM(STAKING).withdraw(_amount);
+  function _redeemImpl(uint256 _amount, uint256 _assetsPerShare) internal {
+    IBAMM(STAKING).withdraw(_amount.mul(1 ether).div(_assetsPerShare));
   }
 
   /**
