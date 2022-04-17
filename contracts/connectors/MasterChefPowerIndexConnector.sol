@@ -20,7 +20,6 @@ contract MasterChefPowerIndexConnector is AbstractStakeRedeemConnector {
     address _piToken,
     uint256 _masterChefPid
   ) AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e12) {
-    //6 hours with 13ms block
     MASTER_CHEF_PID = _masterChefPid;
   }
 
