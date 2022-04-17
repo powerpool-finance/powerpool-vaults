@@ -20,10 +20,7 @@ contract MockBProtocolConnector is BProtocolPowerIndexConnector {
     address _rewardsToken,
     bytes32 _pId,
     address _swapper
-  )
-    public
-    BProtocolPowerIndexConnector(_assetManager, _staking, _underlying, _vault, _stabilityPool, _rewardsToken, _pId)
-  {
+  ) BProtocolPowerIndexConnector(_assetManager, _staking, _underlying, _vault, _stabilityPool, _rewardsToken, _pId) {
     swapper = MockSwapper(_swapper);
   }
 
@@ -31,7 +28,7 @@ contract MockBProtocolConnector is BProtocolPowerIndexConnector {
     swapper.swap(address(REWARDS_TOKEN), address(UNDERLYING), _rewardsAmount);
   }
 
-  function getSwapperAddress() public override returns (address) {
+  function getSwapperAddress() public view override returns (address) {
     return address(swapper);
   }
 }

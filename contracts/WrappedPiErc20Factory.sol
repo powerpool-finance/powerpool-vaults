@@ -6,7 +6,7 @@ import "./WrappedPiErc20.sol";
 import "./interfaces/WrappedPiErc20FactoryInterface.sol";
 
 contract WrappedPiErc20Factory is WrappedPiErc20FactoryInterface {
-  constructor() public {}
+  constructor() {}
 
   function build(
     address _underlyingToken,

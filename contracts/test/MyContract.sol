@@ -8,7 +8,7 @@ contract MyContract is Ownable {
   uint256 internal theAnswer;
   uint256 internal theAnswer2;
 
-  constructor() public Ownable() {}
+  constructor() Ownable() {}
 
   function setAnswer(uint256 _theAnswer) external onlyOwner returns (uint256) {
     theAnswer = _theAnswer;

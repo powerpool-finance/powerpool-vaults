@@ -13,7 +13,7 @@ contract MockRouter is PowerIndexVaultRouter {
     address _piToken,
     address _underlying,
     BasicConfig memory _basicConfig
-  ) public PowerIndexVaultRouter(_piToken, _underlying, _basicConfig) {}
+  ) PowerIndexVaultRouter(_piToken, _underlying, _basicConfig) {}
 
   function piTokenCallback(address, uint256 _withdrawAmount) external payable virtual override {
     emit MockWrapperCallback(_withdrawAmount);

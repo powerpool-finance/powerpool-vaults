@@ -8,7 +8,7 @@ contract MockAutoMasterChef {
   address token;
   uint256 swt;
 
-  constructor(address _token, uint256 _swt) public {
+  constructor(address _token, uint256 _swt) {
     token = _token;
     swt = _swt;
   }

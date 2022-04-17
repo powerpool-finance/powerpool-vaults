@@ -12,7 +12,7 @@ contract MockChainLinkPriceOracle is AggregatorV3Interface {
   uint80 internal latestRound;
   mapping(uint80 => int256) internal answers;
 
-  constructor(int256 latestAnswer_) public {
+  constructor(int256 latestAnswer_) {
     _latestAnswer = latestAnswer_;
     latestRound = 41;
     answers[41] = _latestAnswer;
@@ -24,7 +24,7 @@ contract MockChainLinkPriceOracle is AggregatorV3Interface {
     answers[latestRound] = latestAnswer_;
   }
 
-  function latestAnswer() public returns (int256) {
+  function latestAnswer() public view returns (int256) {
     return answers[latestRound];
   }
 

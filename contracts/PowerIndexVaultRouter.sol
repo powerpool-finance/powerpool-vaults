@@ -14,7 +14,7 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
     address _assetsHolder,
     address _underlying,
     BasicConfig memory _basicConfig
-  ) public AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {}
+  ) AbstractPowerIndexRouter(_assetsHolder, _underlying, _basicConfig) {}
 
   /**
    * @notice Set piERC20 ETH fee for deposit and withdrawal functions.

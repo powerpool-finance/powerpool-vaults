@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
@@ -9,9 +11,9 @@ contract MockTornPowerIndexConnector is TornPowerIndexConnector {
     address _underlying,
     address _piToken,
     address _governance
-  ) public TornPowerIndexConnector(_staking, _underlying, _piToken, _governance) {}
+  ) TornPowerIndexConnector(_staking, _underlying, _piToken, _governance) {}
 
-  function getTornPriceRatio() public view override returns (uint256) {
+  function getTornPriceRatio() public pure override returns (uint256) {
     return 15000000000000000;
   }
 }

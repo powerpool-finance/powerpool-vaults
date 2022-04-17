@@ -6,7 +6,7 @@ contract MockOracle {
   mapping(address => uint256) public prices;
   mapping(address => address) public wrappers;
 
-  constructor() public {}
+  constructor() {}
 
   function setPrice(address token, uint256 price) public {
     prices[token] = price;
