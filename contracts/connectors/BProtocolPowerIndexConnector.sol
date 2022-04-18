@@ -169,7 +169,8 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
     // transfer fee to receiver
     if (amountToRedeem > _amount) {
-      IERC20(UNDERLYING).transfer(_distributeData.performanceFeeReceiver, underlyingFee);
+      // send the rest UNDERLYING(fee amount)
+      IERC20(UNDERLYING).transfer(_distributeData.performanceFeeReceiver, UNDERLYING.balanceOf(address(this)));
       underlyingEarned = 0;
     }
 
