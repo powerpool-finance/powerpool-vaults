@@ -89,7 +89,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _feeReceiver,
     uint256 _amount
   ) internal override {
-    //TODO: check that underlying LUSD or LQTY
     _underlying.transfer(_feeReceiver, _amount);
   }
 
@@ -132,7 +131,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function ethBammBalance() public view returns (uint256) {
-    return STAKING.balance + IStabilityPool(STABILITY_POOL).getDepositorETHGain(STAKING);
+    return STAKING.balance.add(IStabilityPool(STABILITY_POOL).getDepositorETHGain(STAKING));
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData)
@@ -354,7 +353,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   function getUnderlyingTotal() external view override returns (uint256) {
     // getUnderlyingReserve + getUnderlyingStaked
-    return getUnderlyingReserve() + getUnderlyingStaked();
+    return getUnderlyingReserve().add(getUnderlyingStaked());
   }
 
   function getSharesByUnderlying(uint256 lusdAmount) external view returns (uint256) {

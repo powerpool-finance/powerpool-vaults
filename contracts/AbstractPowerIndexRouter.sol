@@ -329,7 +329,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
   }
 
   function claimRewardsIntervalReached(uint256 _lastClaimRewardsAt) public view returns (bool) {
-    return _lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
+    return _lastClaimRewardsAt.add(claimRewardsInterval) < block.timestamp;
   }
 
   function getAssetsHolderUnderlyingBalance() public view virtual returns (uint256);
@@ -411,8 +411,8 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     }
     return
       _isSlasher
-        ? (lastRebalancedAt + _maxInterval < block.timestamp)
-        : (lastRebalancedAt + _minInterval < block.timestamp);
+        ? (lastRebalancedAt.add(_maxInterval) < block.timestamp)
+        : (lastRebalancedAt.add(_minInterval) < block.timestamp);
   }
 
   /**
