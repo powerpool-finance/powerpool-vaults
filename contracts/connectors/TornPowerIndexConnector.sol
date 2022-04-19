@@ -25,7 +25,7 @@ contract TornPowerIndexConnector is AbstractConnector {
     address _governance
   )
     // 1e18 for 100% / (6 hours * 60 * 60) seconds ~= 46e12 degradation per 1 second
-    AbstractProfitDistributionConnector(46e12)
+    AbstractConnector(46e12)
   {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
