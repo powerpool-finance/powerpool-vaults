@@ -17,6 +17,8 @@ License; No Warranties; Limitation of Liability;
 (c) IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+import "../../interfaces/IERC20Decimals.sol";
+
 // Sources flattened with hardhat v2.8.3 https://hardhat.org
 
 // File contracts/Interfaces/IBorrowerOperations.sol
@@ -324,101 +326,6 @@ pragma solidity ^0.7.0;
 
 interface ILiquityBase {
   function priceFeed() external view returns (IPriceFeed);
-}
-
-// File contracts/Dependencies/IERC20.sol
-
-pragma solidity ^0.7.0;
-
-/**
- * Based on the OpenZeppelin IER20 interface:
- * https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol
- *
- * @dev Interface of the ERC20 standard as defined in the EIP.
- */
-interface IERC20 {
-  /**
-   * @dev Returns the amount of tokens in existence.
-   */
-  function totalSupply() external view returns (uint256);
-
-  /**
-   * @dev Returns the amount of tokens owned by `account`.
-   */
-  function balanceOf(address account) external view returns (uint256);
-
-  /**
-   * @dev Moves `amount` tokens from the caller's account to `recipient`.
-   *
-   * Returns a boolean value indicating whether the operation succeeded.
-   *
-   * Emits a {Transfer} event.
-   */
-  function transfer(address recipient, uint256 amount) external returns (bool);
-
-  /**
-   * @dev Returns the remaining number of tokens that `spender` will be
-   * allowed to spend on behalf of `owner` through {transferFrom}. This is
-   * zero by default.
-   *
-   * This value changes when {approve} or {transferFrom} are called.
-   */
-  function allowance(address owner, address spender) external view returns (uint256);
-
-  function increaseAllowance(address spender, uint256 addedValue) external returns (bool);
-
-  function decreaseAllowance(address spender, uint256 subtractedValue) external returns (bool);
-
-  /**
-   * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
-   *
-   * Returns a boolean value indicating whether the operation succeeded.
-   *
-   * IMPORTANT: Beware that changing an allowance with this method brings the risk
-   * that someone may use both the old and the new allowance by unfortunate
-   * transaction ordering. One possible solution to mitigate this race
-   * condition is to first reduce the spender's allowance to 0 and set the
-   * desired value afterwards:
-   * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
-   *
-   * Emits an {Approval} event.
-   */
-  function approve(address spender, uint256 amount) external returns (bool);
-
-  /**
-   * @dev Moves `amount` tokens from `sender` to `recipient` using the
-   * allowance mechanism. `amount` is then deducted from the caller's
-   * allowance.
-   *
-   * Returns a boolean value indicating whether the operation succeeded.
-   *
-   * Emits a {Transfer} event.
-   */
-  function transferFrom(
-    address sender,
-    address recipient,
-    uint256 amount
-  ) external returns (bool);
-
-  function name() external view returns (string memory);
-
-  function symbol() external view returns (string memory);
-
-  function decimals() external view returns (uint8);
-
-  /**
-   * @dev Emitted when `value` tokens are moved from one account (`from`) to
-   * another (`to`).
-   *
-   * Note that `value` may be zero.
-   */
-  event Transfer(address indexed from, address indexed to, uint256 value);
-
-  /**
-   * @dev Emitted when the allowance of a `spender` for an `owner` is set by
-   * a call to {approve}. `value` is the new allowance.
-   */
-  event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
 // File contracts/Dependencies/IERC2612.sol
@@ -6337,31 +6244,13 @@ interface VatLike {
   ) external;
 }
 
-interface ERC20 {
-  function balanceOf(address owner) external view returns (uint256);
-
-  function transfer(address dst, uint256 amount) external returns (bool);
-
-  function transferFrom(
-    address src,
-    address dst,
-    uint256 amount
-  ) external returns (bool);
-
-  function approve(address spender, uint256 amount) external returns (bool);
-
-  function allowance(address owner, address spender) external view returns (uint256);
-
-  function decimals() external returns (uint8);
-}
-
 // receives tokens and shares them among holders
 contract CropJoin {
   VatLike public immutable vat; // cdp engine
   bytes32 public immutable ilk; // collateral type
-  ERC20 public immutable gem; // collateral token
+  IERC20 public immutable gem; // collateral token
   uint256 public immutable dec; // gem decimals
-  ERC20 public immutable bonus; // rewards token
+  IERC20 public immutable bonus; // rewards token
 
   uint256 public share; // crops per gem    [ray]
   uint256 public total; // total gems       [wad]
@@ -6387,14 +6276,14 @@ contract CropJoin {
   ) {
     vat = VatLike(vat_);
     ilk = ilk_;
-    gem = ERC20(gem_);
-    uint256 dec_ = ERC20(gem_).decimals();
+    gem = IERC20(gem_);
+    uint256 dec_ = IERC20Decimals(gem_).decimals();
     require(dec_ <= 18);
     dec = dec_;
     to18ConversionFactor = 10**(18 - dec_);
     toGemConversionFactor = 10**dec_;
 
-    bonus = ERC20(bonus_);
+    bonus = IERC20(bonus_);
   }
 
   function add(uint256 x, uint256 y) public pure returns (uint256 z) {
@@ -6509,7 +6398,7 @@ contract CropJoin {
 
 pragma solidity ^0.7.0;
 
-// NOTE! - this is not an ERC20 token. transfer is not supported.
+// NOTE! - this is not an IERC20 token. transfer is not supported.
 contract CropJoinAdapter is CropJoin {
   string public constant name = "B.AMM LUSD-ETH";
   string public constant symbol = "LUSDETH";
