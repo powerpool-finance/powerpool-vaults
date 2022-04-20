@@ -23,7 +23,11 @@ contract TornPowerIndexConnector is AbstractConnector {
     address _underlying,
     address _piToken,
     address _governance
-  ) public AbstractConnector(46e14) {
+  )
+    public
+    // 1e18 for 100% / (6 hours * 60 * 60) seconds ~= 46e12 degradation per 1 second
+    AbstractConnector(46e12)
+  {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
