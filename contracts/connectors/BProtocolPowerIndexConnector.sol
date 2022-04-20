@@ -75,7 +75,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function _swapRewardsToUnderlying(uint256 _rewardsAmount) internal virtual {
-    UniswapV3OracleHelper.swapByMiddleWeth(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
+    UniswapV3OracleHelper.swapByTwoMiddleWethDai(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
   }
 
   function getSwapperAddress() public virtual returns (address) {
