@@ -488,5 +488,14 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(await web3.eth.getBalance(assetManager.address), '0');
       assert.equal(await web3.eth.getBalance(pvp), ether('10000.1'));
     });
+
+    it('should migrate successfully', async () => {
+      const newRouter = alice;
+      const data = web3.eth.abi.encodeParameters(['uint256', 'uint256[]'], [0, [ether(2e6), ether(2e6)]]);
+      await expectRevert(assetManager.migrateToNewAssetManager(data, newRouter, []), 'Ownable');
+      const res = await assetManager.migrateToNewAssetManager(data, newRouter, [], {from: piGov});
+      const testMigrate = BProtocolPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'TestMigrate')[0];
+      assert.equal(testMigrate.args.migrateData, data);
+    });
   });
 });

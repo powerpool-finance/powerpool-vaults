@@ -8,6 +8,7 @@ import "./MockSwapper.sol";
 
 contract MockBProtocolConnector is BProtocolPowerIndexConnector {
   event MockWrapperCallback(uint256 withdrawAmount);
+  event TestMigrate(bytes migrateData);
 
   MockSwapper immutable swapper;
 
@@ -30,5 +31,9 @@ contract MockBProtocolConnector is BProtocolPowerIndexConnector {
 
   function getSwapperAddress() public view override returns (address) {
     return address(swapper);
+  }
+
+  function migrate(bytes calldata _migrateData) external virtual override {
+    emit TestMigrate(_migrateData);
   }
 }
