@@ -23,4 +23,8 @@ contract AssetManager is AbstractPowerIndexRouter {
     }
     return balance;
   }
+
+  function sendEthToPerformanceFeeReceiver() public onlyOwner {
+    require(payable(performanceFeeReceiver).send(address(this).balance), "FAILED");
+  }
 }

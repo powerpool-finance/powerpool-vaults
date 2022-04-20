@@ -472,5 +472,21 @@ describe('LUSDAssetManager Tests', () => {
         '592603',
       );
     });
+
+    it('should send eth to perfomance fee receiver', async () => {
+      await web3.eth.sendTransaction({
+        value: ether(0.1),
+        from: deployer,
+        to: assetManager.address,
+      })
+      assert.equal(await web3.eth.getBalance(assetManager.address), ether(0.1));
+      assert.equal(await web3.eth.getBalance(pvp), ether('10000'));
+
+      await expectRevert(assetManager.sendEthToPerformanceFeeReceiver({from: deployer}), 'Ownable');
+      await assetManager.sendEthToPerformanceFeeReceiver({from: piGov});
+
+      assert.equal(await web3.eth.getBalance(assetManager.address), '0');
+      assert.equal(await web3.eth.getBalance(pvp), ether('10000.1'));
+    });
   });
 });
