@@ -24,6 +24,7 @@ contract TornPowerIndexConnector is AbstractConnector {
     address _piToken,
     address _governance
   )
+    public
     // 1e18 for 100% / (6 hours * 60 * 60) seconds ~= 46e12 degradation per 1 second
     AbstractConnector(46e12)
   {
