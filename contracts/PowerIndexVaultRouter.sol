@@ -6,8 +6,9 @@ pragma experimental ABIEncoderV2;
 import "./AbstractPowerIndexRouter.sol";
 import "./interfaces/WrappedPiErc20Interface.sol";
 import "./interfaces/IRouterLockedProfitConnector.sol";
+import "./interfaces/PowerIndexVaultRouterInterface.sol";
 
-contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
+contract PowerIndexVaultRouter is AbstractPowerIndexRouter, PowerIndexVaultRouterInterface {
   using SafeMath for uint256;
 
   constructor(
@@ -60,5 +61,28 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter {
   function getUnderlyingAvailable() public view override returns (uint256) {
     // assetsHolderUnderlyingBalance + getUnderlyingStaked - _calculateLockedProfit
     return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked()).sub(calculateLockedProfit());
+  }
+
+  function migrateToNewRouter(
+    address _piToken,
+    address payable _newRouter,
+    address[] memory _tokens
+  ) public virtual onlyOwner {
+    super.migrateToNewRouter(_newRouter, _tokens);
+
+    WrappedPiErc20Interface(_piToken).changeRouter(_newRouter);
+  }
+
+  function enableRouterCallback(address _piToken, bool _enable) public override onlyOwner {
+    WrappedPiErc20Interface(_piToken).enableRouterCallback(_enable);
+  }
+
+  function piTokenCallback(address sender, uint256 _withdrawAmount)
+    external
+    payable
+    virtual
+    override(PowerIndexVaultRouterInterface)
+  {
+    // DO NOTHING
   }
 }

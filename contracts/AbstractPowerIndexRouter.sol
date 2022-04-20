@@ -5,11 +5,11 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IPowerPoke.sol";
 import "./interfaces/IPoolRestrictions.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
-import "./PowerIndexNaiveRouter.sol";
 
 /**
  * @notice AbstractPowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
@@ -18,7 +18,7 @@ import "./PowerIndexNaiveRouter.sol";
  * as the difference between total balance and share of necessary balance(reserveRatio) for keeping in piERC20
  * for withdrawals.
  */
-abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
+abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable {
   using SafeERC20 for IERC20;
   using SafeMath for uint256;
 
@@ -122,7 +122,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
     address _assetsHolder,
     address _underlying,
     BasicConfig memory _basicConfig
-  ) PowerIndexNaiveRouter() Ownable() {
+  ) Ownable() {
     require(_assetsHolder != address(0), "INVALID_ASSET_HOLDER");
     require(_basicConfig.reserveRatioUpperBound <= HUNDRED_PCT, "UPPER_RR_GREATER_THAN_100_PCT");
     require(_basicConfig.reserveRatio >= _basicConfig.reserveRatioLowerBound, "RR_LTE_LOWER_RR");
@@ -240,17 +240,10 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, PowerIn
 
   /**
    * @notice Transfer ERC20 balances and rights to a new router address.
-   * @param _piToken piERC20 address.
    * @param _newRouter New router contract address.
    * @param _tokens ERC20 to transfer.
    */
-  function migrateToNewRouter(
-    address _piToken,
-    address payable _newRouter,
-    address[] memory _tokens
-  ) public override onlyOwner {
-    super.migrateToNewRouter(_piToken, _newRouter, _tokens);
-
+  function migrateToNewRouter(address payable _newRouter, address[] memory _tokens) public virtual onlyOwner {
     _newRouter.transfer(address(this).balance);
 
     uint256 len = _tokens.length;
