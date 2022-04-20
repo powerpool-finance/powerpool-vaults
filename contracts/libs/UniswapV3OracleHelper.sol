@@ -129,11 +129,11 @@ library UniswapV3OracleHelper {
     IERC20(_tokenFrom).approve(address(UniswapV3Router), _amountIn);
 
     ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-    path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, DAI, poolFee, _tokenTo),
-    recipient: msg.sender,
-    deadline: block.timestamp,
-    amountIn: _amountIn,
-    amountOutMinimum: 0
+      path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, DAI, poolFee, _tokenTo),
+      recipient: msg.sender,
+      deadline: block.timestamp,
+      amountIn: _amountIn,
+      amountOutMinimum: 0
     });
 
     // Executes the swap.
