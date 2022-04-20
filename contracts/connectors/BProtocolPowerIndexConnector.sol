@@ -232,7 +232,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
    * @notice Checking: is pending rewards enough to reinvest
    * @param _claimParams Claim parameters, that stored in PowerIndexRouter
    */
-  function isClaimAvailable(bytes calldata _claimParams) external view virtual returns (bool) {
+  function isClaimAvailable(
+    bytes calldata _claimParams,
+    uint256, /*_lastClaimRewardsAt*/
+    uint256 /*_lastChangeStakeAt*/
+  ) external view virtual override returns (bool) {
     uint256 minClaimAmount = unpackClaimParams(_claimParams);
     return REWARDS_TOKEN.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minClaimAmount;
   }

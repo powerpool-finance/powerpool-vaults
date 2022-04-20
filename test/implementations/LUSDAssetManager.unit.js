@@ -418,7 +418,7 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(stakeParams.minLUSDToDistribute, ether('1000'));
       await time.increase(time.duration.minutes(60));
       await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
-      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), true);
+      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams, '0', '0'), true);
 
       let underlyingStaked = await connector.getUnderlyingStakedWithShares();
       assert.equal(underlyingStaked.shares, '1565265736462611586167109');
@@ -427,7 +427,7 @@ describe('LUSDAssetManager Tests', () => {
       underlyingStaked = await connector.getUnderlyingStakedWithShares();
       assert.equal(underlyingStaked.shares, '1566856098808651890937915');
       assert.equal(await lqty.balanceOf(pvp), '569641911827476325685');
-      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), false);
+      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams, '0', '0'), false);
 
       await vault.swap(
         {
@@ -449,7 +449,7 @@ describe('LUSDAssetManager Tests', () => {
       );
 
       await time.increase(time.duration.minutes(60));
-      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), false);
+      assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams, '0', '0'), false);
 
       assert.equal(
         await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
