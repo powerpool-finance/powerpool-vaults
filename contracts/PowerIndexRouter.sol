@@ -34,6 +34,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     bool indexed isNewConnector
   );
   event SetConnectorClaimParams(address connector, bytes claimParams);
+  event SetConnectorStakeParams(address connector, bytes stakeParams);
 
   struct BasicConfig {
     address poolRestrictions;
@@ -78,6 +79,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 lastChangeStakeAt;
     bytes stakeData;
     bytes pokeData;
+    bytes stakeParams;
     bytes claimParams;
   }
 
@@ -197,7 +199,17 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
       if (c.newConnector) {
         connectors.push(
-          Connector(c.connector, c.share, c.callBeforeAfterPoke, 0, 0, new bytes(0), new bytes(0), new bytes(0))
+          Connector(
+            c.connector,
+            c.share,
+            c.callBeforeAfterPoke,
+            0,
+            0,
+            new bytes(0),
+            new bytes(0),
+            new bytes(0),
+            new bytes(0)
+          )
         );
         c.connectorIndex = connectors.length - 1;
       } else {
@@ -219,6 +231,16 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   function setClaimParams(uint256 _connectorIndex, bytes memory _claimParams) external onlyOwner {
     connectors[_connectorIndex].claimParams = _claimParams;
     emit SetConnectorClaimParams(address(connectors[_connectorIndex].connector), _claimParams);
+  }
+
+  /**
+   * @notice Set connector stake params to pass it to connector.
+   * @param _connectorIndex Index of connector
+   * @param _stakeParams Claim params
+   */
+  function setStakeParams(uint256 _connectorIndex, bytes memory _stakeParams) external onlyOwner {
+    connectors[_connectorIndex].stakeParams = _stakeParams;
+    emit SetConnectorStakeParams(address(connectors[_connectorIndex].connector), _stakeParams);
   }
 
   /**
@@ -417,14 +439,14 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    * @notice Call redeem in the connector with delegatecall, save result stakeData if not null.
    */
   function _redeem(Connector storage _c, uint256 _diff) internal {
-    _callStakeRedeem("redeem(uint256,(bytes,uint256,address))", _c, _diff);
+    _callStakeRedeem("redeem(uint256,(bytes,bytes,uint256,address))", _c, _diff);
   }
 
   /**
    * @notice Call stake in the connector with delegatecall, save result `stakeData` if not null.
    */
   function _stake(Connector storage _c, uint256 _diff) internal {
-    _callStakeRedeem("stake(uint256,(bytes,uint256,address))", _c, _diff);
+    _callStakeRedeem("stake(uint256,(bytes,bytes,uint256,address))", _c, _diff);
   }
 
   function _callStakeRedeem(
@@ -571,10 +593,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
 
     if (shouldClaim && _c.claimParams.length != 0) {
       shouldClaim = _c.connector.isClaimAvailable(_c.claimParams, _c.lastClaimRewardsAt, _c.lastChangeStakeAt);
-    }
-
-    if (status == StakeStatus.EQUILIBRIUM && shouldClaim) {
-      forceRebalance = true;
+      if (shouldClaim && !forceRebalance) {
+        forceRebalance = true;
+      }
     }
   }
 
@@ -787,7 +808,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function _getDistributeData(Connector storage c) internal view returns (IRouterConnector.DistributeData memory) {
-    return IRouterConnector.DistributeData(c.stakeData, performanceFee, performanceFeeReceiver);
+    return IRouterConnector.DistributeData(c.stakeData, c.stakeParams, performanceFee, performanceFeeReceiver);
   }
 
   function _checkConnectorsTotalShare() internal view {
