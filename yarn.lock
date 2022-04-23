@@ -932,6 +932,15 @@
     "@powerpool/balancer-v2-solidity-utils" "2.0.0"
     "@powerpool/balancer-v2-vault" "2.0.1"
 
+"@powerpool/balancer-v2-pool-weighted@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@powerpool/balancer-v2-pool-weighted/-/balancer-v2-pool-weighted-2.0.1.tgz#a363e37ef497a9fadb4d41a631c5afed2a345417"
+  integrity sha512-cnJ/593h/q+Zu+YnVPd1bq1G5Q8hmVsI/ufy8Gusx1kHYEE1RCdCDbGEcHLVUHkpDo/DDzWjrH8f+UaetmBSYA==
+  dependencies:
+    "@powerpool/balancer-v2-pool-utils" "2.0.3"
+    "@powerpool/balancer-v2-solidity-utils" "2.0.0"
+    "@powerpool/balancer-v2-vault" "2.0.1"
+
 "@powerpool/balancer-v2-solidity-utils@2.0.0":
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/@powerpool/balancer-v2-solidity-utils/-/balancer-v2-solidity-utils-2.0.0.tgz#8e78947eb81f11ee83bed4063a7d83bc79304c81"
