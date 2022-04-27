@@ -23,7 +23,11 @@ contract TornPowerIndexConnector is AbstractConnector {
     address _underlying,
     address _piToken,
     address _governance
-  ) public AbstractConnector(46e14) {
+  )
+    public
+    // 1e18 for 100% / (6 hours * 60 * 60) seconds ~= 46e12 degradation per 1 second
+    AbstractConnector(46e12)
+  {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
     PI_TOKEN = WrappedPiErc20Interface(_piToken);
@@ -84,24 +88,8 @@ contract TornPowerIndexConnector is AbstractConnector {
 
   /*** VIEWERS ***/
 
-  function getPendingRewards() public view returns (uint256) {
+  function getPendingRewards() external view returns (uint256) {
     return ITornStaking(STAKING).checkReward(address(PI_TOKEN));
-  }
-
-  function accumulatedRewardPerTorn() public view returns (uint256) {
-    return ITornStaking(STAKING).accumulatedRewardPerTorn();
-  }
-
-  function accumulatedReward() public view returns (uint256) {
-    return ITornStaking(STAKING).accumulatedRewards(address(PI_TOKEN));
-  }
-
-  function accumulatedRewardRateOnLastUpdate() public view returns (uint256) {
-    return ITornStaking(STAKING).accumulatedRewardRateOnLastUpdate(address(PI_TOKEN));
-  }
-
-  function accumulatedRewardRateDiffForLastUpdate() public view returns (uint256) {
-    return accumulatedRewardPerTorn().sub(accumulatedRewardRateOnLastUpdate());
   }
 
   /**
@@ -117,7 +105,7 @@ contract TornPowerIndexConnector is AbstractConnector {
   ) public view returns (uint256) {
     return
       _lockedBalance.mul(_accRewardPerTorn.sub(_accRewardRateOnLastUpdate)).div(RATIO_CONSTANT).add(
-        accumulatedReward()
+        ITornStaking(STAKING).accumulatedRewards(address(PI_TOKEN))
       );
   }
 
@@ -165,8 +153,8 @@ contract TornPowerIndexConnector is AbstractConnector {
   {
     uint256 lastUpdate = _lastClaimRewardsAt > _lastChangeStakeAt ? _lastClaimRewardsAt : _lastChangeStakeAt;
     uint256 lockedBalance = getUnderlyingStaked();
-    uint256 accRewardPerTorn = accumulatedRewardPerTorn();
-    uint256 accRewardOnLastUpdate = accumulatedRewardRateOnLastUpdate();
+    uint256 accRewardPerTorn = ITornStaking(STAKING).accumulatedRewardPerTorn();
+    uint256 accRewardOnLastUpdate = ITornStaking(STAKING).accumulatedRewardRateOnLastUpdate(address(PI_TOKEN));
     pending = pendingReward(accRewardPerTorn, accRewardOnLastUpdate, lockedBalance);
 
     return (
@@ -226,16 +214,7 @@ contract TornPowerIndexConnector is AbstractConnector {
    * @param _tornAmountIn TORN amount to convert
    */
   function calcWethOutByTornIn(uint256 _tornAmountIn) external view returns (uint256) {
-    return calcWethOutByTornInWithRatio(_tornAmountIn, getTornPriceRatio());
-  }
-
-  /**
-   * @notice Convert TORN amount to WETH amount by provided rario
-   * @param _tornAmount TORN amount to convert
-   * @param _ratio Uniswap V3 ratio
-   */
-  function calcWethOutByTornInWithRatio(uint256 _tornAmount, uint256 _ratio) public pure returns (uint256) {
-    return _tornAmount.mul(_ratio).div(UniswapV3OracleHelper.RATIO_DIVIDER);
+    return _tornAmountIn.mul(getTornPriceRatio()).div(UniswapV3OracleHelper.RATIO_DIVIDER);
   }
 
   /**
@@ -243,22 +222,13 @@ contract TornPowerIndexConnector is AbstractConnector {
    * @param _wethAmount WETH amount to convert
    */
   function calcTornOutByWethIn(uint256 _wethAmount) public view returns (uint256) {
-    return calcTornOutByWethInWithRatio(_wethAmount, getTornPriceRatio());
-  }
-
-  /**
-   * @notice Convert WETH amount to TORN amount with provided ratio
-   * @param _wethAmount WETH amount to convert
-   * @param _ratio Uniswap V3 ratio
-   */
-  function calcTornOutByWethInWithRatio(uint256 _wethAmount, uint256 _ratio) public pure returns (uint256) {
-    return _wethAmount.mul(UniswapV3OracleHelper.RATIO_DIVIDER).div(_ratio);
+    return _wethAmount.mul(UniswapV3OracleHelper.RATIO_DIVIDER).div(getTornPriceRatio());
   }
 
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(uint256 paybackDuration, uint256 gasToReinvest) public pure returns (bytes memory) {
+  function packClaimParams(uint256 paybackDuration, uint256 gasToReinvest) external pure returns (bytes memory) {
     return abi.encode(paybackDuration, gasToReinvest);
   }
 

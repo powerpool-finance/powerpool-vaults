@@ -9,6 +9,7 @@ import "../interfaces/PowerIndexRouterInterface.sol";
 interface IRouterConnector {
   struct DistributeData {
     bytes stakeData;
+    bytes stakeParams;
     uint256 performanceFee;
     address performanceFeeReceiver;
   }

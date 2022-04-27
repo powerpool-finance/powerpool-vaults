@@ -4,11 +4,8 @@ require('@nomiclabs/hardhat-ethers');
 task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers, network}) => {
   const {ether, fromEther, impersonateAccount, gwei, increaseTime, advanceBlocks} = require('../test/helpers');
   const WrappedPiErc20 = await artifacts.require('WrappedPiErc20');
-  const IERC20 = await artifacts.require('IERC20');
+  const IERC20 = await artifacts.require(process.env.FLAT ? 'flatten/PowerIndexRouter.sol:IERC20' : '@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20');
   const PowerIndexRouter = await artifacts.require('PowerIndexRouter');
-  const PowerPoke = await artifacts.require('PowerPoke');
-  const ITornGovernance = await artifacts.require('ITornGovernance');
-  const ITornStaking = await artifacts.require('ITornStaking');
   const TornPowerIndexConnector = await artifacts.require('TornPowerIndexConnector');
 
   if (process.env.FORK) {
@@ -18,15 +15,17 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   const { web3 } = WrappedPiErc20;
 
   const [deployer] = await web3.eth.getAccounts();
+  console.log('deployer', deployer);
   const sendOptions = { from: deployer };
 
   const OWNER = '0xB258302C3f209491d604165549079680708581Cc';
 
   const TORN_STAKING = '0x2fc93484614a34f26f7970cbb94615ba109bb4bf';
   const TORN_GOVERNANCE = '0x5efda50f22d34f262c29268506c5fa42cb56a1ce';
-  const torn = await IERC20.at('0x77777feddddffc19ff86db637967013e6c6a116c');
-  const piTorn = await WrappedPiErc20.new(torn.address, deployer, 'Wrapped Torn', 'piTORN');
-  console.log('piTorn', piTorn.address);
+  const tornAddress = '0x77777feddddffc19ff86db637967013e6c6a116c';
+  const startBalance = fromEther(await web3.eth.getBalance(deployer));
+  const piTorn = await WrappedPiErc20.new(tornAddress, deployer, 'PowerPool Torn Vault', 'ppTORN');
+  console.log('piTorn', piTorn.address, 'name', await piTorn.name(), 'symbol', await piTorn.symbol());
 
   const tornRouter = await PowerIndexRouter.new(
     piTorn.address,
@@ -43,7 +42,7 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   );
   console.log('tornRouter', tornRouter.address);
 
-  const tornConnector = await TornPowerIndexConnector.new(TORN_STAKING, torn.address, piTorn.address, TORN_GOVERNANCE);
+  const tornConnector = await TornPowerIndexConnector.new(TORN_STAKING, tornAddress, piTorn.address, TORN_GOVERNANCE);
   console.log('tornConnector', tornConnector.address);
   // console.log('calcTornOutByWethIn', fromEther(await tornConnector.calcTornOutByWethIn(ether('0.1'))));
   // console.log('calcWethOutByTornIn', fromEther(await tornConnector.calcWethOutByTornIn(ether('5.38727'))));
@@ -65,11 +64,18 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   // console.log('getUnderlyingAvailable', await tornRouter.getUnderlyingAvailable());
   // console.log('getPiEquivalentForUnderlying', await tornRouter.getPiEquivalentForUnderlying(ether(1), '0'));
 
+  await tornRouter.initRouterByConnector('0', '0x', sendOptions);
   await tornRouter.transferOwnership(OWNER, sendOptions);
-
+  const endBalance = fromEther(await web3.eth.getBalance(deployer));
+  console.log('balance spent', startBalance - endBalance);
   if (network.name !== 'mainnetfork') {
     return;
   }
+  const PowerPoke = await artifacts.require('IPowerPoke');
+  const ITornGovernance = await artifacts.require('ITornGovernance');
+  const ITornStaking = await artifacts.require('ITornStaking');
+
+  const torn = await IERC20.at(tornAddress);
 
   const tornHolder = '0xf977814e90da44bfa03b6295a0616a897441acec';
   const pokerReporter = '0xabdf215fce6c5b0c1b40b9f2068204a9e7c49627';
@@ -132,12 +138,13 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
 
   await increaseTime(TEN_HOURS);
   await advanceBlocks(1);
-  await staking.addBurnRewards(ether(1700), {from: TORN_GOVERNANCE});
+  await staking.addBurnRewards(ether(2700), {from: TORN_GOVERNANCE});
   console.log('checkReward 3', fromEther(await staking.checkReward(piTorn.address)));
   await printForecast(TEN_HOURS);
   await checkClaimAvailability(TEN_HOURS);
 
-  await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
+  const res = await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
+  console.log('res.receipt.gasUsed', res.receipt.gasUsed);
 
   console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
 
