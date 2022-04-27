@@ -71,7 +71,7 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
   if (network.name !== 'mainnetfork') {
     return;
   }
-  const PowerPoke = await artifacts.require('PowerPoke');
+  const PowerPoke = await artifacts.require('IPowerPoke');
   const ITornGovernance = await artifacts.require('ITornGovernance');
   const ITornStaking = await artifacts.require('ITornStaking');
 
@@ -138,12 +138,13 @@ task('deploy-torn-vault', 'Deploy VestedLpMining').setAction(async (__, {ethers,
 
   await increaseTime(TEN_HOURS);
   await advanceBlocks(1);
-  await staking.addBurnRewards(ether(1700), {from: TORN_GOVERNANCE});
+  await staking.addBurnRewards(ether(2700), {from: TORN_GOVERNANCE});
   console.log('checkReward 3', fromEther(await staking.checkReward(piTorn.address)));
   await printForecast(TEN_HOURS);
   await checkClaimAvailability(TEN_HOURS);
 
-  await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
+  const res = await tornRouter.pokeFromReporter('1', true, powerPokeOpts, {from: pokerReporter});
+  console.log('res.receipt.gasUsed', res.receipt.gasUsed);
 
   console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
 
