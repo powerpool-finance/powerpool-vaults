@@ -1,7 +1,7 @@
 require('@nomiclabs/hardhat-truffle5');
 require('@nomiclabs/hardhat-ethers');
 
-task('deploy-torn-vault', 'Deploy TornVault').setAction(async (__, {ethers, network}) => {
+task('redeploy-torn-router', 'Redeploy TornRouter').setAction(async (__, {ethers, network}) => {
   const {ether, fromEther, impersonateAccount, gwei, increaseTime, advanceBlocks} = require('../test/helpers');
   const WrappedPiErc20 = await artifacts.require('WrappedPiErc20');
   const IERC20 = await artifacts.require(process.env.FLAT ? 'flatten/PowerIndexRouter.sol:IERC20' : '@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20');
@@ -19,22 +19,19 @@ task('deploy-torn-vault', 'Deploy TornVault').setAction(async (__, {ethers, netw
   const sendOptions = { from: deployer };
 
   const OWNER = '0xB258302C3f209491d604165549079680708581Cc';
+  const piTorn = await WrappedPiErc20.at('0x65ca07a894e00b6a264c897de956cb0afb63a44b');
+  const tornConnector = await TornPowerIndexConnector.at('0x4930A67E605520Fe13B3037c0f70A72848Bf3B79');
+  console.log('tornConnector', tornConnector.address);
 
-  const TORN_STAKING = '0x2fc93484614a34f26f7970cbb94615ba109bb4bf';
-  const TORN_GOVERNANCE = '0x5efda50f22d34f262c29268506c5fa42cb56a1ce';
-  const tornAddress = '0x77777feddddffc19ff86db637967013e6c6a116c';
   const startBalance = fromEther(await web3.eth.getBalance(deployer));
-  const piTorn = await WrappedPiErc20.new(tornAddress, deployer, 'PowerPool Torn Vault', 'ppTORN');
-  console.log('piTorn', piTorn.address, 'name', await piTorn.name(), 'symbol', await piTorn.symbol());
-
   const tornRouter = await PowerIndexRouter.new(
     piTorn.address,
     {
       poolRestrictions: '0x698967cA2fB85A6D9a7D2BeD4D2F6D32Bbc5fCdc',
       powerPoke: '0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96',
-      reserveRatio: ether(0.1),
-      reserveRatioLowerBound: ether(0.01),
-      reserveRatioUpperBound: ether(0.2),
+      reserveRatio: '0',
+      reserveRatioLowerBound: '0',
+      reserveRatioUpperBound: '0',
       claimRewardsInterval: '604800',
       performanceFeeReceiver: '0xd132973eaebbd6d7ca7b88e9170f2cca058de430',
       performanceFee: ether(0.003)
@@ -42,10 +39,6 @@ task('deploy-torn-vault', 'Deploy TornVault').setAction(async (__, {ethers, netw
   );
   console.log('tornRouter', tornRouter.address);
 
-  const tornConnector = await TornPowerIndexConnector.new(TORN_STAKING, tornAddress, piTorn.address, TORN_GOVERNANCE);
-  console.log('tornConnector', tornConnector.address);
-  // console.log('calcTornOutByWethIn', fromEther(await tornConnector.calcTornOutByWethIn(ether('0.1'))));
-  // console.log('calcWethOutByTornIn', fromEther(await tornConnector.calcWethOutByTornIn(ether('5.38727'))));
   await tornRouter.setConnectorList([
     {
       connector: tornConnector.address,
@@ -55,16 +48,8 @@ task('deploy-torn-vault', 'Deploy TornVault').setAction(async (__, {ethers, netw
       connectorIndex: 0,
     },
   ]);
-  await piTorn.changeRouter(tornRouter.address);
   console.log('tornConnector done');
-  // console.log('getUnderlyingReserve', await tornRouter.getUnderlyingReserve());
-  console.log('tornConnector.getTornPriceRatio', await tornConnector.getTornPriceRatio().then(r => r.toString()));
-  // console.log('router.getUnderlyingStaked', await tornRouter.getUnderlyingStaked());
-  // console.log('calculateLockedProfit', await tornRouter.calculateLockedProfit());
-  // console.log('getUnderlyingAvailable', await tornRouter.getUnderlyingAvailable());
-  // console.log('getPiEquivalentForUnderlying', await tornRouter.getPiEquivalentForUnderlying(ether(1), '0'));
 
-  await tornRouter.initRouterByConnector('0', '0x', sendOptions);
   await tornRouter.transferOwnership(OWNER, sendOptions);
   const endBalance = fromEther(await web3.eth.getBalance(deployer));
   console.log('balance spent', startBalance - endBalance);
@@ -75,7 +60,7 @@ task('deploy-torn-vault', 'Deploy TornVault').setAction(async (__, {ethers, netw
   const ITornGovernance = await artifacts.require('ITornGovernance');
   const ITornStaking = await artifacts.require('ITornStaking');
 
-  const torn = await IERC20.at(tornAddress);
+  const torn = await IERC20.at('0x77777feddddffc19ff86db637967013e6c6a116c');
 
   const tornHolder = '0xf977814e90da44bfa03b6295a0616a897441acec';
   const pokerReporter = '0xabdf215fce6c5b0c1b40b9f2068204a9e7c49627';
@@ -95,6 +80,9 @@ task('deploy-torn-vault', 'Deploy TornVault').setAction(async (__, {ethers, netw
   const MIN_SLASHING_DEPOSIT = ether(40);
 
   await impersonateAccount(ethers, OWNER);
+  const oldRouter = await PowerIndexRouter.at('0x0d0B8d93D9F099A0cB2e2dFE8362e88cf08C3094');
+  await oldRouter.migrateToNewRouter(piTorn.address, tornRouter.address, [], {from: OWNER});
+  await tornRouter.initRouterByConnector('0', '0x', {from: OWNER});
 
   const powerPokeAddress = '0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96';
   const cvpAddress = '0x38e4adb44ef08f22f5b5b76a8f0c2d0dcbe7dca1';
@@ -118,6 +106,8 @@ task('deploy-torn-vault', 'Deploy TornVault').setAction(async (__, {ethers, netw
   await tornRouter.pokeFromReporter('1', false, powerPokeOpts, {from: pokerReporter});
 
   console.log('3 wrapper balance', fromEther(await torn.balanceOf(piTorn.address)));
+  const TORN_STAKING = '0x2fc93484614a34f26f7970cbb94615ba109bb4bf';
+  const TORN_GOVERNANCE = '0x5efda50f22d34f262c29268506c5fa42cb56a1ce';
   const governance = await ITornGovernance.at(TORN_GOVERNANCE);
   const staking = await ITornStaking.at(TORN_STAKING);
   console.log('lockedBalance', fromEther(await governance.lockedBalance(piTorn.address)));
