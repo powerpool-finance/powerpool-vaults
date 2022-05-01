@@ -55,7 +55,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   IPowerPoke public powerPoke;
   uint256 public reserveRatio;
   uint256 public claimRewardsInterval;
-  uint256 public lastRebalancedAt;
+  uint256 public lastRebalancedByPokerAt;
   uint256 public reserveRatioLowerBound;
   uint256 public reserveRatioUpperBound;
   // 1 ether == 100%
@@ -96,6 +96,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 maxInterval;
     uint256 piTokenUnderlyingBalance;
     bool atLeastOneForceRebalance;
+    bool skipCanPokeCheck;
   }
 
   modifier onlyEOA() {
@@ -294,6 +295,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     require(success, string(result));
   }
 
+  function piTokenCallback(address sender, uint256 _withdrawAmount) external payable virtual override {
+    PokeFromState memory state = PokeFromState(0, 0, 0, false, true);
+    _rebalance(state, true, false);
+  }
+
   /**
    * @notice Call poke by Reporter.
    * @param _reporterId Reporter ID.
@@ -360,13 +366,22 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    * @param _isSlasher Calling by Slasher.
    */
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
-    PokeFromState memory state = PokeFromState(0, 0, 0, false);
+    PokeFromState memory state = PokeFromState(0, 0, 0, false, false);
     (state.minInterval, state.maxInterval) = _getMinMaxReportInterval();
 
-    state.piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
-    (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
+    _rebalance(state, _claimAndDistributeRewards, _isSlasher);
 
-    state.atLeastOneForceRebalance = false;
+    require(
+      _canPoke(_isSlasher, state.atLeastOneForceRebalance, state.minInterval, state.maxInterval),
+      "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
+    );
+
+    lastRebalancedByPokerAt = block.timestamp;
+  }
+
+  function _rebalance(PokeFromState memory s, bool _claimAndDistributeRewards, bool _isSlasher) internal {
+    s.piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
+    (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
@@ -377,19 +392,19 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
 
       (StakeStatus status, uint256 diff, bool shouldClaim, bool forceRebalance) = getStakeAndClaimStatus(
-        state.piTokenUnderlyingBalance,
+        s.piTokenUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[i],
         _claimAndDistributeRewards,
         connectors[i]
       );
       if (forceRebalance) {
-        state.atLeastOneForceRebalance = true;
+        s.atLeastOneForceRebalance = true;
       }
 
       if (status == StakeStatus.EXCESS) {
         // Calling rebalance immediately if interval conditions reached
-        if (_canPoke(_isSlasher, forceRebalance, state.minInterval, state.maxInterval)) {
+        if (s.skipCanPokeCheck || _canPoke(_isSlasher, forceRebalance, s.minInterval, s.maxInterval)) {
           _rebalancePokeByConf(RebalanceConfig(false, status, diff, shouldClaim, forceRebalance, i));
         }
       } else {
@@ -398,23 +413,16 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
     }
 
-    require(
-      _canPoke(_isSlasher, state.atLeastOneForceRebalance, state.minInterval, state.maxInterval),
-      "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
-    );
-
     // Second cycle: connectors with EQUILIBRIUM and SHORTAGE balance status on staking
     for (uint256 i = 0; i < connectors.length; i++) {
       if (!configs[i].shouldPushFunds) {
         continue;
       }
       // Calling rebalance if interval conditions reached
-      if (_canPoke(_isSlasher, configs[i].forceRebalance, state.minInterval, state.maxInterval)) {
+      if (s.skipCanPokeCheck || _canPoke(_isSlasher, configs[i].forceRebalance, s.minInterval, s.maxInterval)) {
         _rebalancePokeByConf(configs[i]);
       }
     }
-
-    lastRebalancedAt = block.timestamp;
   }
 
   /**
@@ -431,8 +439,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
     return
       _isSlasher
-        ? (lastRebalancedAt + _maxInterval < block.timestamp)
-        : (lastRebalancedAt + _minInterval < block.timestamp);
+        ? (lastRebalancedByPokerAt + _maxInterval < block.timestamp)
+        : (lastRebalancedByPokerAt + _minInterval < block.timestamp);
   }
 
   /**
