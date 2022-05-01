@@ -95,6 +95,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 minInterval;
     uint256 maxInterval;
     uint256 piTokenUnderlyingBalance;
+    uint256 addToExpectedAmount;
     bool atLeastOneForceRebalance;
     bool skipCanPokeCheck;
   }
@@ -296,8 +297,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function piTokenCallback(address sender, uint256 _withdrawAmount) external payable virtual override {
-    PokeFromState memory state = PokeFromState(0, 0, 0, false, true);
-    _rebalance(state, true, false);
+    PokeFromState memory state = PokeFromState(0, 0, 0, _withdrawAmount, false, true);
+    _rebalance(state, false, false);
   }
 
   /**
@@ -366,7 +367,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
    * @param _isSlasher Calling by Slasher.
    */
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
-    PokeFromState memory state = PokeFromState(0, 0, 0, false, false);
+    PokeFromState memory state = PokeFromState(0, 0, 0, 0, false, false);
     (state.minInterval, state.maxInterval) = _getMinMaxReportInterval();
 
     _rebalance(state, _claimAndDistributeRewards, _isSlasher);
@@ -395,6 +396,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         s.piTokenUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[i],
+        s.addToExpectedAmount,
         _claimAndDistributeRewards,
         connectors[i]
       );
@@ -572,13 +574,14 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       bool forceRebalance
     )
   {
-    return getStakeStatus(piToken.getUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, _share);
+    return getStakeStatus(piToken.getUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, 0, _share);
   }
 
   function getStakeAndClaimStatus(
     uint256 _leftOnPiTokenBalance,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
+    uint256 _addToExpectedAmount,
     bool _claimAndDistributeRewards,
     Connector memory _c
   )
@@ -595,6 +598,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       _leftOnPiTokenBalance,
       _totalStakedBalance,
       _stakedBalance,
+      _addToExpectedAmount,
       _c.share
     );
     shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(_c.lastClaimRewardsAt);
@@ -614,6 +618,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 _leftOnPiTokenBalance,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
+    uint256 _addToExpectedAmount,
     uint256 _share
   )
     public
@@ -630,7 +635,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       _leftOnPiTokenBalance,
       _totalStakedBalance,
       _stakedBalance,
-      _share
+      _share,
+      _addToExpectedAmount
     );
 
     if (status == StakeStatus.EQUILIBRIUM) {
@@ -762,7 +768,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 _leftOnPiToken,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
-    uint256 _share
+    uint256 _share,
+    uint256 _addToExpectedStakeAmount
   )
     public
     view
@@ -774,6 +781,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   {
     require(_reserveRatioPct <= HUNDRED_PCT, "RR_GREATER_THAN_100_PCT");
     expectedStakeAmount = getExpectedStakeAmount(_reserveRatioPct, _leftOnPiToken, _totalStakedBalance, _share);
+    expectedStakeAmount = expectedStakeAmount.add(_addToExpectedStakeAmount.mul(_share).div(1 ether));
 
     if (expectedStakeAmount > _stakedBalance) {
       status = StakeStatus.SHORTAGE;
