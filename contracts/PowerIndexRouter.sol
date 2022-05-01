@@ -296,7 +296,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     require(success, string(result));
   }
 
-  function piTokenCallback(address sender, uint256 _withdrawAmount) external payable virtual override {
+  function piTokenCallback(address, uint256 _withdrawAmount) external payable virtual override {
     PokeFromState memory state = PokeFromState(0, 0, 0, _withdrawAmount, false, true);
     _rebalance(state, false, false);
   }
@@ -380,7 +380,20 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     lastRebalancedByPokerAt = block.timestamp;
   }
 
-  function _rebalance(PokeFromState memory s, bool _claimAndDistributeRewards, bool _isSlasher) internal {
+  function _rebalance(
+    PokeFromState memory s,
+    bool _claimAndDistributeRewards,
+    bool _isSlasher
+  ) internal {
+    if (connectors.length == 1 && reserveRatio == 0 && !_claimAndDistributeRewards) {
+      if (s.addToExpectedAmount > 0) {
+        _rebalancePoke(connectors[0], StakeStatus.EXCESS, s.addToExpectedAmount);
+      } else {
+        _rebalancePoke(connectors[0], StakeStatus.SHORTAGE, piToken.getUnderlyingBalance());
+      }
+      return;
+    }
+
     s.piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
     (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
 
