@@ -19,25 +19,27 @@ task('redeploy-torn-router', 'Redeploy TornRouter').setAction(async (__, {ethers
   const sendOptions = { from: deployer };
 
   const OWNER = '0xB258302C3f209491d604165549079680708581Cc';
-  const piTorn = await WrappedPiErc20.at('0x65ca07a894e00b6a264c897de956cb0afb63a44b');
-  const tornConnector = await TornPowerIndexConnector.at('0x4930A67E605520Fe13B3037c0f70A72848Bf3B79');
-  console.log('tornConnector', tornConnector.address);
+  const piTornAddress = '0x65ca07a894e00b6a264c897de956cb0afb63a44b';
+  const tornConnectorAddress = '0x4930A67E605520Fe13B3037c0f70A72848Bf3B79';
 
   const startBalance = fromEther(await web3.eth.getBalance(deployer));
   const tornRouter = await PowerIndexRouter.new(
-    piTorn.address,
+    piTornAddress,
     {
       poolRestrictions: '0x698967cA2fB85A6D9a7D2BeD4D2F6D32Bbc5fCdc',
       powerPoke: '0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96',
       reserveRatio: '0',
       reserveRatioLowerBound: '0',
       reserveRatioUpperBound: '0',
-      claimRewardsInterval: '604800',
+      claimRewardsInterval: '86400',
       performanceFeeReceiver: '0xd132973eaebbd6d7ca7b88e9170f2cca058de430',
-      performanceFee: ether(0.003)
+      performanceFee: '0'
     }
   );
   console.log('tornRouter', tornRouter.address);
+  const piTorn = await WrappedPiErc20.at(piTornAddress);
+  const tornConnector = await TornPowerIndexConnector.at(tornConnectorAddress);
+  console.log('tornConnector', tornConnector.address);
 
   await tornRouter.setConnectorList([
     {
@@ -48,6 +50,8 @@ task('redeploy-torn-router', 'Redeploy TornRouter').setAction(async (__, {ethers
       connectorIndex: 0,
     },
   ]);
+
+  await tornRouter.setClaimParams('0', await tornConnector.contract.methods.packClaimParams('2592000', '564341').call({}), sendOptions);
   console.log('tornConnector done');
 
   await tornRouter.transferOwnership(OWNER, sendOptions);
