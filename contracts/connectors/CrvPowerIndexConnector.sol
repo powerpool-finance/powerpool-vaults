@@ -90,17 +90,10 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     override
     returns (bytes memory result, bool claimed)
   {
-    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
     (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
-    require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
     _capitalOut(underlyingStaked, _amount);
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
-    result = packStakeData(
-      assetsPerShare,
-      getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares)
-    );
-    claimed = true;
   }
 
   function ethBammBalance() public view returns (uint256) {
