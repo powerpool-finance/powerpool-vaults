@@ -3,15 +3,15 @@
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
-import "../interfaces/bprotocol/IBAMM.sol";
-import "../interfaces/balancerV3/IVault.sol";
-import "../interfaces/liquidity/IStabilityPool.sol";
-import "./AbstractConnector.sol";
-import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 
-contract BProtocolPowerIndexConnector is AbstractConnector {
+import "../interfaces/bprotocol/IBAMM.sol";
+import "../interfaces/liquidity/IStabilityPool.sol";
+import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
+import "./AbstractBalancerVaultConnector.sol";
+
+contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
 
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
@@ -21,10 +21,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   address public immutable ASSET_MANAGER;
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
-  address public immutable VAULT;
   IERC20 public immutable REWARDS_TOKEN;
-  IERC20 public immutable UNDERLYING;
-  bytes32 public immutable PID;
 
   constructor(
     address _assetManager,
@@ -34,14 +31,11 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _stabilityPool,
     address _rewardsToken,
     bytes32 _pId
-  ) AbstractConnector() {
+  ) AbstractBalancerVaultConnector(_underlying, _vault, _pId) {
     ASSET_MANAGER = _assetManager;
     STAKING = _staking;
-    UNDERLYING = IERC20(_underlying);
-    VAULT = _vault;
     STABILITY_POOL = _stabilityPool;
     REWARDS_TOKEN = IERC20(_rewardsToken);
-    PID = _pId;
   }
 
   // solhint-disable-next-line
@@ -177,49 +171,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     claimed = true;
   }
 
-  /**
-   * @dev Transfers capital into the asset manager, and then invests it
-   * @param _underlyingStaked - staked balance
-   * @param _amount - the amount of tokens being deposited
-   */
-  function _capitalIn(uint256 _underlyingStaked, uint256 _amount) private {
-    IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
-    // Update the vault with new managed balance accounting for returns
-    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
-    // Send funds back to the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.DEPOSIT, PID, UNDERLYING, _amount);
-
-    IVault(VAULT).managePoolBalance(ops);
-  }
-
-  /**
-   * @notice Divests capital back to the asset manager and then sends it to the vault
-   * @param _underlyingStaked - staked balance
-   * @param _amount - the amount of tokens to withdraw to the vault
-   */
-  function _capitalOut(uint256 _underlyingStaked, uint256 _amount) private {
-    IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
-    // Update the vault with new managed balance accounting for returns
-    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
-    // Pull funds from the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, _amount);
-
-    IVault(VAULT).managePoolBalance(ops);
-  }
-
-  function beforePoke(
-    bytes memory _pokeData,
-    DistributeData memory _distributeData,
-    bool _willClaimReward
-  ) external override {}
-
-  function afterPoke(
-    PowerIndexRouterInterface.StakeStatus, /*reserveStatus*/
-    bool /*_rewardClaimDone*/
-  ) external override returns (bytes memory) {
-    return new bytes(0);
-  }
-
   function initRouter(bytes calldata) external override {
     UNDERLYING.approve(STAKING, uint256(-1));
     UNDERLYING.approve(VAULT, uint256(-1));
@@ -301,23 +252,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   function _redeemImpl(uint256 _amount, uint256 _assetsPerShare) internal {
     IBAMM(STAKING).withdraw(_amount.mul(1 ether).div(_assetsPerShare));
-  }
-
-  /**
-   * @dev Returns current amount of LUSD remaining in the Balancer Vault.
-   */
-  function getUnderlyingReserve() public view override returns (uint256) {
-    (uint256 poolCash, , , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
-    return poolCash;
-  }
-
-  /**
-   * @dev Returns the accounted amount of LUSD borrowed from the Balancer Vault by this Asset Manager contract.
-   *      managed = total - cash
-   */
-  function getUnderlyingManaged() external view returns (uint256) {
-    (, uint256 poolManaged, , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
-    return poolManaged;
   }
 
   /**
