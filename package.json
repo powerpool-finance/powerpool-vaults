@@ -33,6 +33,7 @@
     "@openzeppelin/upgrades": "^2.8.0",
     "@powerpool/power-oracle": "https://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf9",
     "@powerpool/balancer-v2-pool-stable": "2.0.4",
+    "@powerpool/balancer-v2-pool-weighted": "2.0.1",
     "@truffle/contract": "^4.2.26",
     "@truffle/hdwallet-provider": "^1.1.1",
     "eslint": "^8.1.0",

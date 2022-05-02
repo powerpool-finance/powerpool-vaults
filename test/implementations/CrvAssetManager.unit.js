@@ -11,6 +11,7 @@ const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
 const StablePoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
+const WeightedPoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/WeightedPoolFactory');
 const StablePool = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePool');
 
 const VeBoostProxy = artifacts.require('veBoostProxy');
@@ -82,8 +83,11 @@ describe('LUSDAssetManager Tests', () => {
       pauseWindowDuration,
       bufferPeriodDuration,
     ]);
-    // mainnet: 0xc66Ba2B6595D3613CCab350C886aCE23866EDe24
-    stablePoolFactory = await StablePoolFactory.new(vault.address);
+    ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), { from: deployer });
+    const busd = await MockERC20.new('bUSD', 'bUSD', '18', ether(20e6), { from: deployer });
+    // mainnet: 0xa5bf2ddf098bb0ef6d120c98217dd6b141c74ee0
+    const weightedPoolFactory = await WeightedPoolFactory.new(vault.address);
+
 
     // mainnet: 0x6f5a2ee11e7a772aeb5114a20d0d7c0ff61eb8a0
     const veBoostProxy = await VeBoostProxy.deploy();
@@ -133,6 +137,7 @@ describe('LUSDAssetManager Tests', () => {
 
     ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), { from: deployer });
     lusdSecond = web3.utils.toBN(lusd.address).gt(web3.utils.toBN(ausd.address));
+    stablePoolFactory = await StablePoolFactory.new(vault.address);
     let res = await stablePoolFactory.create(
       'Balancer PP Stable Pool',
       'bb-p-USD',
