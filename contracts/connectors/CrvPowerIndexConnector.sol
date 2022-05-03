@@ -105,26 +105,7 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     override
     returns (bytes memory result, bool claimed)
   {
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
-    uint256 minLUSDToDistribute;
-    {
-      uint256 maxETHOnStaking;
-      (maxETHOnStaking, minLUSDToDistribute) = unpackStakeParams(_distributeData.stakeParams);
-      uint256 ethBalanceOnBamm = ethBammBalance().mul(shares).div(1 ether);
-      require(ethBalanceOnBamm <= maxETHOnStaking, "MAX_ETHER_ON_BAMM");
-    }
-    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
-    require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
-
-    underlyingEarned = getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
-
-    // redeem with fee or without
-    uint256 amountToRedeem = _amount;
-    uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
-    if (underlyingFee >= minLUSDToDistribute) {
-      amountToRedeem = amountToRedeem.add(underlyingFee);
-      underlyingEarned = 0;
-    }
+    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUgetUnderlyingStakednderlyingStaked();
     // redeem amount will be converted to shares
     _redeemImpl(amountToRedeem, assetsPerShare);
 
