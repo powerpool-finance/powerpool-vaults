@@ -23,4 +23,18 @@ contract AssetManager is AbstractPowerIndexRouter {
     }
     return balance;
   }
+
+  function migrateToNewAssetManager(
+    bytes memory _migrateData,
+    address payable _newRouter,
+    address[] memory _tokens
+  ) public virtual onlyOwner {
+    super.migrateToNewRouter(_newRouter, _tokens);
+
+    for (uint256 i = 0; i < connectors.length; i++) {
+      if (address(connectors[i].connector) != address(0)) {
+        connectors[i].connector.migrate(_migrateData);
+      }
+    }
+  }
 }

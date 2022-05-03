@@ -17,7 +17,6 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
-  uint256 public constant RATIO_CONSTANT = 10000000 ether;
   address public immutable ASSET_MANAGER;
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
@@ -70,7 +69,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function _swapRewardsToUnderlying(uint256 _rewardsAmount) internal virtual {
-    UniswapV3OracleHelper.swapByMiddleWeth(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
+    UniswapV3OracleHelper.swapByTwoMiddleWethDai(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
   }
 
   function getSwapperAddress() public virtual returns (address) {

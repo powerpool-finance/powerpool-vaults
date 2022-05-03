@@ -19,6 +19,7 @@ library UniswapV3OracleHelper {
   IUniswapV3Factory public constant UniswapV3Factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
   ISwapRouter public constant UniswapV3Router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
   address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+  address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
   uint256 public constant RATIO_DIVIDER = 1e18;
   uint24 public constant poolFee = 3000;
 
@@ -110,6 +111,25 @@ library UniswapV3OracleHelper {
 
     ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
       path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, _tokenTo),
+      recipient: msg.sender,
+      deadline: block.timestamp,
+      amountIn: _amountIn,
+      amountOutMinimum: 0
+    });
+
+    // Executes the swap.
+    amountOut = UniswapV3Router.exactInput(params);
+  }
+
+  function swapByTwoMiddleWethDai(
+    uint256 _amountIn,
+    address _tokenFrom,
+    address _tokenTo
+  ) internal returns (uint256 amountOut) {
+    IERC20(_tokenFrom).approve(address(UniswapV3Router), _amountIn);
+
+    ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+      path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, DAI, poolFee, _tokenTo),
       recipient: msg.sender,
       deadline: block.timestamp,
       amountIn: _amountIn,
