@@ -90,14 +90,10 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     override
     returns (bytes memory result, bool claimed)
   {
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
+    uint256 underlyingStaked = getUnderlyingStaked();
     _capitalOut(underlyingStaked, _amount);
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
-  }
-
-  function ethBammBalance() public view returns (uint256) {
-    return STAKING.balance.add(IStabilityPool(STABILITY_POOL).getDepositorETHGain(STAKING));
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData)
@@ -105,22 +101,12 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     override
     returns (bytes memory result, bool claimed)
   {
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUgetUnderlyingStakednderlyingStaked();
+    uint256 underlyingStaked = getUnderlyingStaked();
     // redeem amount will be converted to shares
-    _redeemImpl(amountToRedeem, assetsPerShare);
-
+    _redeemImpl(_amount);
     // capital in amount without fee
     _capitalIn(underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
-
-    // transfer fee to receiver
-    if (amountToRedeem > _amount) {
-      // send the rest UNDERLYING(fee amount)
-      IERC20(UNDERLYING).transfer(_distributeData.performanceFeeReceiver, UNDERLYING.balanceOf(address(this)));
-      underlyingEarned = 0;
-    }
-
-    result = packStakeData(assetsPerShare, underlyingEarned);
     claimed = true;
   }
 
@@ -203,8 +189,8 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     ILiquidityGauge(STAKING).deposit(_amount, ASSET_MANAGER, false);
   }
 
-  function _redeemImpl(uint256 _amount, uint256 _assetsPerShare) internal {
-    ILiquidityGauge(STAKING).withdraw(_amount.mul(1 ether).div(_assetsPerShare));
+  function _redeemImpl(uint256 _amount) internal {
+    ILiquidityGauge(STAKING).withdraw(_amount, false);
   }
 
   /**
@@ -221,6 +207,6 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function getPendingRewards() public view returns (uint256) {
-    return ILiquidityGauge(STAKING).claimable_reward(ASSET_MANAGER, UNDERLYING);
+    return ILiquidityGauge(STAKING).claimable_reward(ASSET_MANAGER, address(UNDERLYING));
   }
 }

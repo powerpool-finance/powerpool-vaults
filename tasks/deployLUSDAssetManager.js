@@ -38,6 +38,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const bammAddress = '0x00ff66ab8699aafa050ee5ef5041d1503aa0849a';
   const stabilityPoolAddress = '0x66017d22b0f8556afdd19fc67041899eb65a21bb';
 
+  const bbaUSDAddress = '0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb2';
+
   const stablePoolFactory = await StablePoolFactory.new(vaultAddress);
 
   const assetManager = await AssetManager.new(vaultAddress, lusdAddress, {
@@ -51,19 +53,22 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     performanceFee: ether(0.003),
   });
 
-  const ausd = await MockERC20.new('ausd', 'ausd', '18', ether(1e9));
   const lusd = await IERC20.at(lusdAddress);
+  const bbaUSD = await IERC20.at(bbaUSDAddress);
   const vault = await IVault.at(vaultAddress);
 
   const lusdHolder = '0x99c9fc46f92e8a1c0dec1b1747d010903e884be1';
+  const bbausdHolder = '0x9888e846bcb0a14e0fcb2f66368a69d1d04bd5f0';
   await impersonateAccount(ethers, lusdHolder);
+  await impersonateAccount(ethers, bbausdHolder);
   await lusd.transfer(deployer, ether(2e6), { from: lusdHolder });
+  await bbaUSD.transfer(deployer, ether(2e6), { from: bbausdHolder });
 
   const lusdSecond = web3.utils.toBN(lusdAddress).gt(web3.utils.toBN(ausd.address));
   let res = await stablePoolFactory.create(
     'Balancer PP Stable Pool',
     'bb-p-USD',
-    lusdSecond ? [ausd.address, lusdAddress] : [lusdAddress, ausd.address],
+    lusdSecond ? [bbaUSD.address, lusdAddress] : [lusdAddress, bbaUSD.address],
     lusdSecond ? [zeroAddress, assetManager.address] : [assetManager.address, zeroAddress],
     200,
     5e14,

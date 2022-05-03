@@ -6,7 +6,7 @@ pragma experimental ABIEncoderV2;
 import "./AbstractConnector.sol";
 import "../interfaces/balancerV3/IVault.sol";
 
-contract AbstractBalancerVaultConnector is AbstractConnector {
+abstract contract AbstractBalancerVaultConnector is AbstractConnector {
   using SafeMath for uint256;
 
   address public immutable VAULT;
@@ -28,7 +28,7 @@ contract AbstractBalancerVaultConnector is AbstractConnector {
    * @param _underlyingStaked - staked balance
    * @param _amount - the amount of tokens being deposited
    */
-  function _capitalIn(uint256 _underlyingStaked, uint256 _amount) private {
+  function _capitalIn(uint256 _underlyingStaked, uint256 _amount) internal {
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
     ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
@@ -43,7 +43,7 @@ contract AbstractBalancerVaultConnector is AbstractConnector {
    * @param _underlyingStaked - staked balance
    * @param _amount - the amount of tokens to withdraw to the vault
    */
-  function _capitalOut(uint256 _underlyingStaked, uint256 _amount) private {
+  function _capitalOut(uint256 _underlyingStaked, uint256 _amount) internal {
     IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
     // Update the vault with new managed balance accounting for returns
     ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
