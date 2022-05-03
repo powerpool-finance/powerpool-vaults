@@ -4,7 +4,7 @@ require('@nomiclabs/hardhat-ethers');
 task('redeploy-torn-router', 'Redeploy TornRouter').setAction(async (__, {ethers, network}) => {
   const {ether, fromEther, impersonateAccount, gwei, increaseTime, advanceBlocks} = require('../test/helpers');
   const WrappedPiErc20 = await artifacts.require('WrappedPiErc20');
-  const IERC20 = await artifacts.require(process.env.FLAT ? 'flatten/PowerIndexRouter.sol:IERC20' : '@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20');
+  const IERC20 = await artifacts.require('WrappedPiErc20');
   const PowerIndexRouter = await artifacts.require('PowerIndexRouter');
   const TornPowerIndexConnector = await artifacts.require('TornPowerIndexConnector');
 
@@ -19,8 +19,8 @@ task('redeploy-torn-router', 'Redeploy TornRouter').setAction(async (__, {ethers
   const sendOptions = { from: deployer };
 
   const OWNER = '0xB258302C3f209491d604165549079680708581Cc';
-  const piTornAddress = '0x65ca07a894e00b6a264c897de956cb0afb63a44b';
-  const tornConnectorAddress = '0x4930A67E605520Fe13B3037c0f70A72848Bf3B79';
+  const piTornAddress = '0xa1ebc8bde2f1f87fe24f384497b6bd9ce3b14345';
+  const tornConnectorAddress = '0x887d871b5aE02dFC35d1ba579461CbE4ed3D95b7';
 
   const startBalance = fromEther(await web3.eth.getBalance(deployer));
   const tornRouter = await PowerIndexRouter.new(
@@ -84,9 +84,8 @@ task('redeploy-torn-router', 'Redeploy TornRouter').setAction(async (__, {ethers
   const MIN_SLASHING_DEPOSIT = ether(40);
 
   await impersonateAccount(ethers, OWNER);
-  const oldRouter = await PowerIndexRouter.at('0x0d0B8d93D9F099A0cB2e2dFE8362e88cf08C3094');
+  const oldRouter = await PowerIndexRouter.at('0x0a6AA119C58cE6e7733dA6ECe7fBa5668d897c7C');
   await oldRouter.migrateToNewRouter(piTorn.address, tornRouter.address, [], {from: OWNER});
-  await tornRouter.initRouterByConnector('0', '0x', {from: OWNER});
 
   const powerPokeAddress = '0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96';
   const cvpAddress = '0x38e4adb44ef08f22f5b5b76a8f0c2d0dcbe7dca1';
