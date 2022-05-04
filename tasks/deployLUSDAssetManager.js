@@ -16,6 +16,11 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const CrvPowerIndexConnector = await artifacts.require('CrvPowerIndexConnector');
   const StablePoolFactory = await artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
 
+  AssetManager.numberFormat = 'String';
+  BProtocolPowerIndexConnector.numberFormat = 'String';
+  CrvPowerIndexConnector.numberFormat = 'String';
+  IVault.numberFormat = 'String';
+
   const { web3 } = IERC20;
 
   const [deployer] = await web3.eth.getAccounts();
@@ -54,7 +59,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     reserveRatio: ether(0.1),
     reserveRatioLowerBound: ether(0.01),
     reserveRatioUpperBound: ether(0.2),
-    claimRewardsInterval: '3600',
+    claimRewardsInterval: 60 * 50,
     performanceFeeReceiver: '0xd132973eaebbd6d7ca7b88e9170f2cca058de430',
     performanceFee: ether(0.003),
   };
@@ -66,6 +71,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   const lusd = await IERC20.at(lusdAddress);
   const bbaUSD = await IERC20.at(bbaUSDAddress);
+  const lqty = await IERC20.at(lqtyAddress);
   const vault = await IVault.at(vaultAddress);
 
   const lusdHolder = '0x99c9fc46f92e8a1c0dec1b1747d010903e884be1';
@@ -180,6 +186,9 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await lusdAssetManager.setStakeParams('0', await lusdConnector.packStakeParams(ether('0.1'), ether('10000')), {
     from: OWNER,
   });
+  await lusdAssetManager.setClaimParams('0', await lusdConnector.packClaimParams(ether('1')), {
+    from: OWNER,
+  });
 
   await printState('lusd', lusdConnector);
   await lusdAssetManager.pokeFromReporter('1', false, powerPokeOpts, { from: pokerReporter });
@@ -201,6 +210,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     console.log(prefix, printsNumber + ' getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
     console.log(prefix, printsNumber + ' getUnderlyingStaked ', await connector.getUnderlyingStaked().then(r => r.toString()));
     console.log(prefix, printsNumber + ' getPendingRewards   ', await connector.getPendingRewards().then(r => r.toString()));
+    console.log(prefix, printsNumber + ' assetManagerRewards ', await lqty.balanceOf(lusdAssetManager.address).then(r => r.toString()));
   }
 
   async function showBammInitInfo() {
@@ -215,8 +225,10 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   }
 
   async function showBammStakeInfo(number) {
+    const c = await lusdAssetManager.connectors('0');
     console.log('stake ' + number, await bamm.stake(lusdAssetManager.address).then(a => a.toString()));
-    console.log('isClaimAvailable', await lusdConnector.isClaimAvailable(await lusdConnector.packClaimParams(ether('10'))));
+    console.log('isClaimAvailable', await lusdConnector.isClaimAvailable(c.claimParams));
+    console.log('claimRewardsIntervalReached', await lusdAssetManager.claimRewardsIntervalReached(c.lastClaimRewardsAt));
     console.log(
       'getStakeAndClaimStatusByConnectorIndex',
       await lusdAssetManager.getStakeAndClaimStatusByConnectorIndex('0', true),
