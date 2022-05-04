@@ -19,22 +19,16 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
   uint256 public constant RATIO_CONSTANT = 10000000 ether;
   address public immutable ASSET_MANAGER;
   address public immutable STAKING;
-  address public immutable STABILITY_POOL;
-  IERC20 public immutable REWARDS_TOKEN;
 
   constructor(
     address _assetManager,
     address _staking,
     address _underlying,
     address _vault,
-    address _stabilityPool,
-    address _rewardsToken,
     bytes32 _pId
   ) AbstractBalancerVaultConnector(_underlying, _vault, _pId) {
     ASSET_MANAGER = _assetManager;
     STAKING = _staking;
-    STABILITY_POOL = _stabilityPool;
-    REWARDS_TOKEN = IERC20(_rewardsToken);
   }
 
   // solhint-disable-next-line
@@ -46,35 +40,35 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     if (pending > 0) {
       _claimImpl();
     }
-    uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
-    if (receivedReward > 0) {
-      uint256 rewardsToReinvest;
-      (, rewardsToReinvest, ) = _distributePerformanceFee(
-        _distributeData.performanceFee,
-        _distributeData.performanceFeeReceiver,
-        0,
-        ASSET_MANAGER,
-        REWARDS_TOKEN,
-        receivedReward
-      );
-
-      _swapRewardsToUnderlying(rewardsToReinvest);
-
-      _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
-      return stakeData;
-    }
+//    uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
+//    if (receivedReward > 0) {
+//      uint256 rewardsToReinvest;
+//      (, rewardsToReinvest, ) = _distributePerformanceFee(
+//        _distributeData.performanceFee,
+//        _distributeData.performanceFeeReceiver,
+//        0,
+//        ASSET_MANAGER,
+//        REWARDS_TOKEN,
+//        receivedReward
+//      );
+//
+//      _swapRewardsToUnderlying(rewardsToReinvest);
+//
+//      _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
+//      return stakeData;
+//    }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
     return new bytes(0);
   }
 
-  function _swapRewardsToUnderlying(uint256 _rewardsAmount) internal virtual {
-    UniswapV3OracleHelper.swapByMiddleWeth(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
-  }
+//  function _swapRewardsToUnderlying(uint256 _rewardsAmount) internal virtual {
+//    UniswapV3OracleHelper.swapByMiddleWeth(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
+//  }
 
-  function getSwapperAddress() public virtual returns (address) {
-    return address(UniswapV3OracleHelper.UniswapV3Router);
-  }
+//  function getSwapperAddress() public virtual returns (address) {
+//    return address(UniswapV3OracleHelper.UniswapV3Router);
+//  }
 
   function _transferFeeToReceiver(
     address,
@@ -113,7 +107,6 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
   function initRouter(bytes calldata) external override {
     UNDERLYING.approve(STAKING, uint256(-1));
     UNDERLYING.approve(VAULT, uint256(-1));
-    REWARDS_TOKEN.approve(getSwapperAddress(), uint256(-1));
   }
 
   /*** VIEWERS ***/
@@ -124,7 +117,7 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
    */
   function isClaimAvailable(bytes calldata _claimParams) external view virtual returns (bool) {
     uint256 minClaimAmount = unpackClaimParams(_claimParams);
-    return REWARDS_TOKEN.balanceOf(ASSET_MANAGER).add(getPendingRewards()) >= minClaimAmount;
+    return getPendingRewards() >= minClaimAmount;
   }
 
   function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) public pure returns (bytes memory) {
