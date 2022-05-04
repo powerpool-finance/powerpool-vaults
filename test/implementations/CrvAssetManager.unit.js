@@ -13,8 +13,7 @@ const MockPoke = artifacts.require('MockPoke');
 const StablePoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
 const WeightedPoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/WeightedPoolFactory');
 const StablePool = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePool');
-
-const VeBoostProxy = artifacts.require('veBoostProxy');
+const VeBoostProxy = artifacts.require('VeBoostProxy');
 
 MockERC20.numberFormat = 'String';
 BProtocolPowerIndexConnector.numberFormat = 'String';
@@ -25,7 +24,8 @@ BProtocolPowerIndexConnector.numberFormat = 'String';
 const { web3 } = MockERC20;
 const { toBN } = web3.utils;
 
-describe('LUSDAssetManager Tests', () => {
+describe.skip('CrvAssetManager Tests', () => {
+
   let deployer, alice, eve, piGov, stub, pvp;
 
   before(async function () {
