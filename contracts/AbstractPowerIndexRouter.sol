@@ -34,8 +34,9 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 indexed connectorIndex,
     bool indexed isNewConnector
   );
-  event SetConnectorClaimParams(address connector, bytes claimParams);
-  event SetConnectorStakeParams(address connector, bytes stakeParams);
+  event SetConnectorClaimParams(address indexed connector, bytes claimParams);
+  event SetConnectorStakeParams(address indexed connector, bytes stakeParams);
+  event SetAssetsHolder(address indexed assetsHolder);
 
   struct BasicConfig {
     address poolRestrictions;
@@ -833,5 +834,10 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
 
   function sendEthToPerformanceFeeReceiver() public onlyOwner {
     require(payable(performanceFeeReceiver).send(address(this).balance), "FAILED");
+  }
+
+  function setAssetsHolder(address _assetsHolder) external onlyOwner {
+    assetsHolder = _assetsHolder;
+    emit SetAssetsHolder(_assetsHolder);
   }
 }
