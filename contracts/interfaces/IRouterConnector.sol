@@ -9,7 +9,7 @@ import "../interfaces/PowerIndexRouterInterface.sol";
 interface IRouterConnector {
   struct DistributeData {
     bytes stakeData;
-    bytes stakeParams; // max eth on BAMM, min LUSD to distribute
+    bytes stakeParams;
     uint256 performanceFee;
     address performanceFeeReceiver;
   }

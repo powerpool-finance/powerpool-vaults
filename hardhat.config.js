@@ -62,7 +62,7 @@ const config = {
     mainnet: {
       url: 'https://mainnet-eth.compound.finance',
       accounts: getAccounts('mainnet'),
-      gasPrice: 36 * 10 ** 9,
+      gasPrice: process.env.GAS_PRICE ? parseInt(process.env.GAS_PRICE) * 10 ** 9 : 20 * 10 ** 9,
       gasMultiplier: 1.2,
       timeout: 2000000,
     },
@@ -81,7 +81,7 @@ const config = {
     kovan: {
       url: 'https://kovan-eth.compound.finance',
       accounts: getAccounts('kovan'),
-      gasPrice: 10 ** 9,
+      gasPrice: process.env.GAS_PRICE ? parseInt(process.env.GAS_PRICE) * 10 ** 9 : 20 * 10 ** 9,
       gasMultiplier: 2,
     },
     coverage: {
@@ -94,7 +94,7 @@ const config = {
     coverage: './coverage',
     coverageJson: './coverage.json',
     root: './',
-    sources: './contracts',
+    sources: process.env.FLAT ? './flatten' : './contracts',
     tests: './test',
   },
   solidity: {
