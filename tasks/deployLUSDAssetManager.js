@@ -19,11 +19,12 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const { web3 } = IERC20;
 
   const [deployer] = await web3.eth.getAccounts();
+  console.log('deployer', deployer);
 
   if (network.name === 'mainnetfork') {
     await network.provider.request({
       method: 'hardhat_reset',
-      params: [{ forking: { jsonRpcUrl: process.env.RPC } }],
+      params: [{ forking: { jsonRpcUrl: process.env.FORK } }],
     });
     const daoMultisigAddress = '0x10a19e7ee7d7f8a52822f6817de8ea18204f2e4f';
     const roles = ['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'];
@@ -46,6 +47,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const liquidityGaugeAddress = '0x68d019f64a7aa97e2d4e7363aee42251d08124fb';
 
   const stablePoolFactory = await StablePoolFactory.new(vaultAddress);
+  console.log('stablePoolFactory', stablePoolFactory.address);
   const assetManagerOptions = {
     poolRestrictions: '0x698967cA2fB85A6D9a7D2BeD4D2F6D32Bbc5fCdc',
     powerPoke: '0x04D7aA22ef7181eE3142F5063e026Af1BbBE5B96',
@@ -59,6 +61,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   const lusdAssetManager = await AssetManager.new(vaultAddress, lusdAddress, assetManagerOptions);
   const bbausdAssetManager = await AssetManager.new(vaultAddress, lusdAddress, assetManagerOptions);
+  console.log('lusdAssetManager', lusdAssetManager.address);
+  console.log('bbausdAssetManager', bbausdAssetManager.address);
 
   const lusd = await IERC20.at(lusdAddress);
   const bbaUSD = await IERC20.at(bbaUSDAddress);
@@ -85,6 +89,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const pool = await IBasePool.at(res.receipt.logs[0].args.pool);
   await lusdAssetManager.setAssetsHolder(vaultAddress);
   await bbausdAssetManager.setAssetsHolder(vaultAddress);
+  console.log('setAssetsHolder');
 
   // borrowerOperations.openTrove(
   //   ether(1),
@@ -103,6 +108,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     userData: web3.eth.abi.encodeParameters(['uint256', 'uint256[]'], [0, [ether(2e6), ether(2e6)]]),
     fromInternalBalance: false,
   });
+  console.log('joinPool');
 
   const lusdConnector = await BProtocolPowerIndexConnector.new(
     lusdAssetManager.address,
@@ -113,6 +119,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     lqtyAddress,
     await pool.getPoolId(),
   );
+  console.log('lusdConnector', lusdConnector.address);
   const bbausdConnector = await CrvPowerIndexConnector.new(
     bbausdAssetManager.address,
     liquidityGaugeAddress,
@@ -120,6 +127,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     vaultAddress,
     await pool.getPoolId(),
   );
+  console.log('bbausdConnector', bbausdConnector.address);
   await lusdAssetManager.setConnectorList([{
     connector: lusdConnector.address,
     share: ether(1),
