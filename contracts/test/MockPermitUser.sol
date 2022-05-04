@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/WrappedPiErc20Interface.sol";
@@ -8,7 +8,7 @@ import "../interfaces/WrappedPiErc20Interface.sol";
 contract MockPermitUser {
   address private token;
 
-  constructor(address _token) public {
+  constructor(address _token) {
     token = _token;
   }
 

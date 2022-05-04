@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -40,7 +40,7 @@ contract TornStaking {
     _;
   }
 
-  constructor(address governanceAddress, address tornAddress) public {
+  constructor(address governanceAddress, address tornAddress) {
     Governance = ITornGovernance(governanceAddress);
     torn = IERC20(tornAddress);
     ratioConstant = IERC20(tornAddress).totalSupply();

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/sushi/IMasterChefV1.sol";
@@ -19,8 +19,7 @@ contract MasterChefPowerIndexConnector is AbstractStakeRedeemConnector {
     address _underlying,
     address _piToken,
     uint256 _masterChefPid
-  ) public AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e12) {
-    //6 hours with 13ms block
+  ) AbstractStakeRedeemConnector(_staking, _underlying, _piToken, 46e12) {
     MASTER_CHEF_PID = _masterChefPid;
   }
 
@@ -32,7 +31,7 @@ contract MasterChefPowerIndexConnector is AbstractStakeRedeemConnector {
 
   /*** OVERRIDES ***/
 
-  function getUnderlyingStaked() external view override returns (uint256) {
+  function getUnderlyingStaked() public view override returns (uint256) {
     if (STAKING == address(0)) {
       return 0;
     }

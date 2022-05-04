@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.0;
 
 interface VenusComptrollerInterface {
   function enterMarkets(address[] calldata cTokens) external returns (uint256[] memory);

@@ -906,6 +906,44 @@
     web3-eth-contract "1.2.2"
     web3-utils "1.2.2"
 
+"@powerpool/balancer-v2-asset-manager-utils@0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@powerpool/balancer-v2-asset-manager-utils/-/balancer-v2-asset-manager-utils-0.2.1.tgz#0cf14a20b255521608be566e8d9823711ac2e40f"
+  integrity sha512-XysGAniMMrtYp7UnwBpUlN5dIHbRrpqXKy/ov8R7SgWvZFwdeAR9VEYrDrRx6fSciz8vps75y8WZRAsJqZ5fRA==
+  dependencies:
+    "@powerpool/balancer-v2-solidity-utils" "2.0.0"
+    "@powerpool/balancer-v2-vault" "2.0.1"
+
+"@powerpool/balancer-v2-pool-stable@2.0.4":
+  version "2.0.4"
+  resolved "https://registry.yarnpkg.com/@powerpool/balancer-v2-pool-stable/-/balancer-v2-pool-stable-2.0.4.tgz#3ddd4714a3013ecc85e7ccaaf948c5410fa99383"
+  integrity sha512-Hh0onbmaYYWecgzSYDceamLlRSq+gAX3wwgXYwjw1qEOpIcD0gforQojT9i1MKdp46ChCA5P9F0abpQRmGAjlA==
+  dependencies:
+    "@powerpool/balancer-v2-pool-utils" "2.0.3"
+    "@powerpool/balancer-v2-solidity-utils" "2.0.0"
+    "@powerpool/balancer-v2-vault" "2.0.1"
+
+"@powerpool/balancer-v2-pool-utils@2.0.3":
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/@powerpool/balancer-v2-pool-utils/-/balancer-v2-pool-utils-2.0.3.tgz#a25c2f65327e0efd1bff2f33bcc7ad1385c57edf"
+  integrity sha512-B0q8F3IdvH/UeWk8+U8Zf6NYuKb2fLTG/HDIiVLl5of/ytaTT0RaPx5/p3w4w93z9quIf/l0XOmhFg9fqPtL2A==
+  dependencies:
+    "@powerpool/balancer-v2-asset-manager-utils" "0.2.1"
+    "@powerpool/balancer-v2-solidity-utils" "2.0.0"
+    "@powerpool/balancer-v2-vault" "2.0.1"
+
+"@powerpool/balancer-v2-solidity-utils@2.0.0":
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/@powerpool/balancer-v2-solidity-utils/-/balancer-v2-solidity-utils-2.0.0.tgz#8e78947eb81f11ee83bed4063a7d83bc79304c81"
+  integrity sha512-h/Pw0ARIVA/DNL6zLowT+6CktFKHO1V7iX5rZ1P+kzp9FGPplyVoPKDOh1ZWVTai1c7pUiex2eaqr2n/IJmDZg==
+
+"@powerpool/balancer-v2-vault@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@powerpool/balancer-v2-vault/-/balancer-v2-vault-2.0.1.tgz#c1b0c084e6045b43f7ba16eaf62149bc3c56ae59"
+  integrity sha512-QPvImUGbwl83SeFw6Z/zEUQYGlqN0aoII7pPLG4SDCT7cZWk6i8EOkSURB/bNLrUbiuJ7aqFz0Bx/Ddpp8FoIw==
+  dependencies:
+    "@powerpool/balancer-v2-solidity-utils" "2.0.0"
+
 "@powerpool/power-oracle@https://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf9":
   version "1.0.0"
   resolved "https://github.com/powerpool-finance/power-oracle-contracts.git#9ce4bf915b2d03b4e2e50ab68712165e379d1640"

@@ -8,10 +8,7 @@ const MockRouter = artifacts.require('MockRouter');
 const MyContract = artifacts.require('MyContract');
 const MockPoke = artifacts.require('MockPoke');
 const MockPermitUser = artifacts.require('MockPermitUser');
-const {
-    Eip2612PermitUtils,
-    Web3ProviderConnector, fromRpcSig,
-} = require('@1inch/permit-signed-approvals-utils');
+const { Eip2612PermitUtils, Web3ProviderConnector, fromRpcSig } = require('@1inch/permit-signed-approvals-utils');
 
 MyContract.numberFormat = 'String';
 MockERC20.numberFormat = 'String';
@@ -49,12 +46,12 @@ describe('WrappedPiErc20 Unit Tests', () => {
       '0',
       stub,
       ether(0),
-      []
+      [],
     );
 
     cake = await MockERC20.new('CAKE', 'CAKE', 18, ether('1000000'));
     piCake = await WrappedPiErc20.new(cake.address, stub, 'WrappedPiCAKE', 'piCAKE');
-    router = await MockRouter.new(piCake.address, defaultBasicConfig);
+    router = await MockRouter.new(piCake.address, cake.address, defaultBasicConfig);
     await piCake.changeRouter(router.address, { from: stub });
     await cake.transfer(mockStaking, ether(50));
   });
@@ -95,19 +92,25 @@ describe('WrappedPiErc20 Unit Tests', () => {
       const payload2 = splitPayload(myContract.contract.methods.setAnswer2(24).encodeABI());
 
       assert.equal(await myContract.getAnswer(), 0);
-      await piCake.callExternalMultiple([{
-        destination: myContract.address,
-        signature: payload.signature,
-        args: payload.calldata,
-        value: 0,
-      },{
-        destination: myContract.address,
-        signature: payload2.signature,
-        args: payload2.calldata,
-        value: 0,
-      }], {
-        from: alice,
-      });
+      await piCake.callExternalMultiple(
+        [
+          {
+            destination: myContract.address,
+            signature: payload.signature,
+            args: payload.calldata,
+            value: 0,
+          },
+          {
+            destination: myContract.address,
+            signature: payload2.signature,
+            args: payload2.calldata,
+            value: 0,
+          },
+        ],
+        {
+          from: alice,
+        },
+      );
       assert.equal(await myContract.getAnswer(), 42);
       assert.equal(await myContract.getAnswer2(), 24);
     });
@@ -121,12 +124,17 @@ describe('WrappedPiErc20 Unit Tests', () => {
       );
 
       await expectExactRevert(
-        piCake.callExternalMultiple([{
-          destination: myContract.address,
-          signature: payload.signature,
-          args: payload.calldata,
-          value: 0,
-        }], { from: alice }),
+        piCake.callExternalMultiple(
+          [
+            {
+              destination: myContract.address,
+              signature: payload.signature,
+              args: payload.calldata,
+              value: 0,
+            },
+          ],
+          { from: alice },
+        ),
         'Ownable: caller is not the owner',
       );
     });
@@ -165,7 +173,7 @@ describe('WrappedPiErc20 Unit Tests', () => {
   });
 
   describe('permit', async () => {
-    beforeEach(async() => {
+    beforeEach(async () => {
       await cake.transfer(alice, ether(100));
       await cake.approve(piCake.address, ether(100), { from: alice });
       await piCake.deposit(ether(100), { from: alice });
@@ -202,7 +210,7 @@ describe('WrappedPiErc20 Unit Tests', () => {
         permitUser.acceptTokens(alice, ether(100), deadline, vrs.v, vrs.r, vrs.s),
         'INVALID_SIGNATURE',
       );
-    })
+    });
   });
 
   describe('deposit', async () => {
@@ -377,7 +385,7 @@ describe('WrappedPiErc20 Unit Tests', () => {
   });
 
   describe('depositWithPermit', async () => {
-    beforeEach(async() => {
+    beforeEach(async () => {
       await cake.transfer(alice, ether(100));
     });
 
@@ -392,21 +400,15 @@ describe('WrappedPiErc20 Unit Tests', () => {
       };
       const connector = new Web3ProviderConnector(web3);
       const eip2612PermitUtils = new Eip2612PermitUtils(connector);
-      const signature = await eip2612PermitUtils.buildPermitSignature(
-        permitParams,
-        chainId,
-        'CAKE',
-        cake.address,
-        '1'
-      );
+      const signature = await eip2612PermitUtils.buildPermitSignature(permitParams, chainId, 'CAKE', cake.address, '1');
 
       assert.equal(await piCake.balanceOf(alice), ether(0));
 
       const vrs = fromRpcSig(signature);
-      await piCake.depositWithPermit(ether(100), deadline, vrs.v, vrs.r, vrs.s, {from: alice});
+      await piCake.depositWithPermit(ether(100), deadline, vrs.v, vrs.r, vrs.s, { from: alice });
 
       assert.equal(await piCake.balanceOf(alice), ether(100));
-    })
+    });
   });
 
   describe('withdraw', async () => {
@@ -896,12 +898,20 @@ describe('WrappedPiErc20 Unit Tests', () => {
       it('should deny calling the method from non-router address', async () => {
         await expectRevert(piCake.callExternal(alice, signature, args, 0, { from: alice }), 'ONLY_ROUTER');
 
-        await expectRevert(piCake.callExternalMultiple([{
-          destination: alice,
-          signature: signature,
-          args: args,
-          value: 0,
-        }], { from: alice }), 'ONLY_ROUTER');
+        await expectRevert(
+          piCake.callExternalMultiple(
+            [
+              {
+                destination: alice,
+                signature: signature,
+                args: args,
+                value: 0,
+              },
+            ],
+            { from: alice },
+          ),
+          'ONLY_ROUTER',
+        );
       });
     });
   });
