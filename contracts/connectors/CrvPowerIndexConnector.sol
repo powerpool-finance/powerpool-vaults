@@ -5,10 +5,11 @@ pragma experimental ABIEncoderV2;
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
-import "../interfaces/ILiquidityGauge.sol";
-import "../interfaces/liquidity/IStabilityPool.sol";
-import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 import "./AbstractBalancerVaultConnector.sol";
+import "../interfaces/ILiquidityGauge.sol";
+import "../interfaces/balancerV3/IBalancerMinter.sol";
+import "../interfaces/balancerV3/IAsset.sol";
+import "hardhat/console.sol";
 
 contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
@@ -17,18 +18,26 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
   uint256 public constant RATIO_CONSTANT = 10000000 ether;
-  address public immutable ASSET_MANAGER;
+  address payable public immutable ASSET_MANAGER;
   address public immutable STAKING;
+  IBalancerMinter public immutable REWARDS_MINTER;
+  IERC20 public immutable REWARDS_TOKEN;
+  address public immutable CONNECTOR;
 
   constructor(
     address _assetManager,
     address _staking,
     address _underlying,
+    address _rewardsToken,
+    address _rewardsMinter,
     address _vault,
     bytes32 _pId
   ) AbstractBalancerVaultConnector(_underlying, _vault, _pId) {
-    ASSET_MANAGER = _assetManager;
+    ASSET_MANAGER = payable(_assetManager);
     STAKING = _staking;
+    REWARDS_TOKEN = IERC20(_rewardsToken);
+    REWARDS_MINTER = IBalancerMinter(_rewardsMinter);
+    CONNECTOR = address(this);
   }
 
   // solhint-disable-next-line
@@ -36,39 +45,33 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     PowerIndexRouterInterface.StakeStatus, /*_status*/
     DistributeData memory _distributeData
   ) external override returns (bytes memory stakeData) {
-    uint256 pending = getPendingRewards();
-    if (pending > 0) {
-      _claimImpl();
+    _claimImpl();
+
+    uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
+    console.log("receivedReward", receivedReward);
+    if (receivedReward > 0) {
+      uint256 rewardsToReinvest;
+      (, rewardsToReinvest, ) = _distributePerformanceFee(
+        _distributeData.performanceFee,
+        _distributeData.performanceFeeReceiver,
+        0,
+        ASSET_MANAGER,
+        REWARDS_TOKEN,
+        receivedReward
+      );
+      console.log("rewardsToReinvest", rewardsToReinvest);
+
+      console.log("_swapRewardsToUnderlying start");
+      _swapRewardsToUnderlying(rewardsToReinvest);
+      console.log("_swapRewardsToUnderlying end");
+
+      _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
+      return stakeData;
     }
-//    uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
-//    if (receivedReward > 0) {
-//      uint256 rewardsToReinvest;
-//      (, rewardsToReinvest, ) = _distributePerformanceFee(
-//        _distributeData.performanceFee,
-//        _distributeData.performanceFeeReceiver,
-//        0,
-//        ASSET_MANAGER,
-//        REWARDS_TOKEN,
-//        receivedReward
-//      );
-//
-//      _swapRewardsToUnderlying(rewardsToReinvest);
-//
-//      _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
-//      return stakeData;
-//    }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
     // so no additional actions required.
     return new bytes(0);
   }
-
-//  function _swapRewardsToUnderlying(uint256 _rewardsAmount) internal virtual {
-//    UniswapV3OracleHelper.swapByMiddleWeth(_rewardsAmount, address(REWARDS_TOKEN), address(UNDERLYING));
-//  }
-
-//  function getSwapperAddress() public virtual returns (address) {
-//    return address(UniswapV3OracleHelper.UniswapV3Router);
-//  }
 
   function _transferFeeToReceiver(
     address,
@@ -77,6 +80,37 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     uint256 _amount
   ) internal override {
     _underlying.transfer(_feeReceiver, _amount);
+  }
+
+  /**
+   * @dev Transfers capital into the asset manager, and then invests it
+   * @param _sum - the amount of tokens being deposited
+   */
+  function _swapRewardsToUnderlying(uint256 _sum) internal {
+    IAsset[] memory assets = new IAsset[](6);
+    assets[0] = IAsset(0xba100000625a3754423978a60c9317c58a424e3D); // BAL
+    assets[1] = IAsset(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH
+    assets[2] = IAsset(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
+    assets[3] = IAsset(0xdAC17F958D2ee523a2206206994597C13D831ec7); // USDT
+    assets[4] = IAsset(0x2BBf681cC4eb09218BEe85EA2a5d3D13Fa40fC0C); // bbaUSDT
+    assets[5] = IAsset(0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2); // bbaUSD
+
+    IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](4);
+    // BAL-WETH
+    swaps[0] = IVault.BatchSwapStep(0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000014, 0, 1, _sum, "");
+    // USDC-WETH
+    swaps[1] = IVault.BatchSwapStep(0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019, 1, 2, 0, "");
+    // DAI-USDC-USDT
+    swaps[2] = IVault.BatchSwapStep(0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000063, 2, 3, 0, "");
+    // bbaUSDT-USDT-aUSDT
+    swaps[3] = IVault.BatchSwapStep(0x2bbf681cc4eb09218bee85ea2a5d3d13fa40fc0c0000000000000000000000fd, 3, 4, 0, "");
+    // bbaUSDT-bbaUSD-bbaDAI-bbaUSDC
+    swaps[4] = IVault.BatchSwapStep(0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb20000000000000000000000fe, 4, 5, 0, "");
+
+    int256[] memory limits = new int256[](6);
+    IVault.FundManagement memory fundManagment = IVault.FundManagement(ASSET_MANAGER, false, ASSET_MANAGER, false);
+
+    IVault(VAULT).batchSwap(IVault.SwapKind.GIVEN_IN, swaps, assets, fundManagment, limits, uint(-1));
   }
 
   function stake(uint256 _amount, DistributeData memory _distributeData)
@@ -107,17 +141,17 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
   function initRouter(bytes calldata) external override {
     UNDERLYING.approve(STAKING, uint256(-1));
     UNDERLYING.approve(VAULT, uint256(-1));
+    REWARDS_MINTER.setMinterApproval(ASSET_MANAGER, true);
+    REWARDS_MINTER.setMinterApproval(CONNECTOR, true);
   }
 
   /*** VIEWERS ***/
 
   /**
    * @notice Checking: is pending rewards enough to reinvest
-   * @param _claimParams Claim parameters, that stored in PowerIndexRouter
    */
-  function isClaimAvailable(bytes calldata _claimParams) external view virtual returns (bool) {
-    uint256 minClaimAmount = unpackClaimParams(_claimParams);
-    return getPendingRewards() >= minClaimAmount;
+  function isClaimAvailable(bytes calldata) external view virtual returns (bool) {
+    return true;
   }
 
   function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) public pure returns (bytes memory) {
@@ -175,7 +209,10 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
 
   /*** OVERRIDES ***/
   function _claimImpl() internal {
-    ILiquidityGauge(STAKING).claim_rewards(ASSET_MANAGER, ASSET_MANAGER);
+    console.log("address(this)", address(this));
+    console.log("ASSET_MANAGER", ASSET_MANAGER);
+    REWARDS_MINTER.mintFor(STAKING, ASSET_MANAGER);
+    console.log("_claimImpl done");
   }
 
   function _stakeImpl(uint256 _amount) internal {
@@ -199,7 +236,21 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     return getUnderlyingReserve().add(getUnderlyingStaked());
   }
 
-  function getPendingRewards() public view returns (uint256) {
-    return ILiquidityGauge(STAKING).claimable_reward(ASSET_MANAGER, address(UNDERLYING));
+  /**
+  * @dev This function should be manually changed to "view" in the ABI
+  */
+  function getPendingRewards() public returns (uint256) {
+    return REWARDS_MINTER.mintFor(STAKING, ASSET_MANAGER);
   }
 }
+
+
+
+
+
+
+
+
+
+
+

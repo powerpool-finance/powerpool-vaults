@@ -2,13 +2,13 @@ require('@nomiclabs/hardhat-truffle5');
 require('@nomiclabs/hardhat-ethers');
 
 task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (__, { ethers, network }) => {
-  const { ether, zeroAddress, impersonateAccount, gwei, increaseTime } = require('../test/helpers');
+  const { ether, zeroAddress, impersonateAccount, gwei, increaseTime, maxUint256 } = require('../test/helpers');
   const IERC20 = await artifacts.require('@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20');
   const IVault = await artifacts.require('contracts/interfaces/balancerV3/IVault.sol:IVault');
   const ILiquidityGauge = await artifacts.require('ILiquidityGauge');
   const AssetManager = await artifacts.require('AssetManager');
   const PowerPoke = await artifacts.require('IPowerPoke');
-  const IAuthorizer = await artifacts.require('contracts/interfaces/balancerV3/IAuthorizer.sol:IAuthorizer');
+  const IBalancerMinter = await artifacts.require('IBalancerMinter');
   const IBasePool = await artifacts.require('contracts/interfaces/balancerV3/IBasePool.sol:IBasePool');
   const BAMM = await artifacts.require('BAMM');
   const StabilityPool = await artifacts.require('StabilityPool');
@@ -26,17 +26,17 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const [deployer] = await web3.eth.getAccounts();
   console.log('deployer', deployer);
 
-  if (network.name === 'mainnetfork') {
-    await network.provider.request({
-      method: 'hardhat_reset',
-      params: [{ forking: { jsonRpcUrl: process.env.FORK } }],
-    });
-    const daoMultisigAddress = '0x10a19e7ee7d7f8a52822f6817de8ea18204f2e4f';
-    const roles = ['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'];
-    const authorizer = await IAuthorizer.at('0xa331d84ec860bf466b4cdccfb4ac09a1b43f3ae6');
-    await impersonateAccount(ethers, daoMultisigAddress);
-    await authorizer.grantRoles(roles, deployer, { from: daoMultisigAddress });
-  }
+  // if (network.name === 'mainnetfork') {
+  //   await network.provider.request({
+  //     method: 'hardhat_reset',
+  //     params: [{ forking: { jsonRpcUrl: process.env.FORK } }],
+  //   });
+  //   const daoMultisigAddress = '0x10a19e7ee7d7f8a52822f6817de8ea18204f2e4f';
+  //   const roles = ['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'];
+  //   const authorizer = await IAuthorizer.at('0xa331d84ec860bf466b4cdccfb4ac09a1b43f3ae6');
+  //   await impersonateAccount(ethers, daoMultisigAddress);
+  //   await authorizer.grantRoles(roles, deployer, { from: daoMultisigAddress });
+  // }
 
   const OWNER = '0xB258302C3f209491d604165549079680708581Cc';
   const vaultAddress = '0xba12222222228d8ba445958a75a0704d566bf2c8';
@@ -50,6 +50,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   //bbausd
   const bbaUSDAddress = '0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb2';
   const liquidityGaugeAddress = '0x68d019f64a7aa97e2d4e7363aee42251d08124fb';
+  const balancerMinter = '0x239e55f427d44c3cc793f49bfb507ebe76638a2b';
+  const balAddress = '0xba100000625a3754423978a60c9317c58a424e3d';
 
   const stablePoolFactory = await StablePoolFactory.new(vaultAddress);
   console.log('stablePoolFactory', stablePoolFactory.address);
@@ -130,6 +132,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     bbausdAssetManager.address,
     liquidityGaugeAddress,
     bbaUSD.address,
+    balAddress,
+    balancerMinter,
     vaultAddress,
     await pool.getPoolId(),
   );
@@ -157,7 +161,9 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   console.log('bbausdAssetManager.address', bbausdAssetManager.address);
 
   await lusdAssetManager.initRouterByConnector('0', '0x');
-  await bbausdAssetManager.initRouterByConnector('0', '0x');
+  const initRes = await bbausdAssetManager.initRouterByConnector('0', '0x');
+  console.log('MinterApprovalSet', IBalancerMinter.decodeLogs(initRes.receipt.rawLogs)[0].args)
+  console.log('ASSET_MANAGER', await bbausdConnector.ASSET_MANAGER())
   await lusdAssetManager.transferOwnership(OWNER);
   await bbausdAssetManager.transferOwnership(OWNER);
 
@@ -176,7 +182,9 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   );
 
   const bamm = await BAMM.at(bammAddress);
-  await showBammInitInfo();
+  const gauge = await ILiquidityGauge.at(liquidityGaugeAddress);
+
+  // await showBammInitInfo();
 
   let printsNumber = 0;
 
@@ -190,18 +198,35 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     from: OWNER,
   });
 
-  await printState('lusd', lusdConnector);
-  await lusdAssetManager.pokeFromReporter('1', false, powerPokeOpts, { from: pokerReporter });
-  await printState('lusd', lusdConnector);
-  await increaseTime(60 * 60);
-  await bamm.withdraw('0', { from: bammDepositer });
-  await printState('lusd', lusdConnector);
-  await increaseTime(60 * 60);
-  await bamm.withdraw('0', { from: bammDepositer });
-  await printState('lusd', lusdConnector);
-  await showBammStakeInfo(1);
-  await lusdAssetManager.pokeFromReporter('1', true, powerPokeOpts, { from: pokerReporter });
-  await showBammStakeInfo(2);
+  await bbausdAssetManager.setClaimParams('0', await bbausdConnector.packClaimParams(ether('1')), {
+    from: OWNER,
+  });
+
+  console.log('gauge.deposit');
+  await bbaUSD.approve(liquidityGaugeAddress, maxUint256, {from: bbausdHolder});
+  await gauge.deposit(ether(1), bbausdHolder, false, {from: bbausdHolder});
+
+  console.log('pokeFromReporter');
+  await printState('bbausd', bbausdConnector);
+  await bbausdAssetManager.pokeFromReporter('1', false, powerPokeOpts, { from: pokerReporter });
+  await printState('bbausd', bbausdConnector);
+  await increaseTime(60 * 60 * 24);
+  await printState('bbausd', bbausdConnector);
+  await bbausdAssetManager.pokeFromReporter('1', true, powerPokeOpts, { from: pokerReporter });
+  await printState('bbausd', bbausdConnector);
+
+  // await printState('lusd', lusdConnector);
+  // await lusdAssetManager.pokeFromReporter('1', false, powerPokeOpts, { from: pokerReporter });
+  // await printState('lusd', lusdConnector);
+  // await increaseTime(60 * 60);
+  // await bamm.withdraw('0', { from: bammDepositer });
+  // await printState('lusd', lusdConnector);
+  // await increaseTime(60 * 60);
+  // await bamm.withdraw('0', { from: bammDepositer });
+  // await printState('lusd', lusdConnector);
+  // await showBammStakeInfo(1);
+  // await lusdAssetManager.pokeFromReporter('1', true, powerPokeOpts, { from: pokerReporter });
+  // await showBammStakeInfo(2);
 
   async function printState(prefix, connector) {
     console.log('\n');
@@ -209,7 +234,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     console.log(prefix, printsNumber + ' getUnderlyingReserve', await connector.getUnderlyingReserve().then(r => r.toString()));
     console.log(prefix, printsNumber + ' getUnderlyingManaged', await connector.getUnderlyingManaged().then(r => r.toString()));
     console.log(prefix, printsNumber + ' getUnderlyingStaked ', await connector.getUnderlyingStaked().then(r => r.toString()));
-    console.log(prefix, printsNumber + ' getPendingRewards   ', await connector.getPendingRewards().then(r => r.toString()));
+    console.log(prefix, printsNumber + ' getPendingRewards   ', await connector.contract.methods.getPendingRewards().call({from: await connector.ASSET_MANAGER()}).then(r => r.toString()).catch(e => e));
     console.log(prefix, printsNumber + ' assetManagerRewards ', await lqty.balanceOf(lusdAssetManager.address).then(r => r.toString()));
   }
 
