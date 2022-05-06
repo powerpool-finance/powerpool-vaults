@@ -11,7 +11,7 @@ import "../interfaces/balancerV3/IBalancerMinter.sol";
 import "../interfaces/balancerV3/IAsset.sol";
 import "hardhat/console.sol";
 
-contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
+contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
 
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);

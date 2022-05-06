@@ -13,12 +13,12 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const BAMM = await artifacts.require('BAMM');
   const StabilityPool = await artifacts.require('StabilityPool');
   const BProtocolPowerIndexConnector = await artifacts.require('BProtocolPowerIndexConnector');
-  const CrvPowerIndexConnector = await artifacts.require('CrvPowerIndexConnector');
+  const BalPowerIndexConnector = await artifacts.require('BalPowerIndexConnector');
   const StablePoolFactory = await artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
 
   AssetManager.numberFormat = 'String';
   BProtocolPowerIndexConnector.numberFormat = 'String';
-  CrvPowerIndexConnector.numberFormat = 'String';
+  BalPowerIndexConnector.numberFormat = 'String';
   IVault.numberFormat = 'String';
 
   const { web3 } = IERC20;
@@ -128,7 +128,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     await pool.getPoolId(),
   );
   console.log('lusdConnector', lusdConnector.address);
-  const bbausdConnector = await CrvPowerIndexConnector.new(
+  const bbausdConnector = await BalPowerIndexConnector.new(
     bbausdAssetManager.address,
     liquidityGaugeAddress,
     bbaUSD.address,

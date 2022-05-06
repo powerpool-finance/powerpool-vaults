@@ -24,7 +24,7 @@ BProtocolPowerIndexConnector.numberFormat = 'String';
 const { web3 } = MockERC20;
 const { toBN } = web3.utils;
 
-describe.skip('CrvAssetManager Tests', () => {
+describe.skip('BalAssetManager Tests', () => {
 
   let deployer, alice, eve, piGov, stub, pvp;
 
