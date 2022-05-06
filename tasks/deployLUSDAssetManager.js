@@ -217,7 +217,8 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await increaseTime(60 * 60 * 24 * 14);
   await printState('bbausd', bbausdConnector);
   console.log('bbausdHolder getPendingRewards   ', await balancerMinter.contract.methods.mintFor(liquidityGaugeAddress, bbausdHolder).call({from: bbausdHolder}).then(r => r.toString()).catch(e => e));
-  await bbausdAssetManager.pokeFromReporter('1', true, powerPokeOpts, { from: pokerReporter });
+  res = await bbausdAssetManager.pokeFromReporter('1', true, powerPokeOpts, { from: pokerReporter });
+  console.log('res.receipt.gasUsed', res.receipt.gasUsed);
   await printState('bbausd', bbausdConnector);
 
   // await printState('lusd', lusdConnector);
