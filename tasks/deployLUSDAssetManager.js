@@ -50,7 +50,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   //bbausd
   const bbaUSDAddress = '0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb2';
   const liquidityGaugeAddress = '0x68d019f64a7aa97e2d4e7363aee42251d08124fb';
-  const balancerMinter = '0x239e55f427d44c3cc793f49bfb507ebe76638a2b';
+  const balancerMinterAddress = '0x239e55f427d44c3cc793f49bfb507ebe76638a2b';
   const balAddress = '0xba100000625a3754423978a60c9317c58a424e3d';
 
   const stablePoolFactory = await StablePoolFactory.new(vaultAddress);
@@ -133,7 +133,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     liquidityGaugeAddress,
     bbaUSD.address,
     balAddress,
-    balancerMinter,
+    balancerMinterAddress,
     vaultAddress,
     await pool.getPoolId(),
   );
@@ -183,6 +183,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   const bamm = await BAMM.at(bammAddress);
   const gauge = await ILiquidityGauge.at(liquidityGaugeAddress);
+  const balancerMinter = await IBalancerMinter.at(balancerMinterAddress);
 
   // await showBammInitInfo();
 
@@ -204,14 +205,18 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
 
   console.log('gauge.deposit');
   await bbaUSD.approve(liquidityGaugeAddress, maxUint256, {from: bbausdHolder});
-  await gauge.deposit(ether(1), bbausdHolder, false, {from: bbausdHolder});
+  await gauge.deposit(ether(1e6), bbausdHolder, false, {from: bbausdHolder});
+  await balancerMinter.setMinterApproval(bbausdHolder, true, {from: bbausdHolder});
+  await balancerMinter.setMinterApproval(deployer, true, {from: bbausdHolder});
 
   console.log('pokeFromReporter');
   await printState('bbausd', bbausdConnector);
   await bbausdAssetManager.pokeFromReporter('1', false, powerPokeOpts, { from: pokerReporter });
+  await gauge.deposit(ether(1e6), bbausdHolder, false, {from: bbausdHolder});
   await printState('bbausd', bbausdConnector);
-  await increaseTime(60 * 60 * 24);
+  await increaseTime(60 * 60 * 24 * 14);
   await printState('bbausd', bbausdConnector);
+  console.log('bbausdHolder getPendingRewards   ', await balancerMinter.contract.methods.mintFor(liquidityGaugeAddress, bbausdHolder).call({from: bbausdHolder}).then(r => r.toString()).catch(e => e));
   await bbausdAssetManager.pokeFromReporter('1', true, powerPokeOpts, { from: pokerReporter });
   await printState('bbausd', bbausdConnector);
 
