@@ -9,7 +9,6 @@ import "./AbstractBalancerVaultConnector.sol";
 import "../interfaces/ILiquidityGauge.sol";
 import "../interfaces/balancerV3/IBalancerMinter.sol";
 import "../interfaces/balancerV3/IAsset.sol";
-import "hardhat/console.sol";
 
 contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
@@ -48,7 +47,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     _claimImpl();
 
     uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
-    console.log("receivedReward", receivedReward);
+
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
       (, rewardsToReinvest, ) = _distributePerformanceFee(
@@ -59,11 +58,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
         REWARDS_TOKEN,
         receivedReward
       );
-      console.log("rewardsToReinvest", rewardsToReinvest);
-
-      console.log("_swapRewardsToUnderlying start");
       _swapRewardsToUnderlying(rewardsToReinvest);
-      console.log("_swapRewardsToUnderlying end");
 
       _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
       return stakeData;
@@ -95,7 +90,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     assets[4] = IAsset(0x2BBf681cC4eb09218BEe85EA2a5d3D13Fa40fC0C); // bbaUSDT
     assets[5] = IAsset(0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2); // bbaUSD
 
-    IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](1);
+    IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](5);
     // BAL-WETH
     swaps[0] = IVault.BatchSwapStep(0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000014, 0, 1, _sum, "");
     // USDC-WETH
@@ -213,10 +208,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
 
   /*** OVERRIDES ***/
   function _claimImpl() internal {
-    console.log("address(this)", address(this));
-    console.log("ASSET_MANAGER", ASSET_MANAGER);
     REWARDS_MINTER.mintFor(STAKING, ASSET_MANAGER);
-    console.log("_claimImpl done");
   }
 
   function _stakeImpl(uint256 _amount) internal {
