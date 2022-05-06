@@ -95,7 +95,7 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     assets[4] = IAsset(0x2BBf681cC4eb09218BEe85EA2a5d3D13Fa40fC0C); // bbaUSDT
     assets[5] = IAsset(0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2); // bbaUSD
 
-    IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](4);
+    IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](1);
     // BAL-WETH
     swaps[0] = IVault.BatchSwapStep(0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000014, 0, 1, _sum, "");
     // USDC-WETH
@@ -108,6 +108,9 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
     swaps[4] = IVault.BatchSwapStep(0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb20000000000000000000000fe, 4, 5, 0, "");
 
     int256[] memory limits = new int256[](6);
+    for (uint256 i = 0; i < limits.length; i++) {
+      limits[i] = type(int256).max;
+    }
     IVault.FundManagement memory fundManagment = IVault.FundManagement(ASSET_MANAGER, false, ASSET_MANAGER, false);
 
     IVault(VAULT).batchSwap(IVault.SwapKind.GIVEN_IN, swaps, assets, fundManagment, limits, uint(-1));
@@ -141,6 +144,7 @@ contract CrvPowerIndexConnector is AbstractBalancerVaultConnector {
   function initRouter(bytes calldata) external override {
     UNDERLYING.approve(STAKING, uint256(-1));
     UNDERLYING.approve(VAULT, uint256(-1));
+    REWARDS_TOKEN.approve(VAULT, uint256(-1));
     REWARDS_MINTER.setMinterApproval(ASSET_MANAGER, true);
     REWARDS_MINTER.setMinterApproval(CONNECTOR, true);
   }
