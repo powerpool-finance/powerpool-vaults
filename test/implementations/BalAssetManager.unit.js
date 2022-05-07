@@ -5,7 +5,7 @@ const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
 const MockWETH = artifacts.require('MockWETH');
 const MockSwapper = artifacts.require('MockSwapper');
-const BProtocolPowerIndexConnector = artifacts.require('MockBProtocolConnector');
+const BalPowerIndexConnector = artifacts.require('MockBProtocolConnector');
 const AssetManager = artifacts.require('AssetManager');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
@@ -13,18 +13,19 @@ const MockPoke = artifacts.require('MockPoke');
 const StablePoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
 const WeightedPoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/WeightedPoolFactory');
 const StablePool = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePool');
-const VeBoostProxy = artifacts.require('VeBoostProxy');
+const VeBoostProxy = artifacts.require('VeBoostProxyMock');
+const VotingEscrow = artifacts.require('VotingEscrowMock');
 
 MockERC20.numberFormat = 'String';
-BProtocolPowerIndexConnector.numberFormat = 'String';
+BalPowerIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 AssetManager.numberFormat = 'String';
-BProtocolPowerIndexConnector.numberFormat = 'String';
+BalPowerIndexConnector.numberFormat = 'String';
 
 const { web3 } = MockERC20;
 const { toBN } = web3.utils;
 
-describe.skip('BalAssetManager Tests', () => {
+describe.only('BalAssetManager Tests', () => {
 
   let deployer, alice, eve, piGov, stub, pvp;
 
@@ -85,12 +86,25 @@ describe.skip('BalAssetManager Tests', () => {
     ]);
     ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), { from: deployer });
     const busd = await MockERC20.new('bUSD', 'bUSD', '18', ether(20e6), { from: deployer });
+    const bal = await MockERC20.new('BAL', 'BAL', '18', ether(20e6), { from: deployer });
     // mainnet: 0xa5bf2ddf098bb0ef6d120c98217dd6b141c74ee0
     const weightedPoolFactory = await WeightedPoolFactory.new(vault.address);
+    const wethSecond = web3.utils.toBN(weth.address).gt(web3.utils.toBN(bal.address));
+    let res = await weightedPoolFactory.create(
+      'Balancer PP Stable Pool',
+      'bb-p-USD',
+      wethSecond ? [bal.address, weth.address] : [weth.address, bal.address],
+      wethSecond ? [ether(0.8), ether(0.2)] : [ether(0.2), ether(0.8)],
+      [zeroAddress, zeroAddress],
+      1e12,
+      deployer,
+    );
+
+    const balPool = await StablePool.at(res.receipt.logs[0].args.pool);
 
 
     // mainnet: 0x6f5a2ee11e7a772aeb5114a20d0d7c0ff61eb8a0
-    const veBoostProxy = await VeBoostProxy.deploy();
+    const veBoostProxy = await VeBoostProxy.new();
     // mainnet: 0xba100000625a3754423978a60c9317c58a424e3d
     const balancerToken = await deployContractWithBytecode('crv/BalancerGovernanceToken', web3, [
       'BAL',
@@ -102,13 +116,20 @@ describe.skip('BalAssetManager Tests', () => {
       balancerToken.address
     ]);
     // mainnet: 0xc128a9954e6c874ea3d62ce62b468ba073093f25
-    const votingEscrow = await deployContractWithBytecode('crv/VotingEscrow', web3, []);
+    const votingEscrow = await VotingEscrow.new(balPool.address);
     // mainnet: 0xc128468b7ce63ea702c1f104d55a2566b13d3abd
-    const gaugeController = await deployContractWithBytecode('crv/GaugeController', web3, []);
-    // mainnet: 0x68d019f64a7aa97e2d4e7363aee42251d08124fb
-    const liquidityGauge = await deployContractWithBytecode('crv/LiquidityGauge', web3, []);
+    const gaugeController = await deployContractWithBytecode('crv/GaugeController', web3, [votingEscrow.address, piGov]);
     // mainnet: 0x239e55f427d44c3cc793f49bfb507ebe76638a2b
-    const balancerMinter = await deployContractWithBytecode('crv/BalancerMinter', web3, []);
+    const balancerMinter = await deployContractWithBytecode('crv/BalancerMinter', web3, [
+      balancerTokenAdmin.address,
+      gaugeController.address,
+    ]);
+    // mainnet: 0x68d019f64a7aa97e2d4e7363aee42251d08124fb
+    const liquidityGauge = await deployContractWithBytecode('crv/LiquidityGauge', web3, [
+      balancerMinter.address,
+      veBoostProxy.address,
+      piGov
+    ]);
 
 
     await authorizer.grantRoles(['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'], deployer, {
@@ -138,7 +159,7 @@ describe.skip('BalAssetManager Tests', () => {
     ausd = await MockERC20.new('aUSD', 'aUSD', '18', ether(20e6), { from: deployer });
     lusdSecond = web3.utils.toBN(lusd.address).gt(web3.utils.toBN(ausd.address));
     stablePoolFactory = await StablePoolFactory.new(vault.address);
-    let res = await stablePoolFactory.create(
+    res = await stablePoolFactory.create(
       'Balancer PP Stable Pool',
       'bb-p-USD',
       lusdSecond ? [ausd.address, lusd.address] : [lusd.address, ausd.address],
@@ -149,13 +170,6 @@ describe.skip('BalAssetManager Tests', () => {
     );
 
     const pool = await StablePool.at(res.receipt.logs[0].args.pool);
-
-    await borrowerOperations.openTrove(ether(1), ether(2e6), zeroAddress, zeroAddress, { value: ether(3e3) });
-    await borrowerOperations.openTrove(ether(1), ether(5e3), zeroAddress, zeroAddress, {
-      value: ether(4),
-      from: alice,
-    });
-    await borrowerOperations.openTrove(ether(1), ether(7e3), zeroAddress, zeroAddress, { value: ether(3), from: eve });
 
     ausd.approve(vault.address, maxUint256);
     lusd.approve(vault.address, maxUint256);
@@ -169,7 +183,7 @@ describe.skip('BalAssetManager Tests', () => {
       fromInternalBalance: false,
     });
 
-    connector = await BProtocolPowerIndexConnector.new(
+    connector = await BalPowerIndexConnector.new(
       assetManager.address,
       staking.address,
       lusd.address,
