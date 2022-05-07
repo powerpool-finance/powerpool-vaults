@@ -18,7 +18,6 @@ import "@powerpool/balancer-v2-solidity-utils/contracts/openzeppelin/ReentrancyG
 import "@powerpool/balancer-v2-solidity-utils/contracts/openzeppelin/SafeMath.sol";
 import "@powerpool/balancer-v2-solidity-utils/contracts/openzeppelin/EIP712.sol";
 
-import "./IBalancerMinter.sol";
 import "./IBalancerToken.sol";
 import "../../interfaces/ILiquidityGauge.sol";
 

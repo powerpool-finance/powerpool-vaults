@@ -61,7 +61,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     reserveRatio: ether(0.1),
     reserveRatioLowerBound: ether(0.01),
     reserveRatioUpperBound: ether(0.2),
-    claimRewardsInterval: 60 * 50,
+    claimRewardsInterval: 60 * 60 * 24,
     performanceFeeReceiver: '0xd132973eaebbd6d7ca7b88e9170f2cca058de430',
     performanceFee: ether(0.003),
   };
@@ -199,7 +199,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     from: OWNER,
   });
 
-  await bbausdAssetManager.setClaimParams('0', await bbausdConnector.packClaimParams(ether('1')), {
+  await bbausdAssetManager.setClaimParams('0', await bbausdConnector.packClaimParams(60 * 60 * 24), {
     from: OWNER,
   });
 
@@ -213,11 +213,14 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await printState('bbausd', bbausdConnector);
   await bbausdAssetManager.pokeFromReporter('1', false, powerPokeOpts, { from: pokerReporter });
   await gauge.deposit(ether(1e6), bbausdHolder, false, {from: bbausdHolder});
+  console.log('reward_data.last_update', await gauge.reward_data(bbausdAssetManager.address).then(r => r.last_update.toString()));
+
   await printState('bbausd', bbausdConnector);
   await increaseTime(60 * 60 * 24 * 14);
   await printState('bbausd', bbausdConnector);
   console.log('bbausdHolder getPendingRewards   ', await balancerMinter.contract.methods.mintFor(liquidityGaugeAddress, bbausdHolder).call({from: bbausdHolder}).then(r => r.toString()).catch(e => e));
   res = await bbausdAssetManager.pokeFromReporter('1', true, powerPokeOpts, { from: pokerReporter });
+  console.log('reward_data.last_update', await gauge.reward_data(bbausdAssetManager.address).then(r => r.last_update.toString()));
   console.log('res.receipt.gasUsed', res.receipt.gasUsed);
   await printState('bbausd', bbausdConnector);
 
