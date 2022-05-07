@@ -48,7 +48,11 @@ interface IRouterConnector {
 
   function migrate(bytes calldata) external;
 
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData calldata _distributeData)
+  function claimRewards(
+    PowerIndexRouterInterface.StakeStatus _status,
+    DistributeData calldata _distributeData,
+    bytes calldata _claimParams
+  )
     external
     returns (bytes calldata);
 }

@@ -41,7 +41,11 @@ abstract contract AbstractStakeRedeemConnector is AbstractProfitDistributionConn
 
   /*** PERMISSIONLESS REWARD CLAIMING AND DISTRIBUTION ***/
 
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
+  function claimRewards(
+    PowerIndexRouterInterface.StakeStatus _status,
+    DistributeData memory _distributeData,
+    bytes memory
+  )
     external
     virtual
     override

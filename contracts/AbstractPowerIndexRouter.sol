@@ -526,7 +526,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
    */
   function _claimRewards(Connector storage c, StakeStatus _stakeStatus) internal {
     (bool success, bytes memory result) = address(c.connector).delegatecall(
-      abi.encodeWithSelector(IRouterConnector.claimRewards.selector, _stakeStatus, _getDistributeData(c))
+      abi.encodeWithSelector(IRouterConnector.claimRewards.selector, _stakeStatus, _getDistributeData(c), c.claimParams)
     );
     require(success, string(result));
     result = abi.decode(result, (bytes));

@@ -39,15 +39,26 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     CONNECTOR = address(this);
   }
 
+  function isReadyToClaim(bytes memory _claimParams) public view returns (bool) {
+    uint256 updateInterval = unpackClaimParams(_claimParams);
+    if (updateInterval == 0) {
+      return true;
+    }
+    (, , , , uint256 lastRewardsUpdate, ) = ILiquidityGauge(STAKING).reward_data(ASSET_MANAGER);
+    return lastRewardsUpdate.add(updateInterval) <= block.timestamp;
+  }
+
   // solhint-disable-next-line
   function claimRewards(
     PowerIndexRouterInterface.StakeStatus, /*_status*/
-    DistributeData memory _distributeData
+    DistributeData memory _distributeData,
+    bytes memory _claimParams
   ) external override returns (bytes memory stakeData) {
-    _claimImpl();
+    if (isReadyToClaim(_claimParams)) {
+      _claimImpl();
+    }
 
     uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
-
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
       (, rewardsToReinvest, ) = _distributePerformanceFee(
@@ -81,7 +92,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
    * @dev Transfers capital into the asset manager, and then invests it
    * @param _sum - the amount of tokens being deposited
    */
-  function _swapRewardsToUnderlying(uint256 _sum) internal {
+  function _swapRewardsToUnderlying(uint256 _sum) internal virtual {
     IAsset[] memory assets = new IAsset[](6);
     assets[0] = IAsset(0xba100000625a3754423978a60c9317c58a424e3D); // BAL
     assets[1] = IAsset(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH
@@ -112,9 +123,9 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function stake(uint256 _amount, DistributeData memory _distributeData)
-    public
-    override
-    returns (bytes memory result, bool claimed)
+  public
+  override
+  returns (bytes memory result, bool claimed)
   {
     uint256 underlyingStaked = getUnderlyingStaked();
     _capitalOut(underlyingStaked, _amount);
@@ -123,9 +134,9 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function redeem(uint256 _amount, DistributeData memory _distributeData)
-    external
-    override
-    returns (bytes memory result, bool claimed)
+  external
+  override
+  returns (bytes memory result, bool claimed)
   {
     uint256 underlyingStaked = getUnderlyingStaked();
     // redeem amount will be converted to shares
@@ -139,7 +150,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   function initRouter(bytes calldata) external override {
     UNDERLYING.approve(STAKING, uint256(-1));
     UNDERLYING.approve(VAULT, uint256(-1));
-    REWARDS_TOKEN.approve(VAULT, uint256(-1));
+    REWARDS_TOKEN.approve(getSwapperAddress(), uint256(-1));
     REWARDS_MINTER.setMinterApproval(ASSET_MANAGER, true);
     REWARDS_MINTER.setMinterApproval(CONNECTOR, true);
   }
@@ -153,14 +164,18 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     return true;
   }
 
+  function getSwapperAddress() public view virtual returns (address) {
+    return VAULT;
+  }
+
   function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) public pure returns (bytes memory) {
     return abi.encode(_lastAssetsPerShare, _underlyingEarned);
   }
 
   function unpackStakeData(bytes memory _stakeData)
-    public
-    pure
-    returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
+  public
+  pure
+  returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
   {
     if (_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
       return (0, 0);
@@ -171,18 +186,18 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(uint256 _minAmount) public pure returns (bytes memory) {
-    return abi.encode(_minAmount);
+  function packClaimParams(uint256 _updateInterval) public pure returns (bytes memory) {
+    return abi.encode(_updateInterval);
   }
 
   /**
    * @notice Unpack claim params from bytes to variables.
    */
-  function unpackClaimParams(bytes memory _claimParams) public pure returns (uint256 minClaimAmount) {
+  function unpackClaimParams(bytes memory _claimParams) public pure returns (uint256 updateInterval) {
     if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
       return (0);
     }
-    (minClaimAmount) = abi.decode(_claimParams, (uint256));
+    (updateInterval) = abi.decode(_claimParams, (uint256));
   }
 
   /**
@@ -196,9 +211,9 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
    * @notice Unpack claim params from bytes to variables.
    */
   function unpackStakeParams(bytes memory _stakeParams)
-    public
-    pure
-    returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
+  public
+  pure
+  returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
   {
     if (_stakeParams.length == 0 || keccak256(_stakeParams) == keccak256("")) {
       return (0, 0);

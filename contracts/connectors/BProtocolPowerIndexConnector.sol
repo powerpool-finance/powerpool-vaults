@@ -40,7 +40,8 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   // solhint-disable-next-line
   function claimRewards(
     PowerIndexRouterInterface.StakeStatus, /*_status*/
-    DistributeData memory _distributeData
+    DistributeData memory _distributeData,
+    bytes memory
   ) external override returns (bytes memory stakeData) {
     uint256 pending = getPendingRewards();
     if (pending > 0) {
