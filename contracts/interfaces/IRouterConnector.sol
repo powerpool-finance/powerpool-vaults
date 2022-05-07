@@ -52,7 +52,5 @@ interface IRouterConnector {
     PowerIndexRouterInterface.StakeStatus _status,
     DistributeData calldata _distributeData,
     bytes calldata _claimParams
-  )
-    external
-    returns (bytes calldata);
+  ) external returns (bytes calldata);
 }

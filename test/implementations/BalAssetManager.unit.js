@@ -1,4 +1,4 @@
-const { time, constants, expectEvent, expectRevert } = require('@openzeppelin/test-helpers');
+const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
 const { ether, zeroAddress, maxUint256, deployContractWithBytecode } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
@@ -26,10 +26,10 @@ const { toBN } = web3.utils;
 
 describe('BalAssetManager Tests', () => {
 
-  let deployer, alice, eve, piGov, stub, pvp;
+  let deployer, alice, piGov, pvp;
 
   before(async function () {
-    [deployer, alice, eve, piGov, stub, pvp] = await web3.eth.getAccounts();
+    [deployer, alice, piGov, pvp] = await web3.eth.getAccounts();
   });
 
   let lusd,
@@ -221,8 +221,8 @@ describe('BalAssetManager Tests', () => {
 
       await time.increase(time.duration.minutes(60));
 
-      const expectedReward = ether(71.81557632398753894);
-      const expectedFee = ether(71.81557632398753894 * 0.15);
+      const expectedReward = ether('71.81557632398753894');
+      const expectedFee = toBN(ether('71.81557632398753894')).mul(toBN(ether('0.15'))).div(toBN(ether('1')));
 
       approximatelyEqual(await connector.contract.methods.getPendingRewards().call({}).then(r => r.toString()), expectedReward);
 
@@ -255,12 +255,12 @@ describe('BalAssetManager Tests', () => {
       )[1];
       assert.equal(transfer.args.from, assetManager.address);
       assert.equal(transfer.args.to, staking.address);
-      approximatelyEqual(transfer.args.value, ether(30.525856697819314641));
+      approximatelyEqual(transfer.args.value, ether('30.525856697819314641'));
 
-      approximatelyEqual(await assetManager.getUnderlyingStaked(), ether(1600030.530093457943925234));
-      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(400000));
-      approximatelyEqual(await assetManager.getUnderlyingTotal(), ether(2000030.530093457943925234));
-      approximatelyEqual(await staking.balanceOf(assetManager.address), ether(1600030.530093457943925234));
+      approximatelyEqual(await assetManager.getUnderlyingStaked(), ether('1600030.530093457943925234'));
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether('400000'));
+      approximatelyEqual(await assetManager.getUnderlyingTotal(), ether('2000030.530093457943925234'));
+      approximatelyEqual(await staking.balanceOf(assetManager.address), ether('1600030.530093457943925234'));
     });
 
     it('should claim rewards twice and reinvest', async () => {
@@ -274,7 +274,7 @@ describe('BalAssetManager Tests', () => {
 
       await time.increase(time.duration.minutes(60));
 
-      const firstReward = ether(71.81557632398753894);
+      const firstReward = ether('71.81557632398753894');
       approximatelyEqual(await connector.contract.methods.getPendingRewards().call({}).then(r => r.toString()), firstReward);
 
       let res = await connector.getPendingRewards();
@@ -289,7 +289,7 @@ describe('BalAssetManager Tests', () => {
 
       await time.increase(time.duration.minutes(60));
 
-      const secondReward = ether(35.907788161993769470);
+      const secondReward = ether('35.907788161993769470');
       await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
       res = await assetManager.pokeFromReporter('1', true, '0x');
 
@@ -302,7 +302,7 @@ describe('BalAssetManager Tests', () => {
       approximatelyEqual(transfer.args.value, secondReward);
 
       const totalReward = toBN(firstReward).add(toBN(secondReward));
-      const fee = totalReward.mul(toBN(ether(0.15))).div(toBN(ether(1)));
+      const fee = totalReward.mul(toBN(ether('0.15'))).div(toBN(ether(1)));
       transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
         l => l.args.to === swapper.address && l.event === 'Transfer',
       )[0];
@@ -321,10 +321,10 @@ describe('BalAssetManager Tests', () => {
       assert.equal(transfer.args.from, assetManager.address);
       approximatelyEqual(transfer.args.value, totalReward.sub(fee).div(toBN('2')));
 
-      approximatelyEqual(await assetManager.getUnderlyingStaked(), ether(1600045.778193146417445482));
-      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether(400000));
-      approximatelyEqual(await assetManager.getUnderlyingTotal(), ether(2000045.778193146417445482));
-      approximatelyEqual(await staking.balanceOf(assetManager.address), ether(1600045.778193146417445482));
+      approximatelyEqual(await assetManager.getUnderlyingStaked(), ether('1600045.778193146417445482'));
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether('400000'));
+      approximatelyEqual(await assetManager.getUnderlyingTotal(), ether('2000045.778193146417445482'));
+      approximatelyEqual(await staking.balanceOf(assetManager.address), ether('1600045.778193146417445482'));
     });
   });
 });

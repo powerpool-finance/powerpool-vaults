@@ -45,12 +45,7 @@ abstract contract AbstractStakeRedeemConnector is AbstractProfitDistributionConn
     PowerIndexRouterInterface.StakeStatus _status,
     DistributeData memory _distributeData,
     bytes memory
-  )
-    external
-    virtual
-    override
-    returns (bytes memory stakeData)
-  {
+  ) external virtual override returns (bytes memory stakeData) {
     if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
       uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
       _claimImpl();

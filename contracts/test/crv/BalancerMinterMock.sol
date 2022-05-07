@@ -35,9 +35,8 @@ contract BalancerMinterMock is ReentrancyGuard, EIP712 {
   mapping(address => uint256) internal _nextNonce;
 
   // solhint-disable-next-line var-name-mixedcase
-  bytes32 private immutable _SET_MINTER_APPROVAL_TYPEHASH = keccak256(
-    "SetMinterApproval(address minter,bool approval,uint256 nonce,uint256 deadline)"
-  );
+  bytes32 private immutable _SET_MINTER_APPROVAL_TYPEHASH =
+    keccak256("SetMinterApproval(address minter,bool approval,uint256 nonce,uint256 deadline)");
 
   event MinterApprovalSet(address indexed user, address indexed minter, bool approval);
 

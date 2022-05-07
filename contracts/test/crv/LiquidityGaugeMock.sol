@@ -19,13 +19,21 @@ contract LiquidityGaugeMock is ILiquidityGauge {
   IERC20 public rewardsTokens;
   uint256 public rewardsPerSecond;
 
-  constructor(IERC20 _stakeToken, IERC20 _rewardsTokens, uint256 _rewardsPerSecond) public {
+  constructor(
+    IERC20 _stakeToken,
+    IERC20 _rewardsTokens,
+    uint256 _rewardsPerSecond
+  ) public {
     stakeToken = _stakeToken;
     rewardsTokens = _rewardsTokens;
     rewardsPerSecond = _rewardsPerSecond;
   }
 
-  function deposit(uint256 _amount, address _depositFor, bool _claim) external override {
+  function deposit(
+    uint256 _amount,
+    address _depositFor,
+    bool _claim
+  ) external override {
     console.log("stakeToken.balanceOf", stakeToken.balanceOf(msg.sender));
     stakeToken.transferFrom(msg.sender, address(this), _amount);
     balanceOf[_depositFor] = balanceOf[_depositFor].add(_amount);
@@ -43,7 +51,9 @@ contract LiquidityGaugeMock is ILiquidityGauge {
   function _updateAccumulated(address _user) internal {
     accumulated = accumulated.add(rewardsPerSecond.mul(block.timestamp.sub(lastAccumulatedAt)));
     if (reward_data[_user].rate != 0) {
-      totalRewards[_user] = totalRewards[_user].add(accumulated.sub(reward_data[_user].rate).mul(balanceOf[_user]).div(totalSupply));
+      totalRewards[_user] = totalRewards[_user].add(
+        accumulated.sub(reward_data[_user].rate).mul(balanceOf[_user]).div(totalSupply)
+      );
     }
     reward_data[_user].rate = accumulated;
     lastAccumulatedAt = block.timestamp;

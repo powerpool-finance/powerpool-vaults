@@ -2,7 +2,7 @@ require('@nomiclabs/hardhat-truffle5');
 require('@nomiclabs/hardhat-ethers');
 
 task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (__, { ethers, network }) => {
-  const { ether, zeroAddress, impersonateAccount, gwei, increaseTime, maxUint256 } = require('../test/helpers');
+  const { ether, impersonateAccount, gwei, increaseTime, maxUint256 } = require('../test/helpers');
   const IERC20 = await artifacts.require('@openzeppelin/contracts/token/ERC20/IERC20.sol:IERC20');
   const IVault = await artifacts.require('contracts/interfaces/balancerV3/IVault.sol:IVault');
   const ILiquidityGauge = await artifacts.require('ILiquidityGauge');
@@ -10,8 +10,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   const PowerPoke = await artifacts.require('IPowerPoke');
   const IBalancerMinter = await artifacts.require('IBalancerMinter');
   const IBasePool = await artifacts.require('contracts/interfaces/balancerV3/IBasePool.sol:IBasePool');
-  const BAMM = await artifacts.require('BAMM');
-  const StabilityPool = await artifacts.require('StabilityPool');
+  // const BAMM = await artifacts.require('BAMM');
   const BProtocolPowerIndexConnector = await artifacts.require('BProtocolPowerIndexConnector');
   const BalPowerIndexConnector = await artifacts.require('BalPowerIndexConnector');
   const StablePoolFactory = await artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
@@ -181,7 +180,7 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     { to: pokerReporter, compensateInETH: true },
   );
 
-  const bamm = await BAMM.at(bammAddress);
+  // const bamm = await BAMM.at(bammAddress);
   const gauge = await ILiquidityGauge.at(liquidityGaugeAddress);
   const balancerMinter = await IBalancerMinter.at(balancerMinterAddress);
 
@@ -247,27 +246,27 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
     console.log(prefix, printsNumber + ' assetManagerRewards ', await lqty.balanceOf(lusdAssetManager.address).then(r => r.toString()));
   }
 
-  async function showBammInitInfo() {
-    console.log('stability pool', await bamm.SP());
-    const stabilityPool = await StabilityPool.at(await bamm.SP());
-    console.log(
-      'getCompoundedLUSDDeposit',
-      await stabilityPool.getCompoundedLUSDDeposit(bammAddress).then(r => r.toString()),
-    );
-    console.log('getDepositorETHGain', await stabilityPool.getDepositorETHGain(bammAddress).then(r => r.toString()));
-    console.log('fetchPrice', await bamm.fetchPrice().then(r => r.toString()));
-  }
-
-  async function showBammStakeInfo(number) {
-    const c = await lusdAssetManager.connectors('0');
-    console.log('stake ' + number, await bamm.stake(lusdAssetManager.address).then(a => a.toString()));
-    console.log('isClaimAvailable', await lusdConnector.isClaimAvailable(c.claimParams));
-    console.log('claimRewardsIntervalReached', await lusdAssetManager.claimRewardsIntervalReached(c.lastClaimRewardsAt));
-    console.log(
-      'getStakeAndClaimStatusByConnectorIndex',
-      await lusdAssetManager.getStakeAndClaimStatusByConnectorIndex('0', true),
-    );
-  }
+  // async function showBammInitInfo() {
+  //   console.log('stability pool', await bamm.SP());
+  //   const stabilityPool = await StabilityPool.at(await bamm.SP());
+  //   console.log(
+  //     'getCompoundedLUSDDeposit',
+  //     await stabilityPool.getCompoundedLUSDDeposit(bammAddress).then(r => r.toString()),
+  //   );
+  //   console.log('getDepositorETHGain', await stabilityPool.getDepositorETHGain(bammAddress).then(r => r.toString()));
+  //   console.log('fetchPrice', await bamm.fetchPrice().then(r => r.toString()));
+  // }
+  //
+  // async function showBammStakeInfo(number) {
+  //   const c = await lusdAssetManager.connectors('0');
+  //   console.log('stake ' + number, await bamm.stake(lusdAssetManager.address).then(a => a.toString()));
+  //   console.log('isClaimAvailable', await lusdConnector.isClaimAvailable(c.claimParams));
+  //   console.log('claimRewardsIntervalReached', await lusdAssetManager.claimRewardsIntervalReached(c.lastClaimRewardsAt));
+  //   console.log(
+  //     'getStakeAndClaimStatusByConnectorIndex',
+  //     await lusdAssetManager.getStakeAndClaimStatusByConnectorIndex('0', true),
+  //   );
+  // }
 
   async function addPokeClient(assetManagerAddress) {
     const BONUS_NUMERATOR = '7610350076';

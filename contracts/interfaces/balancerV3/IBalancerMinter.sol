@@ -1,3 +1,5 @@
+pragma solidity ^0.7.0;
+
 interface IBalancerMinter {
   event MinterApprovalSet(address indexed user, address indexed minter, bool approval);
 
@@ -16,7 +18,7 @@ interface IBalancerMinter {
   function mintFor(address gauge, address user) external returns (uint256);
 
   /**
-  * @notice Set whether `minter` is approved to mint tokens on your behalf
-  */
+   * @notice Set whether `minter` is approved to mint tokens on your behalf
+   */
   function setMinterApproval(address minter, bool approval) external;
 }

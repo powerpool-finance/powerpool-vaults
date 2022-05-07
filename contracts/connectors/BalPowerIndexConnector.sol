@@ -119,24 +119,20 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     }
     IVault.FundManagement memory fundManagment = IVault.FundManagement(ASSET_MANAGER, false, ASSET_MANAGER, false);
 
-    IVault(VAULT).batchSwap(IVault.SwapKind.GIVEN_IN, swaps, assets, fundManagment, limits, uint(-1));
+    IVault(VAULT).batchSwap(IVault.SwapKind.GIVEN_IN, swaps, assets, fundManagment, limits, uint256(-1));
   }
 
-  function stake(uint256 _amount, DistributeData memory _distributeData)
-  public
-  override
-  returns (bytes memory result, bool claimed)
-  {
+  function stake(uint256 _amount, DistributeData memory) public override returns (bytes memory result, bool claimed) {
     uint256 underlyingStaked = getUnderlyingStaked();
     _capitalOut(underlyingStaked, _amount);
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
   }
 
-  function redeem(uint256 _amount, DistributeData memory _distributeData)
-  external
-  override
-  returns (bytes memory result, bool claimed)
+  function redeem(uint256 _amount, DistributeData memory)
+    external
+    override
+    returns (bytes memory result, bool claimed)
   {
     uint256 underlyingStaked = getUnderlyingStaked();
     // redeem amount will be converted to shares
@@ -144,7 +140,6 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     // capital in amount without fee
     _capitalIn(underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
-    claimed = true;
   }
 
   function initRouter(bytes calldata) external override {
@@ -173,9 +168,9 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function unpackStakeData(bytes memory _stakeData)
-  public
-  pure
-  returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
+    public
+    pure
+    returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
   {
     if (_stakeData.length == 0 || keccak256(_stakeData) == keccak256("")) {
       return (0, 0);
@@ -211,9 +206,9 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
    * @notice Unpack claim params from bytes to variables.
    */
   function unpackStakeParams(bytes memory _stakeParams)
-  public
-  pure
-  returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
+    public
+    pure
+    returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
   {
     if (_stakeParams.length == 0 || keccak256(_stakeParams) == keccak256("")) {
       return (0, 0);
@@ -248,20 +243,9 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   /**
-  * @dev This function should be manually changed to "view" in the ABI
-  */
+   * @dev This function should be manually changed to "view" in the ABI
+   */
   function getPendingRewards() public returns (uint256) {
     return REWARDS_MINTER.mintFor(STAKING, ASSET_MANAGER);
   }
 }
-
-
-
-
-
-
-
-
-
-
-
