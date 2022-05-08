@@ -135,9 +135,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     returns (bytes memory result, bool claimed)
   {
     uint256 underlyingStaked = getUnderlyingStaked();
-    // redeem amount will be converted to shares
     _redeemImpl(_amount);
-    // capital in amount without fee
     _capitalIn(underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
   }
