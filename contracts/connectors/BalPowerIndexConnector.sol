@@ -93,27 +93,24 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
    * @param _sum - the amount of tokens being deposited
    */
   function _swapRewardsToUnderlying(uint256 _sum) internal virtual {
-    IAsset[] memory assets = new IAsset[](6);
+    IAsset[] memory assets = new IAsset[](5);
     assets[0] = IAsset(0xba100000625a3754423978a60c9317c58a424e3D); // BAL
     assets[1] = IAsset(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH
     assets[2] = IAsset(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48); // USDC
-    assets[3] = IAsset(0xdAC17F958D2ee523a2206206994597C13D831ec7); // USDT
-    assets[4] = IAsset(0x2BBf681cC4eb09218BEe85EA2a5d3D13Fa40fC0C); // bbaUSDT
-    assets[5] = IAsset(0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2); // bbaUSD
+    assets[3] = IAsset(0x9210F1204b5a24742Eba12f710636D76240dF3d0); // bbaUSDC
+    assets[4] = IAsset(0x7B50775383d3D6f0215A8F290f2C9e2eEBBEceb2); // bbaUSD
 
-    IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](5);
+    IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](4);
     // BAL-WETH
     swaps[0] = IVault.BatchSwapStep(0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000014, 0, 1, _sum, "");
     // USDC-WETH
     swaps[1] = IVault.BatchSwapStep(0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019, 1, 2, 0, "");
-    // DAI-USDC-USDT
-    swaps[2] = IVault.BatchSwapStep(0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000063, 2, 3, 0, "");
-    // bbaUSDT-USDT-aUSDT
-    swaps[3] = IVault.BatchSwapStep(0x2bbf681cc4eb09218bee85ea2a5d3d13fa40fc0c0000000000000000000000fd, 3, 4, 0, "");
+    // bbaUSDC-USDC-aUSDC
+    swaps[2] = IVault.BatchSwapStep(0x9210f1204b5a24742eba12f710636d76240df3d00000000000000000000000fc, 2, 3, 0, "");
     // bbaUSDT-bbaUSD-bbaDAI-bbaUSDC
-    swaps[4] = IVault.BatchSwapStep(0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb20000000000000000000000fe, 4, 5, 0, "");
+    swaps[3] = IVault.BatchSwapStep(0x7b50775383d3d6f0215a8f290f2c9e2eebbeceb20000000000000000000000fe, 3, 4, 0, "");
 
-    int256[] memory limits = new int256[](6);
+    int256[] memory limits = new int256[](5);
     for (uint256 i = 0; i < limits.length; i++) {
       limits[i] = type(int256).max;
     }
