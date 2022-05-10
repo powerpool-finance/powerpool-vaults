@@ -5,6 +5,7 @@ require('solidity-coverage');
 require('hardhat-contract-sizer');
 require('hardhat-gas-reporter');
 require('./tasks/deployTornVault');
+require('./tasks/redeployTornRouter');
 
 const fs = require('fs');
 const homeDir = require('os').homedir();

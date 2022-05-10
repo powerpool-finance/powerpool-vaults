@@ -1,8 +1,13 @@
 const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
-const { ether, fromEther } = require('./../helpers');
+const { ether, fromEther, latestBlockTimestamp } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
+const {
+  Eip2612PermitUtils,
+  Web3ProviderConnector, fromRpcSig,
+} = require('@1inch/permit-signed-approvals-utils');
+
 const assert = require('chai').assert;
-const MockERC20 = artifacts.require('MockERC20');
+const MockERC20 = artifacts.require('MockERC20Permit');
 const TornPowerIndexConnector = artifacts.require('MockTornPowerIndexConnector');
 const PowerIndexRouter = artifacts.require('PowerIndexRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
@@ -16,10 +21,12 @@ MockERC20.numberFormat = 'String';
 TornPowerIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
 PowerIndexRouter.numberFormat = 'String';
+TornGovernance.numberFormat = 'String';
 
 const { web3 } = MockERC20;
 
 const REPORTER_ID = 42;
+const chainId = 31337;
 
 describe('PancakeMasterChefRouter Tests', () => {
   let deployer, bob, alice, piGov, stub, pvp, pool1, pool2;
@@ -147,18 +154,18 @@ describe('PancakeMasterChefRouter Tests', () => {
       await piTorn.deposit(ether('10000'), { from: alice });
 
       // bob
-      await torn.transfer(bob, ether('42000'));
+      await torn.transfer(bob, ether('100000'));
       await torn.approve(governance.address, ether('42000'), { from: bob });
       await governance.lockWithApproval(ether('42000'), { from: bob });
+    });
 
+    it('should claim rewards and reinvest', async () => {
       await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
 
       assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
       assert.equal(await torn.balanceOf(governance.address), ether(50000));
       assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
-    });
 
-    it('should claim rewards and reinvest', async () => {
       const reinvestDuration = 60 * 60;
       const claimParams = await connector.packClaimParams(reinvestDuration, GAS_TO_REINVEST);
       await myRouter.setClaimParams('0', claimParams, {from: piGov});
@@ -204,8 +211,11 @@ describe('PancakeMasterChefRouter Tests', () => {
       assert.equal(fromEther(await rewards.lockedProfit, ether('2.7197990668')) > 3300, true);
     });
 
-
     describe('on poke', async () => {
+      beforeEach(async () => {
+        await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+      });
+
       it('should do nothing when nothing has changed', async () => {
         await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
       });
@@ -239,6 +249,248 @@ describe('PancakeMasterChefRouter Tests', () => {
         assert.equal(await myRouter.calculateLockedProfit(), ether(0));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether('12360'));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('12360'));
+      });
+    });
+
+    describe('on deposit/withdraw', async () => {
+      it('should increase reserve if required', async () => {
+        let nonce = {};
+
+        await myRouter.enableRouterCallback(piTorn.address, true, {from: piGov});
+        await myRouter.setReserveConfig('0', '0', '0', '1000', {from: piGov});
+
+        assert.equal(await torn.balanceOf(piTorn.address), ether('10000'));
+        assert.equal(await governance.lockedBalance(piTorn.address), '0');
+
+        let vrs = await getPermitVrs(ether(10000), alice);
+        let res = await piTorn.depositWithPermit(ether(10000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: alice});
+        // console.log('1 deposit by alice gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(20000));
+
+        await piTorn.withdraw(ether('5000'), { from: alice });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(15000));
+
+        vrs = await getPermitVrs(ether(2000), alice);
+        await piTorn.depositWithPermit(ether(2000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: alice});
+        // console.log('2 deposit by alice gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(17000));
+
+        vrs = await getPermitVrs(ether(2000), bob);
+        await piTorn.depositWithPermit(ether(2000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('1 deposit by bob gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(19000));
+
+        vrs = await getPermitVrs(ether(1000), bob);
+        await piTorn.depositWithPermit(ether(1000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('2 deposit by bob gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(20000));
+
+        await staking.addBurnRewards(ether('50000'));
+
+        assert.equal(await torn.balanceOf(bob), ether('55000'));
+        assert.equal(await piTorn.balanceOf(bob), ether('3000'));
+        await expectRevert(piTorn.withdraw(ether('4000'), { from: bob }), 'ERC20: burn amount exceeds balance');
+        await piTorn.withdraw(ether('2000'), { from: bob });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('57000'));
+        assert.equal(await piTorn.balanceOf(bob), ether('1000'));
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(18000));
+
+        res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+          l => l.event === 'DistributeReward',
+        )[0];
+        assert.equal(distributeRewards.args.totalReward, ether('5000'));
+
+        assert.equal(await torn.balanceOf(governance.address), ether(64250));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(22250));
+        assert.equal(await myRouter.getUnderlyingStaked(), ether(22250));
+        assert.equal(await myRouter.getUnderlyingReserve(), ether('0'));
+        assert.equal(await myRouter.getUnderlyingAvailable(), ether(18000));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('22250'));
+        assert.equal(await myRouter.calculateLockedProfit(), ether('4250'));
+        assert.equal(await torn.balanceOf(piTorn.address), ether('0'));
+
+        await piTorn.withdraw(ether('100'), { from: bob });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('57100'));
+        assert.equal(await piTorn.balanceOf(bob), ether('900.001086099314865775'));
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(22150));
+
+        await time.increase(time.duration.hours(10));
+        await piTorn.withdraw(ether('100'), { from: bob });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('57200'));
+        assert.equal(await piTorn.balanceOf(bob), ether('819.188440112410509722'));
+        assert.equal(await myRouter.calculateLockedProfit(), ether(0));
+        assert.equal(await myRouter.getUnderlyingAvailable(), ether('22050'));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('22050'));
+
+        vrs = await getPermitVrs(ether(100), bob);
+        await piTorn.depositWithPermit(ether(100), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('57100'));
+        assert.equal(await piTorn.balanceOf(bob), ether('900.001086099314865775'));
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(22150));
+
+        async function getPermitVrs(value, owner) {
+          const deadline = (await latestBlockTimestamp()) + 10;
+          if(!nonce[owner]) {
+            nonce[owner] = 0;
+          }
+          const permitParams = {
+            spender: piTorn.address,
+            nonce: nonce[owner],
+            owner,
+            value,
+            deadline,
+          };
+          nonce[owner]++;
+
+          const connector = new Web3ProviderConnector(web3);
+          const eip2612PermitUtils = new Eip2612PermitUtils(connector);
+          const signature = await eip2612PermitUtils.buildPermitSignature(
+            permitParams,
+            chainId,
+            'Torn',
+            torn.address,
+            '1'
+          );
+          return {
+            ...fromRpcSig(signature),
+            deadline
+          };
+        }
+      });
+    });
+
+    describe('on deposit/withdraw', async () => {
+      it('should increase reserve if required', async () => {
+        let nonce = {};
+
+        await myRouter.enableRouterCallback(piTorn.address, true, {from: piGov});
+        await myRouter.setReserveConfig(ether('0.1'), ether('0.1'), ether('0.1'), '1000', {from: piGov});
+
+        assert.equal(await torn.balanceOf(piTorn.address), ether('10000'));
+        assert.equal(await governance.lockedBalance(piTorn.address), '0');
+
+        let vrs = await getPermitVrs(ether(10000), alice);
+        await piTorn.depositWithPermit(ether(10000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: alice});
+        // console.log('1 deposit by alice gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(18000));
+        assert.equal(await torn.balanceOf(alice), '0');
+
+        await piTorn.withdraw(ether('5000'), { from: alice });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(alice), ether('5000'));
+        assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(13000));
+
+        vrs = await getPermitVrs(ether(2000), alice);
+        await piTorn.depositWithPermit(ether(2000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: alice});
+        // console.log('2 deposit by alice gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), ether(1700));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(15300));
+
+        vrs = await getPermitVrs(ether(2000), bob);
+        await piTorn.depositWithPermit(ether(2000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('1 deposit by bob gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), ether(1900));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(17100));
+
+        vrs = await getPermitVrs(ether(1000), bob);
+        await piTorn.depositWithPermit(ether(1000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('2 deposit by bob gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(18000));
+
+        await staking.addBurnRewards(ether('50000'));
+
+        assert.equal(await torn.balanceOf(bob), ether('55000'));
+        assert.equal(await piTorn.balanceOf(bob), ether('3000'));
+        await expectRevert(piTorn.withdraw(ether('4000'), { from: bob }), 'ERC20: burn amount exceeds balance');
+        await piTorn.withdraw(ether('2000'), { from: bob });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('57000'));
+        assert.equal(await piTorn.balanceOf(bob), ether('1000'));
+        assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(16000));
+
+        const res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+          l => l.event === 'DistributeReward',
+        )[0];
+        assert.equal(distributeRewards.args.totalReward, ether('4500'));
+
+        assert.equal(await torn.balanceOf(governance.address), ether(62025));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(20025));
+        assert.equal(await myRouter.getUnderlyingStaked(), ether(20025));
+        assert.equal(await myRouter.getUnderlyingReserve(), ether(1800));
+        assert.equal(await myRouter.getUnderlyingAvailable(), ether(18000));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('21825'));
+        assert.equal(await myRouter.calculateLockedProfit(), ether('3825'));
+        assert.equal(await torn.balanceOf(piTorn.address), ether(1800));
+
+        await piTorn.withdraw(ether('100'), { from: bob });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('57100'));
+        assert.equal(await piTorn.balanceOf(bob), ether('900.000977490445030900'));
+        assert.equal(await torn.balanceOf(piTorn.address), ether(2182.5));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(19542.5));
+
+        await time.increase(time.duration.hours(10));
+        await piTorn.withdraw(ether('100'), { from: bob });
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('57200'));
+        assert.equal(await piTorn.balanceOf(bob), ether('817.607417179787056075'));
+        assert.equal(await myRouter.calculateLockedProfit(), ether(0));
+        assert.equal(await myRouter.getUnderlyingAvailable(), ether('21625'));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('21625'));
+
+        vrs = await getPermitVrs(ether(1000), bob);
+        await piTorn.depositWithPermit(ether(1000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('2 deposit by bob gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), ether('2262.5'));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether('20362.5'));
+
+        async function getPermitVrs(value, owner) {
+          const deadline = (await latestBlockTimestamp()) + 10;
+          if(!nonce[owner]) {
+            nonce[owner] = 0;
+          }
+          const permitParams = {
+            spender: piTorn.address,
+            nonce: nonce[owner],
+            owner,
+            value,
+            deadline,
+          };
+          nonce[owner]++;
+
+          const connector = new Web3ProviderConnector(web3);
+          const eip2612PermitUtils = new Eip2612PermitUtils(connector);
+          const signature = await eip2612PermitUtils.buildPermitSignature(
+            permitParams,
+            chainId,
+            'Torn',
+            torn.address,
+            '1'
+          );
+          return {
+            ...fromRpcSig(signature),
+            deadline
+          };
+        }
       });
     });
   });
