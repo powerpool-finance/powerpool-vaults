@@ -17,7 +17,6 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
   uint256 public constant RATIO_CONSTANT = 10000000 ether;
-  address payable public immutable ASSET_MANAGER;
   address public immutable STAKING;
   IBalancerMinter public immutable REWARDS_MINTER;
   IERC20 public immutable REWARDS_TOKEN;
@@ -30,9 +29,9 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     address _rewardsToken,
     address _rewardsMinter,
     address _vault,
-    bytes32 _pId
-  ) AbstractBalancerVaultConnector(_underlying, _vault, _pId) {
-    ASSET_MANAGER = payable(_assetManager);
+    bytes32 _pId,
+    address _poolAddress
+  ) AbstractBalancerVaultConnector(_assetManager, _underlying, _vault, _pId, _poolAddress) {
     STAKING = _staking;
     REWARDS_TOKEN = IERC20(_rewardsToken);
     REWARDS_MINTER = IBalancerMinter(_rewardsMinter);

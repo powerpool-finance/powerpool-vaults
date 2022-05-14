@@ -9,18 +9,24 @@ import "../interfaces/balancerV3/IVault.sol";
 abstract contract AbstractBalancerVaultConnector is AbstractConnector {
   using SafeMath for uint256;
 
+  address payable public immutable ASSET_MANAGER;
   address public immutable VAULT;
   IERC20 public immutable UNDERLYING;
   bytes32 public immutable PID;
+  IERC20 public immutable POOL;
 
   constructor(
+    address _assetManager,
     address _underlying,
     address _vault,
-    bytes32 _pId
+    bytes32 _pId,
+    address _poolAddress
   ) AbstractConnector() {
+    ASSET_MANAGER = payable(_assetManager);
     UNDERLYING = IERC20(_underlying);
     VAULT = _vault;
     PID = _pId;
+    POOL = IERC20(_poolAddress);
   }
 
   /**
@@ -68,6 +74,10 @@ abstract contract AbstractBalancerVaultConnector is AbstractConnector {
   function getUnderlyingManaged() external view returns (uint256) {
     (, uint256 poolManaged, , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
     return poolManaged;
+  }
+
+  function distributePoolBalance(address _feeReceiver, bytes calldata) external {
+    POOL.transfer(_feeReceiver, POOL.balanceOf(ASSET_MANAGER));
   }
 
   function beforePoke(

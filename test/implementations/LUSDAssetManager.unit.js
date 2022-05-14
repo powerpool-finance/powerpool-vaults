@@ -27,10 +27,10 @@ const { web3 } = MockERC20;
 const { toBN } = web3.utils;
 
 describe('LUSDAssetManager Tests', () => {
-  let deployer, alice, eve, bob, piGov, stub, pvp;
+  let deployer, alice, eve, bob, dan, piGov, stub, pvp;
 
   before(async function () {
-    [deployer, alice, eve, bob, piGov, stub, pvp] = await web3.eth.getAccounts();
+    [deployer, alice, eve, bob, dan, piGov, stub, pvp] = await web3.eth.getAccounts();
   });
 
   let lusd,
@@ -247,6 +247,22 @@ describe('LUSDAssetManager Tests', () => {
 
     pool = await StablePool.at(res.receipt.logs[0].args.pool);
 
+    await web3.eth.sendTransaction({
+      from: alice,
+      to: deployer,
+      value: ether(1e3)
+    });
+    await web3.eth.sendTransaction({
+      from: bob,
+      to: deployer,
+      value: ether(1e3)
+    });
+    await web3.eth.sendTransaction({
+      from: dan,
+      to: deployer,
+      value: ether(1e3)
+    });
+
     await borrowerOperations.openTrove(ether(1), ether(2e6), zeroAddress, zeroAddress, { value: ether(3e3) });
     await borrowerOperations.openTrove(ether(1), ether(5e3), zeroAddress, zeroAddress, {
       value: ether(4),
@@ -276,6 +292,7 @@ describe('LUSDAssetManager Tests', () => {
       stabilityPool.address,
       lqty.address,
       pid,
+      pool.address,
       swapper.address,
     );
     await assetManager.setConnectorList([
@@ -429,8 +446,8 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(await lqty.balanceOf(pvp), '0');
       const res = await assetManager.pokeFromReporter(0, true, '0x');
       underlyingStaked = await connector.getUnderlyingStakedWithShares();
-      assert.equal(underlyingStaked.shares, '1566856098808651890937915');
-      assert.equal(await lqty.balanceOf(pvp), '569641911827476325685');
+      assert.equal(underlyingStaked.shares, '1566864933102469227575491');
+      assert.equal(await lqty.balanceOf(pvp), '572806212109285034799');
       assert.equal(await connector.isClaimAvailable((await assetManager.connectors(0)).claimParams), false);
 
       await vault.swap(
@@ -457,23 +474,23 @@ describe('LUSDAssetManager Tests', () => {
 
       assert.equal(
         await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
-        '11574985146107827411314',
+        '11574985146107827411317',
       );
 
       stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', true);
       assert.equal(stakeAndClaimStatus.status, '1');
-      assert.equal(stakeAndClaimStatus.diff, '402413009079281972718');
+      assert.equal(stakeAndClaimStatus.diff, '404206112572306907883');
 
       assert.equal(await lusd.balanceOf(pvp), '0');
       await assetManager.pokeFromReporter(0, true, '0x');
       underlyingStaked = await connector.getUnderlyingStakedWithShares();
-      assert.equal(underlyingStaked.shares, '1564748740500732319476838');
+      assert.equal(underlyingStaked.shares, '1564755807935786188786898');
       assert.equal(await lusd.balanceOf(pvp), '1736247771916174112495');
-      assert.equal(await lqty.balanceOf(pvp), '569641911827476325685');
+      assert.equal(await lqty.balanceOf(pvp), '572806212109285034799');
 
       assert.equal(
         await connector.getActualUnderlyingEarnedByStakeData(await assetManager.connectors('0').then(c => c.stakeData)),
-        '592603',
+        '592606',
       );
     });
 
@@ -502,13 +519,13 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(testMigrate.args.migrateData, data);
     });
 
-    it.only('emergencyWithdraw should work properly', async () => {
+    it('emergencyWithdraw should work properly', async () => {
       assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(),  ether('974070.046021699791322769'));
       await assetManager.pokeFromReporter('1', false, '0x');
       assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(),  ether('194814.009204339958264554'));
       assert.equal(await pool.balanceOf(assetManager.address), '0');
       assert.equal(await lusd.balanceOf(bob), '0');
-      const poolBalance = '3999999999999999999000000';
+      let poolBalance = '3999999999999999999000000';
       await pool.transfer(bob, poolBalance);
       assert.equal(await pool.balanceOf(bob), poolBalance);
 
@@ -519,9 +536,51 @@ describe('LUSDAssetManager Tests', () => {
       await expectRevert(assetManager.emergencyWithdraw(ether(100000), poolBalance, true, {from: bob}), 'NOT_EMERGENCY');
       await expectRevert(assetManager.emergencyWithdraw(ether('194814.009204339958264554'), poolBalance, true, {from: bob}), 'NOT_EMERGENCY');
       await expectRevert(assetManager.emergencyWithdraw(ether(3e6), poolBalance, true, {from: bob}), 'SafeMath: subtraction overflow');
+
       await assetManager.emergencyWithdraw(ether(200000), poolBalance, true, {from: bob});
+      poolBalance = ether('201606.509795451064000000');
       assert.equal(await lusd.balanceOf(bob), ether(200000));
-      assert.equal(await pool.balanceOf(bob), ether('201606.509795451064000000'));
+      assert.equal(await pool.balanceOf(bob), poolBalance);
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether('154814.009204339958264554'));
+      assert.equal(await assetManager.getUnderlyingStaked(), ether('619256.036817359833058215'));
+
+      let stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
+      assert.equal(stakeAndClaimStatus.diff, '0');
+      assert.equal(stakeAndClaimStatus.status, '0');
+      assert.equal(stakeAndClaimStatus.forceRebalance, false);
+
+      await assetManager.setReserveConfig(ether('0.01'), ether('0.01'), ether('0.01'), 60 * 60, {from: piGov});
+      await assetManager.pokeFromReporter('1', false, '0x');
+      assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(), ether('7740.700460216997913228'));
+      assert.equal(await assetManager.getUnderlyingStaked(), ether('766329.345561482793409541'));
+
+      await assetManager.setReserveConfig(ether('0.1'), ether('0.1'), ether('0.1'), 60 * 60, {from: piGov});
+
+      stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
+      assert.equal(stakeAndClaimStatus.diff, ether('69666.304141952981219049'));
+      assert.equal(stakeAndClaimStatus.status, '1');
+      assert.equal(stakeAndClaimStatus.forceRebalance, true);
+
+      await pool.approve(assetManager.address, poolBalance, {from: bob});
+      await assetManager.emergencyWithdraw(ether(50000), poolBalance, false, {from: bob});
+      await expectRevert(assetManager.emergencyWithdraw(ether(3e6), poolBalance, true, {from: bob}), 'SafeMath: subtraction overflow');
+
+      stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', false);
+      assert.equal(stakeAndClaimStatus.diff, '0');
+      assert.equal(stakeAndClaimStatus.status, '0');
+      assert.equal(stakeAndClaimStatus.forceRebalance, false);
+
+      assert.equal(await lusd.balanceOf(bob), ether(250000));
+      assert.equal(await pool.balanceOf(bob), '0');
+      assert.equal(await pool.balanceOf(assetManager.address), ether('3747860.539036497267058411'));
+
+      await expectRevert(assetManager.emergencyWithdraw(ether(3e6), poolBalance, true, {from: bob}), 'SafeMath: subtraction overflow');
+
+      assert.equal(await pool.balanceOf(pvp), '0');
+      await expectRevert(assetManager.distributeRestPoolBalance('0', '0x', {from: bob}), 'Ownable');
+      await assetManager.distributeRestPoolBalance('0', '0x', {from: piGov});
+      assert.equal(await pool.balanceOf(assetManager.address), '0');
+      assert.equal(await pool.balanceOf(pvp), ether('3747860.539036497267058411'));
     });
   });
 });

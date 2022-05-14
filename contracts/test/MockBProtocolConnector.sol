@@ -20,8 +20,20 @@ contract MockBProtocolConnector is BProtocolPowerIndexConnector {
     address _stabilityPool,
     address _rewardsToken,
     bytes32 _pId,
+    address _poolAddress,
     address _swapper
-  ) BProtocolPowerIndexConnector(_assetManager, _staking, _underlying, _vault, _stabilityPool, _rewardsToken, _pId) {
+  )
+    BProtocolPowerIndexConnector(
+      _assetManager,
+      _staking,
+      _underlying,
+      _vault,
+      _stabilityPool,
+      _rewardsToken,
+      _pId,
+      _poolAddress
+    )
+  {
     swapper = MockSwapper(_swapper);
   }
 

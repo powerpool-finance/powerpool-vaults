@@ -180,6 +180,7 @@ describe('BalAssetManager Tests', () => {
       balancerMinter.address,
       vault.address,
       pid,
+      pool.address,
       swapper.address,
     );
     await assetManager.setConnectorList([

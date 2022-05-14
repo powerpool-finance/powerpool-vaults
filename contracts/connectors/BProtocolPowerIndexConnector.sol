@@ -17,7 +17,6 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
-  address public immutable ASSET_MANAGER;
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
   IERC20 public immutable REWARDS_TOKEN;
@@ -29,9 +28,9 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     address _vault,
     address _stabilityPool,
     address _rewardsToken,
-    bytes32 _pId
-  ) AbstractBalancerVaultConnector(_underlying, _vault, _pId) {
-    ASSET_MANAGER = _assetManager;
+    bytes32 _pId,
+    address _poolAddress
+  ) AbstractBalancerVaultConnector(_assetManager, _underlying, _vault, _pId, _poolAddress) {
     STAKING = _staking;
     STABILITY_POOL = _stabilityPool;
     REWARDS_TOKEN = IERC20(_rewardsToken);

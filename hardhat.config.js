@@ -54,10 +54,13 @@ const config = {
       gas: 12000000,
       loggingEnabled: false,
       blockGasLimit: 12000000,
+      defaultBalanceEther: 2e9,
+      accountsBalance: 2e9,
     },
     ganache: {
       url: 'http://127.0.0.1:8945',
-      defaultBalanceEther: 1e9,
+      defaultBalanceEther: 2e9,
+      accountsBalance: 2e9,
       hardfork: 'muirGlacier',
     },
     mainnet: {

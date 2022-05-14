@@ -20,8 +20,20 @@ contract MockBalConnector is BalPowerIndexConnector {
     address _rewardsMinter,
     address _vault,
     bytes32 _pId,
+    address _poolAddress,
     address _swapper
-  ) BalPowerIndexConnector(_assetManager, _staking, _underlying, _rewardsToken, _rewardsMinter, _vault, _pId) {
+  )
+    BalPowerIndexConnector(
+      _assetManager,
+      _staking,
+      _underlying,
+      _rewardsToken,
+      _rewardsMinter,
+      _vault,
+      _pId,
+      _poolAddress
+    )
+  {
     swapper = MockSwapper(_swapper);
   }
 
