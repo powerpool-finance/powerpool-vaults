@@ -48,21 +48,21 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     if (pending > 0) {
       _claimImpl();
     }
-    uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
+    uint256 receivedReward = REWARDS_TOKEN.balanceOf(address(this));
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
       (, rewardsToReinvest, ) = _distributePerformanceFee(
         _distributeData.performanceFee,
         _distributeData.performanceFeeReceiver,
         0,
-        ASSET_MANAGER,
+        address(this),
         REWARDS_TOKEN,
         receivedReward
       );
 
       _swapRewardsToUnderlying(rewardsToReinvest);
 
-      _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
+      _stakeImpl(IERC20(UNDERLYING).balanceOf(address(this)));
       return stakeData;
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
