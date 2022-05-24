@@ -18,7 +18,6 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
-  uint256 public constant RATIO_CONSTANT = 10000000 ether;
   address public immutable STAKING;
   IBalancerMinter public immutable REWARDS_MINTER;
   IERC20 public immutable REWARDS_TOKEN;
