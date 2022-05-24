@@ -48,7 +48,7 @@ contract AssetManager is AbstractPowerIndexRouter {
     bytes memory _migrateData,
     address payable _newRouter,
     address[] memory _tokens
-  ) public virtual onlyOwner {
+  ) external virtual onlyOwner {
     super.migrateToNewRouter(_newRouter, _tokens);
 
     for (uint256 i = 0; i < connectors.length; i++) {

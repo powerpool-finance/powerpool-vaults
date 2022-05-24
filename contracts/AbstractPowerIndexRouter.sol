@@ -832,7 +832,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     require(totalShare == HUNDRED_PCT, "TOTAL_SHARE_IS_NOT_HUNDRED_PCT");
   }
 
-  function sendEthToPerformanceFeeReceiver() public onlyOwner {
+  function sendEthToPerformanceFeeReceiver() external onlyOwner {
     require(payable(performanceFeeReceiver).send(address(this).balance), "FAILED");
   }
 

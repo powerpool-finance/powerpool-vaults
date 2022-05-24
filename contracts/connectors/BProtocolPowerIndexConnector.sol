@@ -108,7 +108,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function stake(uint256 _amount, DistributeData memory _distributeData)
-    public
+    external
     override
     returns (bytes memory result, bool claimed)
   {
@@ -207,7 +207,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(uint256 _minAmount) public pure returns (bytes memory) {
+  function packClaimParams(uint256 _minAmount) external pure returns (bytes memory) {
     return abi.encode(_minAmount);
   }
 
@@ -222,14 +222,18 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   /**
-   * @notice Pack claim params to bytes.
+   * @notice Pack stake params to bytes.
    */
-  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute) public pure returns (bytes memory) {
+  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute)
+    external
+    pure
+    returns (bytes memory)
+  {
     return abi.encode(_maxETHOnStaking, _minLUSDToDistribute);
   }
 
   /**
-   * @notice Unpack claim params from bytes to variables.
+   * @notice Unpack stake params from bytes to variables.
    */
   function unpackStakeParams(bytes memory _stakeParams)
     public
@@ -317,7 +321,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
 
   uint256 internal constant RAY = 10**27;
 
-  function add(uint256 x, uint256 y) public pure returns (uint256 z) {
+  function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
     require((z = x + y) >= x, "ds-math-add-overflow");
   }
 
@@ -329,7 +333,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     z = mul(x, RAY) / y;
   }
 
-  function rmul(uint256 x, uint256 y) public pure returns (uint256 z) {
+  function rmul(uint256 x, uint256 y) internal pure returns (uint256 z) {
     z = mul(x, y) / RAY;
   }
 }

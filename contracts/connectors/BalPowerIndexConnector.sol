@@ -158,12 +158,12 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     return VAULT;
   }
 
-  function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) public pure returns (bytes memory) {
+  function packStakeData(uint256 _lastAssetsPerShare, uint256 _underlyingEarned) external pure returns (bytes memory) {
     return abi.encode(_lastAssetsPerShare, _underlyingEarned);
   }
 
   function unpackStakeData(bytes memory _stakeData)
-    public
+    external
     pure
     returns (uint256 lastAssetsPerShare, uint256 underlyingEarned)
   {
@@ -176,7 +176,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(uint256 _updateInterval) public pure returns (bytes memory) {
+  function packClaimParams(uint256 _updateInterval) external pure returns (bytes memory) {
     return abi.encode(_updateInterval);
   }
 
@@ -188,27 +188,6 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
       return (0);
     }
     (updateInterval) = abi.decode(_claimParams, (uint256));
-  }
-
-  /**
-   * @notice Pack claim params to bytes.
-   */
-  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute) public pure returns (bytes memory) {
-    return abi.encode(_maxETHOnStaking, _minLUSDToDistribute);
-  }
-
-  /**
-   * @notice Unpack claim params from bytes to variables.
-   */
-  function unpackStakeParams(bytes memory _stakeParams)
-    public
-    pure
-    returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
-  {
-    if (_stakeParams.length == 0 || keccak256(_stakeParams) == keccak256("")) {
-      return (0, 0);
-    }
-    (maxETHOnStaking, minLUSDToDistribute) = abi.decode(_stakeParams, (uint256, uint256));
   }
 
   /*** OVERRIDES ***/
@@ -240,7 +219,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   /**
    * @dev This function should be manually changed to "view" in the ABI
    */
-  function getPendingRewards() public returns (uint256) {
+  function getPendingRewards() external returns (uint256) {
     return REWARDS_MINTER.mintFor(STAKING, ASSET_MANAGER);
   }
 }
