@@ -124,6 +124,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     _capitalOut(underlyingStaked, _amount);
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
+    (result, claimed) = ("", false);
   }
 
   function redeem(uint256 _amount, DistributeData memory)
@@ -135,6 +136,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     _redeemImpl(_amount);
     _capitalIn(underlyingStaked, _amount);
     emit Redeem(msg.sender, STAKING, address(UNDERLYING), _amount);
+    (result, claimed) = ("", false);
   }
 
   function initRouter(bytes calldata) external override {
