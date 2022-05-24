@@ -3,6 +3,7 @@
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 
@@ -13,6 +14,7 @@ import "./AbstractBalancerVaultConnector.sol";
 
 contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
+  using SafeERC20 for IERC20;
 
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
@@ -82,7 +84,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     address _feeReceiver,
     uint256 _amount
   ) internal override {
-    _underlying.transfer(_feeReceiver, _amount);
+    _underlying.safeTransfer(_feeReceiver, _amount);
   }
 
   function getActualUnderlyingEarnedByStakeData(bytes calldata _stakeData) external view returns (uint256) {
@@ -162,7 +164,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     // transfer fee to receiver
     if (amountToRedeem > _amount) {
       // send the rest UNDERLYING(fee amount)
-      IERC20(UNDERLYING).transfer(_distributeData.performanceFeeReceiver, UNDERLYING.balanceOf(address(this)));
+      IERC20(UNDERLYING).safeTransfer(_distributeData.performanceFeeReceiver, UNDERLYING.balanceOf(address(this)));
       underlyingEarned = 0;
     }
 

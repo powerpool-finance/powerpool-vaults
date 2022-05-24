@@ -3,6 +3,7 @@
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 import "./AbstractBalancerVaultConnector.sol";
@@ -12,6 +13,7 @@ import "../interfaces/balancerV3/IAsset.sol";
 
 contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
+  using SafeERC20 for IERC20;
 
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
@@ -84,7 +86,7 @@ contract BalPowerIndexConnector is AbstractBalancerVaultConnector {
     address _feeReceiver,
     uint256 _amount
   ) internal override {
-    _underlying.transfer(_feeReceiver, _amount);
+    _underlying.safeTransfer(_feeReceiver, _amount);
   }
 
   /**
