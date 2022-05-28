@@ -9,6 +9,7 @@ import "./interfaces/IRouterVaultConnector.sol";
 
 contract AssetManager is AbstractPowerIndexRouter {
   using SafeMath for uint256;
+  using SafeERC20 for IERC20;
 
   enum BalancerV2JoinKind {
     INIT,
@@ -106,7 +107,7 @@ contract AssetManager is AbstractPowerIndexRouter {
       _redeem(c, _underlyingAmount.sub(diff));
     }
 
-    IERC20(poolAddress).transferFrom(msg.sender, address(this), _maxBPTAmountIn);
+    IERC20(poolAddress).safeTransferFrom(msg.sender, address(this), _maxBPTAmountIn);
 
     uint256 poolBalanceBefore;
     if (_returnDiff) {
@@ -118,7 +119,7 @@ contract AssetManager is AbstractPowerIndexRouter {
     if (_returnDiff) {
       uint256 poolBalanceAfter = IERC20(poolAddress).balanceOf(address(this));
       poolBalanceDiff = poolBalanceBefore.sub(poolBalanceAfter);
-      IERC20(poolAddress).transfer(msg.sender, poolBalanceDiff);
+      IERC20(poolAddress).safeTransfer(msg.sender, poolBalanceDiff);
     }
   }
 
