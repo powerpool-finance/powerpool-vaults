@@ -101,14 +101,6 @@ task('deploy-lusd-asset-manager', 'Deploy LUSD Asset Manager').setAction(async (
   await bbausdAssetManager.setAssetsHolder(vaultAddress);
   console.log('setAssetsHolder');
 
-  // borrowerOperations.openTrove(
-  //   ether(1),
-  //   ether(5e6),
-  //   zeroAddress,
-  //   zeroAddress,
-  //   {value : ether(4e3)}
-  // );
-
   await bbaUSD.approve(vaultAddress, ether(2e6));
   await lusd.approve(vaultAddress, ether(2e6));
 
