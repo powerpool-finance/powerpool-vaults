@@ -640,17 +640,14 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     }
 
     uint256 denominator = _leftOnPiTokenBalance.add(_totalStakedBalance);
+    uint256 currentRatio = _leftOnPiTokenBalance.mul(HUNDRED_PCT).div(denominator);
 
     if (status == StakeStatus.EXCESS) {
-      uint256 numerator = _leftOnPiTokenBalance.add(diff).mul(HUNDRED_PCT);
-      uint256 currentRatio = numerator.div(denominator);
       forceRebalance = reserveRatioLowerBound >= currentRatio;
     } else if (status == StakeStatus.SHORTAGE) {
       if (diff > _leftOnPiTokenBalance) {
         return (status, diff, true);
       }
-      uint256 numerator = _leftOnPiTokenBalance.sub(diff).mul(HUNDRED_PCT);
-      uint256 currentRatio = numerator.div(denominator);
       forceRebalance = reserveRatioUpperBound <= currentRatio;
     }
   }
