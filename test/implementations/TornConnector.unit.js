@@ -1,5 +1,5 @@
 const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
-const { ether, fromEther, latestBlockTimestamp } = require('./../helpers');
+const { ether, fromEther, latestBlockTimestamp, deployContractWithBytecode, pokeFromReporter } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const {
   Eip2612PermitUtils,
@@ -35,12 +35,13 @@ describe('TornConnector Tests', () => {
     [deployer, bob, alice, piGov, stub, pvp, pool1, pool2] = await web3.eth.getAccounts();
   });
 
-  let torn, staking, governance, poolRestrictions, piTorn, myRouter, connector, poke;
+  let cvp, torn, staking, governance, poolRestrictions, piTorn, myRouter, connector, poke;
 
   const GAS_TO_REINVEST = 1e6;
   const GAS_PRICE = 100 * 1e9;
 
   beforeEach(async function () {
+    cvp = await MockERC20.new('CVP', 'CVP', '18', ether('10000000'));
     // mainnet: 0x77777feddddffc19ff86db637967013e6c6a116c
     torn = await MockERC20.new('Torn', 'Torn', '18', ether('10000000'), { from: deployer });
     // mainnet: 0x5efda50f22d34f262c29268506c5fa42cb56a1ce
@@ -52,7 +53,12 @@ describe('TornConnector Tests', () => {
     poolRestrictions = await MockPoolRestrictions.new();
     piTorn = await WrappedPiErc20.new(torn.address, stub, 'Wrapped Torn', 'piTorn');
 
-    poke = await MockPoke.new(true);
+    poke = await deployContractWithBytecode('ppagent/ppagent', web3, [
+      deployer, // owner_,
+      cvp.address, // cvp_,
+      ether(1e3), // minKeeperCvp_,
+      '60', // pendingWithdrawalTimeoutSeconds_
+    ]);
     myRouter = await PowerIndexVaultRouter.new(
       piTorn.address,
       torn.address,
@@ -64,6 +70,7 @@ describe('TornConnector Tests', () => {
         ether('0.2'),
         ether('0.02'),
         ether('0.3'),
+        60 * 60,
         0,
         pvp,
         ether('0.15'),
@@ -87,6 +94,27 @@ describe('TornConnector Tests', () => {
     await myRouter.initRouterByConnector('0', '0x');
     await myRouter.transferOwnership(piGov);
     assert.equal(await myRouter.owner(), piGov);
+
+    let res = await poke.registerJob({
+      jobAddress: myRouter.address,
+      jobSelector: '0xbce0a8b3',
+      useJobOwnerCredits: false,
+      assertResolverSelector: true,
+      maxBaseFeeGwei: '10',
+      rewardPct: '10',
+      fixedReward: '1000',
+      jobMinCvp: ether(2000),
+      calldataSource: '2',
+      intervalSeconds: '0'
+    }, {
+      resolverAddress: myRouter.address,
+      resolverCalldata: '0x39e055aa' // agentResolver
+    }, '0x', {from: piGov});
+
+    await poke.depositJobCredits(res.logs[0].args.jobKey, {from: piGov, value: ether(10)});
+
+    await cvp.approve(poke.address, ether(2000), { from: deployer });
+    await poke.registerAsKeeper(deployer, ether(2000), {from: deployer});
   });
 
   describe('owner methods', async () => {
@@ -100,7 +128,7 @@ describe('TornConnector Tests', () => {
         await torn.approve(piTorn.address, ether('10000'), { from: alice });
         await piTorn.deposit(ether('10000'), { from: alice });
 
-        await myRouter.pokeFromReporter(REPORTER_ID, false, '0x');
+        await pokeFromReporter(poke);
 
         assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
         assert.equal(await torn.balanceOf(governance.address), ether(8000));
@@ -157,7 +185,7 @@ describe('TornConnector Tests', () => {
     });
 
     it('should claim rewards and reinvest', async () => {
-      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+      await pokeFromReporter(poke, GAS_PRICE);
 
       assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
       assert.equal(await torn.balanceOf(governance.address), ether(50000));
@@ -168,11 +196,11 @@ describe('TornConnector Tests', () => {
       await myRouter.setClaimParams('0', claimParams, { from: piGov });
 
       await time.increase(time.duration.hours(100));
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', { gasPrice: GAS_PRICE }), 'NOTHING_TO_DO');
+      await expectRevert(pokeFromReporter(poke, GAS_PRICE), 'NOTHING_TO_DO');
       await torn.transfer(staking.address, ether('50000'));
       await staking.addBurnRewards(ether('50000'));
 
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', { gasPrice: GAS_PRICE }), 'NOTHING_TO_DO');
+      await expectRevert(pokeFromReporter(poke, GAS_PRICE), 'NOTHING_TO_DO');
 
       const c = await myRouter.connectors('0');
       const tornNeedToReinvest = await connector.getTornUsedToReinvest(GAS_TO_REINVEST, GAS_PRICE);
@@ -191,7 +219,7 @@ describe('TornConnector Tests', () => {
         false,
       );
 
-      await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, true, '0x', { gasPrice: GAS_PRICE }), 'NOTHING_TO_DO');
+      await expectRevert(pokeFromReporter(poke, GAS_PRICE), 'NOTHING_TO_DO');
 
       await time.increase(time.duration.hours(100));
       await torn.transfer(staking.address, ether('100000'));
@@ -211,7 +239,7 @@ describe('TornConnector Tests', () => {
         true,
       );
 
-      await myRouter.pokeFromReporter(REPORTER_ID, true, '0x', { gasPrice: GAS_PRICE });
+      await pokeFromReporter(poke, GAS_PRICE);
 
       assert.equal(fromEther(await governance.lockedBalance(piTorn.address)) > 11300, true);
 
@@ -222,14 +250,16 @@ describe('TornConnector Tests', () => {
 
     describe('on poke', async () => {
       beforeEach(async () => {
-        await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
+        await pokeFromReporter(poke, GAS_PRICE);
       });
 
       it('should do nothing when nothing has changed', async () => {
-        await expectRevert(myRouter.pokeFromReporter(REPORTER_ID, false, '0x'), 'NOTHING_TO_DO');
+        await expectRevert(pokeFromReporter(poke, GAS_PRICE), 'NOTHING_TO_DO');
       });
 
       it('should increase reserve if required', async () => {
+        await time.increase(time.duration.minutes(61));
+
         await torn.transfer(staking.address, ether('50000'));
         await staking.addBurnRewards(ether('50000'));
 
@@ -239,8 +269,8 @@ describe('TornConnector Tests', () => {
         assert.equal(await governance.lockedBalance(piTorn.address), ether(8000));
         assert.equal(await torn.balanceOf(piTorn.address), ether(3000));
 
-        const res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
-        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+        const res = await pokeFromReporter(poke, GAS_PRICE);
+        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.logs).filter(
           l => l.event === 'DistributeReward',
         )[0];
         assert.equal(distributeRewards.args.totalReward, ether('1600'));
@@ -263,10 +293,12 @@ describe('TornConnector Tests', () => {
 
     describe('on deposit/withdraw', async () => {
       it('should increase reserve if required', async () => {
+        await time.increase(time.duration.minutes(61));
+
         let nonce = {};
 
         await myRouter.enableRouterCallback(piTorn.address, true, {from: piGov});
-        await myRouter.setReserveConfig('0', '0', '0', '1000', {from: piGov});
+        await myRouter.setReserveConfig('0', '0', '0', 60 * 60, '1000', {from: piGov});
 
         assert.equal(await torn.balanceOf(piTorn.address), ether('10000'));
         assert.equal(await governance.lockedBalance(piTorn.address), '0');
@@ -302,46 +334,47 @@ describe('TornConnector Tests', () => {
 
         await staking.addBurnRewards(ether('50000'));
 
-        assert.equal(await torn.balanceOf(bob), ether('55000'));
-        assert.equal(await piTorn.balanceOf(bob), ether('3000'));
         await expectRevert(piTorn.withdraw(ether('4000'), { from: bob }), 'ERC20: burn amount exceeds balance');
-        await piTorn.withdraw(ether('2000'), { from: bob });
-        // console.log('withdraw gasUsed', res.receipt.gasUsed);
-        assert.equal(await torn.balanceOf(bob), ether('57000'));
-        assert.equal(await piTorn.balanceOf(bob), ether('1000'));
-        assert.equal(await torn.balanceOf(piTorn.address), '0');
-        assert.equal(await governance.lockedBalance(piTorn.address), ether(18000));
 
-        res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
-        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+        const reinvestDuration = 60 * 60;
+        const claimParams = await connector.packClaimParams(reinvestDuration, GAS_TO_REINVEST);
+        await myRouter.setClaimParams('0', claimParams, { from: piGov });
+
+        let stakeAndClaimStatus = await myRouter.getStakeAndClaimStatusByConnectorIndex('0', true, {gasPrice: GAS_TO_REINVEST});
+        assert.equal(stakeAndClaimStatus.status, '0');
+        assert.equal(stakeAndClaimStatus.diff, '0');
+        assert.equal(stakeAndClaimStatus.forceRebalance, true);
+
+        res = await pokeFromReporter(poke);
+        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.logs).filter(
           l => l.event === 'DistributeReward',
         )[0];
         assert.equal(distributeRewards.args.totalReward, ether('5000'));
 
-        assert.equal(await torn.balanceOf(governance.address), ether(64250));
-        assert.equal(await governance.lockedBalance(piTorn.address), ether(22250));
-        assert.equal(await myRouter.getUnderlyingStaked(), ether(22250));
+        assert.equal(await torn.balanceOf(governance.address), ether(66250));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(24250));
+        assert.equal(await myRouter.getUnderlyingStaked(), ether(24250));
         assert.equal(await myRouter.getAssetsHolderUnderlyingBalance(), ether('0'));
-        assert.equal(await myRouter.getUnderlyingAvailable(), ether(18000));
-        assert.equal(await myRouter.getUnderlyingTotal(), ether('22250'));
+        assert.equal(await myRouter.getUnderlyingAvailable(), ether(20000));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('24250'));
         assert.equal(await myRouter.calculateLockedProfit(), ether('4250'));
         assert.equal(await torn.balanceOf(piTorn.address), ether('0'));
 
         await piTorn.withdraw(ether('100'), { from: bob });
         // console.log('withdraw gasUsed', res.receipt.gasUsed);
-        assert.equal(await torn.balanceOf(bob), ether('57100'));
-        assert.equal(await piTorn.balanceOf(bob), ether('900.001086099314865775'));
+        assert.equal(await torn.balanceOf(bob), ether('55100'));
+        assert.equal(await piTorn.balanceOf(bob), ether('2900.000977490445030900'));
         assert.equal(await torn.balanceOf(piTorn.address), '0');
-        assert.equal(await governance.lockedBalance(piTorn.address), ether(22150));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(24150));
 
         await time.increase(time.duration.hours(10));
         await piTorn.withdraw(ether('100'), { from: bob });
         // console.log('withdraw gasUsed', res.receipt.gasUsed);
-        assert.equal(await torn.balanceOf(bob), ether('57200'));
-        assert.equal(await piTorn.balanceOf(bob), ether('819.188440112410509722'));
+        assert.equal(await torn.balanceOf(bob), ether('55200'));
+        assert.equal(await piTorn.balanceOf(bob), ether('2817.599317128165755410'));
         assert.equal(await myRouter.calculateLockedProfit(), ether(0));
-        assert.equal(await myRouter.getUnderlyingAvailable(), ether('22050'));
-        assert.equal(await myRouter.getUnderlyingTotal(), ether('22050'));
+        assert.equal(await myRouter.getUnderlyingAvailable(), ether('24050'));
+        assert.equal(await myRouter.getUnderlyingTotal(), ether('24050'));
 
         async function getPermitVrs(value, owner) {
           const deadline = (await latestBlockTimestamp()) + 10;
@@ -379,7 +412,7 @@ describe('TornConnector Tests', () => {
         let nonce = {};
 
         await myRouter.enableRouterCallback(piTorn.address, true, {from: piGov});
-        await myRouter.setReserveConfig(ether('0.1'), ether('0.1'), ether('0.1'), '1000', {from: piGov});
+        await myRouter.setReserveConfig(ether('0.1'), ether('0.1'), ether('0.1'), 60 * 60, '1000', {from: piGov});
 
         assert.equal(await torn.balanceOf(piTorn.address), ether('10000'));
         assert.equal(await governance.lockedBalance(piTorn.address), '0');
@@ -427,8 +460,8 @@ describe('TornConnector Tests', () => {
         assert.equal(await torn.balanceOf(piTorn.address), ether(2000));
         assert.equal(await governance.lockedBalance(piTorn.address), ether(16000));
 
-        const res = await myRouter.pokeFromReporter(REPORTER_ID, true, '0x');
-        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(
+        const res = await pokeFromReporter(poke);
+        const distributeRewards = TornPowerIndexConnector.decodeLogs(res.logs).filter(
           l => l.event === 'DistributeReward',
         )[0];
         assert.equal(distributeRewards.args.totalReward, ether('4500'));

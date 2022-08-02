@@ -47,4 +47,30 @@ contract BakeryChefPowerIndexConnector is AbstractStakeRedeemConnector {
   function _redeemImpl(uint256 _amount) internal override {
     _callExternal(PI_TOKEN, STAKING, IBakeryMasterChef.withdraw.selector, abi.encode(address(UNDERLYING), _amount));
   }
+
+  /**
+   * @notice Pack claim params to bytes.
+   */
+  function packClaimParams(uint256 _minPending) external pure returns (bytes memory) {
+    return abi.encode(_minPending);
+  }
+
+  /**
+   * @notice Unpack claim params from bytes to variables.
+   */
+  function unpackClaimParams(bytes memory _claimParams) public pure returns (uint256 minPending) {
+    if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
+      return (0);
+    }
+    (minPending) = abi.decode(_claimParams, (uint256));
+  }
+
+  /**
+   * @notice Checking: is pending rewards enough to reinvest
+   * @param _claimParams Claim parameters, that stored in PowerIndexRouter
+   */
+  function isClaimAvailable(bytes calldata _claimParams, uint256, uint256) external view override virtual returns (bool) {
+    uint256 minClaimAmount = unpackClaimParams(_claimParams);
+    return getPendingRewards() >= minClaimAmount;
+  }
 }
