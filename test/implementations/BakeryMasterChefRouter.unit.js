@@ -230,6 +230,18 @@ describe('BakeryMasterChefRouter Tests', () => {
         });
       });
 
+      it('should DO rebalance on withdrawal if the rebalancing interval hasnt passed but meet the lower bound', async () => {
+        await time.increase(time.duration.minutes(50));
+        assert.equal(await bake.balanceOf(piBake.address), ether('2000'));
+
+        await piBake.withdraw(ether(1500), { from: alice });
+        await pokeFromReporter(poke);
+
+        assert.equal(await bake.balanceOf(bakeryChef.address), ether('50546.031746032'));
+        assert.equal((await bakeryChef.poolUserInfoMap(bake.address, piBake.address)).amount, ether(6800));
+        assert.equal(await bake.balanceOf(piBake.address), ether('1915.8730158728'));
+      });
+
       it('should DO rebalance on withdrawal if the rebalancing interval has passed', async () => {
         await time.increase(time.duration.minutes(61));
         assert.equal(await bake.balanceOf(piBake.address), ether('2000'));
@@ -241,6 +253,18 @@ describe('BakeryMasterChefRouter Tests', () => {
         assert.equal(await bake.balanceOf(bakeryChef.address), ether('50946.031746032000000000'));
         assert.equal((await bakeryChef.poolUserInfoMap(bake.address, piBake.address)).amount, ether(7200));
         assert.equal(await bake.balanceOf(piBake.address), ether('2015.8730158728'));
+      });
+
+      it('should DO rebalance by pokeFromReporter if the rebalancing interval hasnt passed but meet the upper bound', async () => {
+        await time.increase(time.duration.minutes(50));
+
+        await bake.approve(piBake.address, ether(1500), { from: alice });
+        await piBake.deposit(ether(1500), { from: alice });
+        await pokeFromReporter(poke);
+
+        assert.equal(await bake.balanceOf(bakeryChef.address), ether('53282.539682544'));
+        assert.equal((await bakeryChef.poolUserInfoMap(bake.address, piBake.address)).amount, ether(9200));
+        assert.equal(await bake.balanceOf(piBake.address), ether('2569.8412698376'));
       });
 
       it('should NOT rebalance by pokeFromReporter if the rebalancing interval has passed', async () => {
