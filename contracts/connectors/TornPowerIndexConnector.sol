@@ -46,7 +46,6 @@ contract TornPowerIndexConnector is AbstractConnector {
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
       (rewardsToReinvest, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
-      _approveToStaking(rewardsToReinvest);
       _stakeImpl(rewardsToReinvest);
       return stakeData;
     }
