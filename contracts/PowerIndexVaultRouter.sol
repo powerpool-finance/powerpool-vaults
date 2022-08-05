@@ -77,12 +77,8 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter, PowerIndexVaultRoute
     WrappedPiErc20Interface(_piToken).enableRouterCallback(_enable);
   }
 
-  function piTokenCallback(address sender, uint256 _withdrawAmount)
-    external
-    payable
-    virtual
-    override(PowerIndexVaultRouterInterface)
-  {
-    // DO NOTHING
+  function piTokenCallback(address, uint256 _withdrawAmount) external payable virtual override {
+    PokeFromState memory state = PokeFromState(0, 0, 0, _withdrawAmount, false, true);
+    _rebalance(state, false, false);
   }
 }

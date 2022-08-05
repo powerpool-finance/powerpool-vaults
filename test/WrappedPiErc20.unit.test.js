@@ -666,6 +666,8 @@ describe('WrappedPiErc20 Unit Tests', () => {
 
         const ethFee = ether(0.001);
 
+        await router.enableRouterCallback(piCake.address, true);
+
         await router.setPiTokenEthFee(ethFee, { from: deployer });
 
         assert.equal(await piCake.ethFee(), ethFee);

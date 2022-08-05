@@ -157,7 +157,10 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
 
     uint256 withdrawAmount = getUnderlyingEquivalentForPi(_burnAmount);
     require(withdrawAmount > 0, "ZERO_UNDERLYING_TO_WITHDRAW");
-    PowerIndexVaultRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, withdrawAmount);
+
+    if (routerCallbackEnabled) {
+      PowerIndexVaultRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, withdrawAmount);
+    }
 
     _burn(msg.sender, _burnAmount);
     underlying.safeTransfer(msg.sender, withdrawAmount);

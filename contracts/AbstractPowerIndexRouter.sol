@@ -56,7 +56,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   IPowerPoke public powerPoke;
   uint256 public reserveRatio;
   uint256 public claimRewardsInterval;
-  uint256 public lastRebalancedAt;
+  uint256 public lastRebalancedByPokerAt;
   uint256 public reserveRatioLowerBound;
   uint256 public reserveRatioUpperBound;
   // 1 ether == 100%
@@ -96,7 +96,9 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 minInterval;
     uint256 maxInterval;
     uint256 assetsHolderUnderlyingBalance;
+    uint256 subFromExpectedStakeAmount;
     bool atLeastOneForceRebalance;
+    bool skipCanPokeCheck;
   }
 
   modifier onlyEOA() {
@@ -333,13 +335,35 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
    * @param _isSlasher Calling by Slasher.
    */
   function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
-    PokeFromState memory state = PokeFromState(0, 0, 0, false);
+    PokeFromState memory state = PokeFromState(0, 0, 0, 0, false, false);
     (state.minInterval, state.maxInterval) = _getMinMaxReportInterval();
 
-    state.assetsHolderUnderlyingBalance = getAssetsHolderUnderlyingBalance();
-    (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
+    _rebalance(state, _claimAndDistributeRewards, _isSlasher);
 
-    state.atLeastOneForceRebalance = false;
+    require(
+      _canPoke(_isSlasher, state.atLeastOneForceRebalance, state.minInterval, state.maxInterval),
+      "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
+    );
+
+    lastRebalancedByPokerAt = block.timestamp;
+  }
+
+  function _rebalance(
+    PokeFromState memory s,
+    bool _claimAndDistributeRewards,
+    bool _isSlasher
+  ) internal {
+    if (connectors.length == 1 && reserveRatio == 0 && !_claimAndDistributeRewards) {
+      if (s.subFromExpectedStakeAmount > 0) {
+        _rebalancePoke(connectors[0], StakeStatus.EXCESS, s.subFromExpectedStakeAmount);
+      } else {
+        _rebalancePoke(connectors[0], StakeStatus.SHORTAGE, getAssetsHolderUnderlyingBalance());
+      }
+      return;
+    }
+
+    s.assetsHolderUnderlyingBalance = getAssetsHolderUnderlyingBalance();
+    (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
@@ -350,19 +374,20 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
       }
 
       (StakeStatus status, uint256 diff, bool shouldClaim, bool forceRebalance) = getStakeAndClaimStatus(
-        state.assetsHolderUnderlyingBalance,
+        s.assetsHolderUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[i],
+        s.subFromExpectedStakeAmount,
         _claimAndDistributeRewards,
         connectors[i]
       );
       if (forceRebalance) {
-        state.atLeastOneForceRebalance = true;
+        s.atLeastOneForceRebalance = true;
       }
 
       if (status == StakeStatus.EXCESS) {
         // Calling rebalance immediately if interval conditions reached
-        if (_canPoke(_isSlasher, forceRebalance, state.minInterval, state.maxInterval)) {
+        if (s.skipCanPokeCheck || _canPoke(_isSlasher, forceRebalance, s.minInterval, s.maxInterval)) {
           _rebalancePokeByConf(RebalanceConfig(false, status, diff, shouldClaim, forceRebalance, i));
         }
       } else {
@@ -371,23 +396,16 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
       }
     }
 
-    require(
-      _canPoke(_isSlasher, state.atLeastOneForceRebalance, state.minInterval, state.maxInterval),
-      "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
-    );
-
     // Second cycle: connectors with EQUILIBRIUM and SHORTAGE balance status on staking
     for (uint256 i = 0; i < connectors.length; i++) {
       if (!configs[i].shouldPushFunds) {
         continue;
       }
       // Calling rebalance if interval conditions reached
-      if (_canPoke(_isSlasher, configs[i].forceRebalance, state.minInterval, state.maxInterval)) {
+      if (s.skipCanPokeCheck || _canPoke(_isSlasher, configs[i].forceRebalance, s.minInterval, s.maxInterval)) {
         _rebalancePokeByConf(configs[i]);
       }
     }
-
-    lastRebalancedAt = block.timestamp;
   }
 
   /**
@@ -404,8 +422,8 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     }
     return
       _isSlasher
-        ? (lastRebalancedAt.add(_maxInterval) < block.timestamp)
-        : (lastRebalancedAt.add(_minInterval) < block.timestamp);
+        ? (lastRebalancedByPokerAt.add(_maxInterval) < block.timestamp)
+        : (lastRebalancedByPokerAt.add(_minInterval) < block.timestamp);
   }
 
   /**
@@ -537,7 +555,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
       bool forceRebalance
     )
   {
-    return getStakeStatus(getAssetsHolderUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, _share);
+    return getStakeStatus(getAssetsHolderUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, 0, _share);
   }
 
   function getStakeAndClaimStatusByConnectorIndex(uint256 _connectorIndex, bool _claimAndDistributeRewards)
@@ -558,6 +576,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
         assetsHolderUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[_connectorIndex],
+        0,
         _claimAndDistributeRewards,
         connectors[_connectorIndex]
       );
@@ -567,6 +586,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 _leftOnAssetsHolderBalance,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
+    uint256 _subFromExpectedStakeAmount,
     bool _claimAndDistributeRewards,
     Connector memory _c
   )
@@ -583,6 +603,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
       _leftOnAssetsHolderBalance,
       _totalStakedBalance,
       _stakedBalance,
+      _subFromExpectedStakeAmount,
       _c.share
     );
     shouldClaim = _claimAndDistributeRewards && claimRewardsIntervalReached(_c.lastClaimRewardsAt);
@@ -602,6 +623,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 _leftOnPiTokenBalance,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
+    uint256 _subFromExpectedStakeAmount,
     uint256 _share
   )
     public
@@ -617,7 +639,8 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
       _leftOnPiTokenBalance,
       _totalStakedBalance,
       _stakedBalance,
-      _share
+      _share,
+      _subFromExpectedStakeAmount
     );
 
     if (status == StakeStatus.EQUILIBRIUM) {
@@ -736,7 +759,8 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 _leftOnPiToken,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
-    uint256 _share
+    uint256 _share,
+    uint256 _subFromExpectedStakeAmount
   )
     public
     pure
@@ -748,6 +772,11 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   {
     require(_reserveRatioPct <= HUNDRED_PCT, "RR_GREATER_THAN_100_PCT");
     expectedStakeAmount = getExpectedStakeAmount(_reserveRatioPct, _leftOnPiToken, _totalStakedBalance, _share);
+
+    uint256 subFromExpectedStakeAmountByShare = _subFromExpectedStakeAmount.mul(_share).div(1 ether);
+    if (expectedStakeAmount >= subFromExpectedStakeAmountByShare) {
+      expectedStakeAmount -= subFromExpectedStakeAmountByShare;
+    }
 
     if (expectedStakeAmount > _stakedBalance) {
       status = StakeStatus.SHORTAGE;
