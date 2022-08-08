@@ -484,7 +484,6 @@ async function deployContractWithBytecode(name, web3, args) {
   });
 
   Contract.setProvider(web3.currentProvider);
-  console.log('name', name, 'args', args);
   return Contract.new.apply(Contract, args);
 }
 

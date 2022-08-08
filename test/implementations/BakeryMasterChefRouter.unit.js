@@ -282,9 +282,7 @@ describe('BakeryMasterChefRouter Tests', () => {
       });
 
       it('should increase reserve if required', async () => {
-        console.log("1 piBake.getUnderlyingBalance", await piBake.getUnderlyingBalance());
         await bake.transfer(piBake.address, ether(1000), { from: deployer });
-        console.log("2 piBake.getUnderlyingBalance", await piBake.getUnderlyingBalance());
 
         let stakeAndClaimStatus = await myRouter.getStakeAndClaimStatusByConnectorIndex('0', false);
         assert.equal(stakeAndClaimStatus.diff, '800000000000000000000');

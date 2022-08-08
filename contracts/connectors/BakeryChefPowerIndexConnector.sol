@@ -22,7 +22,7 @@ contract BakeryChefPowerIndexConnector is AbstractStakeRedeemConnector {
 
   /*** VIEWERS ***/
 
-  function getPendingRewards() external view returns (uint256 amount) {
+  function getPendingRewards() public view returns (uint256 amount) {
     return IBakeryMasterChef(STAKING).pendingBake(address(UNDERLYING), address(PI_TOKEN));
   }
 
@@ -69,7 +69,11 @@ contract BakeryChefPowerIndexConnector is AbstractStakeRedeemConnector {
    * @notice Checking: is pending rewards enough to reinvest
    * @param _claimParams Claim parameters, that stored in PowerIndexRouter
    */
-  function isClaimAvailable(bytes calldata _claimParams, uint256, uint256) external view override virtual returns (bool) {
+  function isClaimAvailable(
+    bytes calldata _claimParams,
+    uint256,
+    uint256
+  ) external view virtual override returns (bool) {
     uint256 minClaimAmount = unpackClaimParams(_claimParams);
     return getPendingRewards() >= minClaimAmount;
   }

@@ -12,7 +12,6 @@ const TornPowerIndexConnector = artifacts.require('MockTornPowerIndexConnector')
 const PowerIndexVaultRouter = artifacts.require('PowerIndexVaultRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
-const MockPoke = artifacts.require('MockPoke');
 
 const TornGovernance = artifacts.require('TornGovernance');
 const TornStaking = artifacts.require('TornStaking');
@@ -25,7 +24,6 @@ TornGovernance.numberFormat = 'String';
 
 const { web3 } = MockERC20;
 
-const REPORTER_ID = 42;
 const chainId = 31337;
 
 describe('TornConnector Tests', () => {
@@ -376,6 +374,14 @@ describe('TornConnector Tests', () => {
         assert.equal(await myRouter.getUnderlyingAvailable(), ether('24050'));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('24050'));
 
+        vrs = await getPermitVrs(ether(100), bob);
+        await piTorn.depositWithPermit(ether(100), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('withdraw gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(bob), ether('55100'));
+        assert.equal(await piTorn.balanceOf(bob), ether('2900.0009774904450309'));
+        assert.equal(await torn.balanceOf(piTorn.address), '0');
+        assert.equal(await governance.lockedBalance(piTorn.address), ether(24150));
+
         async function getPermitVrs(value, owner) {
           const deadline = (await latestBlockTimestamp()) + 10;
           if(!nonce[owner]) {
@@ -490,6 +496,12 @@ describe('TornConnector Tests', () => {
         assert.equal(await myRouter.calculateLockedProfit(), ether(0));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether('21625'));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('21625'));
+
+        vrs = await getPermitVrs(ether(1000), bob);
+        await piTorn.depositWithPermit(ether(1000), vrs.deadline, vrs.v, vrs.r, vrs.s, {from: bob});
+        // console.log('2 deposit by bob gasUsed', res.receipt.gasUsed);
+        assert.equal(await torn.balanceOf(piTorn.address), ether('2262.5'));
+        assert.equal(await governance.lockedBalance(piTorn.address), ether('20362.5'));
 
         async function getPermitVrs(value, owner) {
           const deadline = (await latestBlockTimestamp()) + 10;

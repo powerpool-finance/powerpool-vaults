@@ -25,7 +25,13 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
   uint256 public constant HUNDRED_PCT = 1 ether;
 
-  event SetReserveConfig(uint256 ratio, uint256 ratioLowerBound, uint256 ratioUpperBound, uint256 pokeInterval, uint256 claimRewardsInterval);
+  event SetReserveConfig(
+    uint256 ratio,
+    uint256 ratioLowerBound,
+    uint256 ratioUpperBound,
+    uint256 pokeInterval,
+    uint256 claimRewardsInterval
+  );
   event SetPerformanceFee(uint256 performanceFee);
   event SetConnector(
     address indexed connector,
@@ -110,7 +116,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   }
 
   modifier onlyAgent() {
-    require(msg.sender == address(powerAgent));
+    require(msg.sender == address(powerAgent), "ONLY_AGENT");
     _;
   }
 
@@ -278,10 +284,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   }
 
   function agentResolver() external view returns (bool, bytes memory) {
-    return (
-      isPokeReady(),
-      abi.encodeWithSelector(AbstractPowerIndexRouter.pokeFromAgent.selector, true)
-    );
+    return (isPokeReady(), abi.encodeWithSelector(AbstractPowerIndexRouter.pokeFromAgent.selector, true));
   }
 
   /**
@@ -327,10 +330,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
 
     _rebalance(state, _claimAndDistributeRewards);
 
-    require(
-      _canPoke(state.atLeastOneForceRebalance),
-      "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
-    );
+    require(_canPoke(state.atLeastOneForceRebalance), "INTERVAL_NOT_REACHED_OR_NOT_FORCE");
 
     lastRebalancedByPokerAt = block.timestamp;
   }
