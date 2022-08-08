@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.0;
+pragma abicoder v2;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import { OracleLibrary } from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import { IUniswapV3Factory } from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IERC20Decimals {
   function decimals() external view returns (uint8);
@@ -13,9 +16,12 @@ interface IERC20Decimals {
 library UniswapV3OracleHelper {
   using SafeMath for uint256;
 
-  IUniswapV3Factory internal constant UniswapV3Factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
-  address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-  uint256 internal constant RATIO_DIVIDER = 1e18;
+  IUniswapV3Factory public constant UniswapV3Factory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
+  ISwapRouter public constant UniswapV3Router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+  address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+  address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+  uint256 public constant RATIO_DIVIDER = 1e18;
+  uint24 public constant poolFee = 3000;
 
   /**
    * @notice This function should return the price of baseToken in quoteToken, as in: quote/base (WETH/TORN)
@@ -94,5 +100,43 @@ library UniswapV3OracleHelper {
     return
       getPriceOfTokenInWETH(tokens[0], fees[0], period).mul(RATIO_DIVIDER) /
       getPriceOfTokenInWETH(tokens[1], fees[1], period);
+  }
+
+  function swapByMiddleWeth(
+    uint256 _amountIn,
+    address _tokenFrom,
+    address _tokenTo
+  ) internal returns (uint256 amountOut) {
+    IERC20(_tokenFrom).approve(address(UniswapV3Router), _amountIn);
+
+    ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+      path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, _tokenTo),
+      recipient: msg.sender,
+      deadline: block.timestamp,
+      amountIn: _amountIn,
+      amountOutMinimum: 0
+    });
+
+    // Executes the swap.
+    amountOut = UniswapV3Router.exactInput(params);
+  }
+
+  function swapByTwoMiddleWethDai(
+    uint256 _amountIn,
+    address _tokenFrom,
+    address _tokenTo
+  ) internal returns (uint256 amountOut) {
+    IERC20(_tokenFrom).approve(address(UniswapV3Router), _amountIn);
+
+    ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+      path: abi.encodePacked(_tokenFrom, poolFee, WETH, poolFee, DAI, poolFee, _tokenTo),
+      recipient: msg.sender,
+      deadline: block.timestamp,
+      amountIn: _amountIn,
+      amountOutMinimum: 0
+    });
+
+    // Executes the swap.
+    amountOut = UniswapV3Router.exactInput(params);
   }
 }

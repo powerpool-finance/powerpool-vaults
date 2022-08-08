@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.12;
+pragma solidity ^0.7.0;
 
 interface IPancakeMasterChef {
   function userInfo(uint256 _pid, address _user) external view returns (uint256 amount, uint256 rewardDebt);

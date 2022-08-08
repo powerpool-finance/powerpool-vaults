@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockGeneralMasterChef {
   address token;
 
-  constructor(address _token) public {
+  constructor(address _token) {
     token = _token;
   }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 interface IAlpacaVault {
   /// @dev Return the total ERC20 entitled to the token holders. Be careful of unaccrued interests.

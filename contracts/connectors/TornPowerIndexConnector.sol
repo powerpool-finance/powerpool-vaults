@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/torn/ITornStaking.sol";
 import "../interfaces/torn/ITornGovernance.sol";
-import "./AbstractConnector.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
+import "./AbstractProfitDistributionConnector.sol";
 
-contract TornPowerIndexConnector is AbstractConnector {
+contract TornPowerIndexConnector is AbstractProfitDistributionConnector {
+  using SafeMath for uint256;
+
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
@@ -26,7 +28,7 @@ contract TornPowerIndexConnector is AbstractConnector {
   )
     public
     // 1e18 for 100% / (6 hours * 60 * 60) seconds ~= 46e12 degradation per 1 second
-    AbstractConnector(46e12)
+    AbstractProfitDistributionConnector(46e12)
   {
     STAKING = _staking;
     UNDERLYING = IERC20(_underlying);
@@ -35,17 +37,21 @@ contract TornPowerIndexConnector is AbstractConnector {
   }
 
   // solhint-disable-next-line
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
-    external
-    override
-    returns (bytes memory stakeData)
-  {
+  function claimRewards(
+    PowerIndexRouterInterface.StakeStatus, /*_status*/
+    DistributeData memory _distributeData
+  ) external override returns (bytes memory stakeData) {
     uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
     _claimImpl();
     uint256 receivedReward = UNDERLYING.balanceOf(address(PI_TOKEN)).sub(tokenBefore);
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
-      (rewardsToReinvest, stakeData) = _distributeReward(_distributeData, PI_TOKEN, UNDERLYING, receivedReward);
+      (rewardsToReinvest, stakeData) = _distributeReward(
+        _distributeData,
+        address(PI_TOKEN),
+        UNDERLYING,
+        receivedReward
+      );
       _stakeImpl(rewardsToReinvest);
       return stakeData;
     }
@@ -252,6 +258,14 @@ contract TornPowerIndexConnector is AbstractConnector {
       return 0;
     }
     return ITornGovernance(GOVERNANCE).lockedBalance(address(PI_TOKEN));
+  }
+
+  function getUnderlyingReserve() public view override returns (uint256 amount) {
+    return UNDERLYING.balanceOf(address(PI_TOKEN));
+  }
+
+  function getUnderlyingTotal() public view override returns (uint256 amount) {
+    return getUnderlyingStaked().add(getUnderlyingReserve());
   }
 
   function _approveToStaking(uint256 _amount) internal {

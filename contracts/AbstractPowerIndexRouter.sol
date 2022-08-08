@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
-import "@powerpool/power-oracle/contracts/interfaces/IPowerPoke.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "./interfaces/WrappedPiErc20Interface.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interfaces/IPowerPoke.sol";
 import "./interfaces/IPoolRestrictions.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/IRouterConnector.sol";
-import "./PowerIndexNaiveRouter.sol";
 
 /**
- * @notice PowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
+ * @notice AbstractPowerIndexRouter executes connectors with delegatecall to stake and redeem ERC20 tokens in
  * protocol-specified staking contracts. After calling, it saves stakeData and pokeData as connectors storage.
  * Available ERC20 token balance from piERC20 is distributed between connectors by its shares and calculated
  * as the difference between total balance and share of necessary balance(reserveRatio) for keeping in piERC20
  * for withdrawals.
  */
-contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
+abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable {
   using SafeERC20 for IERC20;
+  using SafeMath for uint256;
 
   uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
   uint256 public constant HUNDRED_PCT = 1 ether;
@@ -27,7 +28,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   event SetReserveConfig(uint256 ratio, uint256 ratioLowerBound, uint256 ratioUpperBound, uint256 claimRewardsInterval);
   event SetPerformanceFee(uint256 performanceFee);
   event SetConnector(
-    IRouterConnector indexed connector,
+    address indexed connector,
     uint256 share,
     bool callBeforeAfterPoke,
     uint256 indexed connectorIndex,
@@ -47,9 +48,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 performanceFee;
   }
 
-  WrappedPiErc20Interface public immutable piToken;
+  address public assetsHolder;
   IERC20 public immutable underlying;
-  address public immutable performanceFeeReceiver;
+  address public performanceFeeReceiver;
 
   IPoolRestrictions public poolRestrictions;
   IPowerPoke public powerPoke;
@@ -94,7 +95,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   struct PokeFromState {
     uint256 minInterval;
     uint256 maxInterval;
-    uint256 piTokenUnderlyingBalance;
+    uint256 assetsHolderUnderlyingBalance;
     uint256 subFromExpectedStakeAmount;
     bool atLeastOneForceRebalance;
     bool skipCanPokeCheck;
@@ -119,8 +120,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     _reward(_reporterId, gasStart, COMPENSATION_PLAN_1_ID, _rewardOpts);
   }
 
-  constructor(address _piToken, BasicConfig memory _basicConfig) public PowerIndexNaiveRouter() Ownable() {
-    require(_piToken != address(0), "INVALID_PI_TOKEN");
+  constructor(
+    address _assetsHolder,
+    address _underlying,
+    BasicConfig memory _basicConfig
+  ) Ownable() {
+    require(_assetsHolder != address(0), "INVALID_ASSET_HOLDER");
     require(_basicConfig.reserveRatioUpperBound <= HUNDRED_PCT, "UPPER_RR_GREATER_THAN_100_PCT");
     require(_basicConfig.reserveRatio >= _basicConfig.reserveRatioLowerBound, "RR_LTE_LOWER_RR");
     require(_basicConfig.reserveRatio <= _basicConfig.reserveRatioUpperBound, "RR_GTE_UPPER_RR");
@@ -128,9 +133,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     require(_basicConfig.performanceFeeReceiver != address(0), "INVALID_PVP_ADDR");
     require(_basicConfig.poolRestrictions != address(0), "INVALID_POOL_RESTRICTIONS_ADDR");
 
-    piToken = WrappedPiErc20Interface(_piToken);
-    (, bytes memory underlyingRes) = _piToken.call(abi.encodeWithSignature("underlying()"));
-    underlying = IERC20(abi.decode(underlyingRes, (address)));
+    assetsHolder = _assetsHolder;
+    underlying = IERC20(_underlying);
     poolRestrictions = IPoolRestrictions(_basicConfig.poolRestrictions);
     powerPoke = IPowerPoke(_basicConfig.powerPoke);
     reserveRatio = _basicConfig.reserveRatio;
@@ -180,15 +184,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   /**
-   * @notice Set piERC20 ETH fee for deposit and withdrawal functions.
-   * @param _ethFee Fee amount in ETH.
-   */
-  function setPiTokenEthFee(uint256 _ethFee) external onlyOwner {
-    require(_ethFee <= 0.1 ether, "ETH_FEE_OVER_THE_LIMIT");
-    piToken.setEthFee(_ethFee);
-  }
-
-  /**
    * @notice Set connectors configs. Items should have `newConnector` variable to create connectors and `connectorIndex`
    * to update existing connectors.
    * @param _connectorList Array of connector items.
@@ -220,13 +215,13 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
         connectors[c.connectorIndex].callBeforeAfterPoke = c.callBeforeAfterPoke;
       }
 
-      emit SetConnector(c.connector, c.share, c.callBeforeAfterPoke, c.connectorIndex, c.newConnector);
+      emit SetConnector(address(c.connector), c.share, c.callBeforeAfterPoke, c.connectorIndex, c.newConnector);
     }
     _checkConnectorsTotalShare();
   }
 
   /**
-   * @notice Set connectors claim params to pass it to connector.
+   * @notice Set connector claim params to pass it to connector.
    * @param _connectorIndex Index of connector
    * @param _claimParams Claim params
    */
@@ -246,35 +241,11 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   /**
-   * @notice Set piERC20 noFee config for account address.
-   * @param _for Account address.
-   * @param _noFee Value for account.
-   */
-  function setPiTokenNoFee(address _for, bool _noFee) external onlyOwner {
-    piToken.setNoFee(_for, _noFee);
-  }
-
-  /**
-   * @notice Call piERC20 `withdrawEthFee`.
-   * @param _receiver Receiver address.
-   */
-  function withdrawEthFee(address payable _receiver) external onlyOwner {
-    piToken.withdrawEthFee(_receiver);
-  }
-
-  /**
    * @notice Transfer ERC20 balances and rights to a new router address.
-   * @param _piToken piERC20 address.
    * @param _newRouter New router contract address.
    * @param _tokens ERC20 to transfer.
    */
-  function migrateToNewRouter(
-    address _piToken,
-    address payable _newRouter,
-    address[] memory _tokens
-  ) public override onlyOwner {
-    super.migrateToNewRouter(_piToken, _newRouter, _tokens);
-
+  function migrateToNewRouter(address payable _newRouter, address[] memory _tokens) public virtual onlyOwner {
     _newRouter.transfer(address(this).balance);
 
     uint256 len = _tokens.length;
@@ -294,11 +265,6 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       abi.encodeWithSignature("initRouter(bytes)", _data)
     );
     require(success, string(result));
-  }
-
-  function piTokenCallback(address, uint256 _withdrawAmount) external payable virtual override {
-    PokeFromState memory state = PokeFromState(0, 0, 0, _withdrawAmount, false, true);
-    _rebalance(state, false, false);
   }
 
   /**
@@ -358,8 +324,10 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
   }
 
   function claimRewardsIntervalReached(uint256 _lastClaimRewardsAt) public view returns (bool) {
-    return _lastClaimRewardsAt + claimRewardsInterval < block.timestamp;
+    return _lastClaimRewardsAt.add(claimRewardsInterval) < block.timestamp;
   }
+
+  function getAssetsHolderUnderlyingBalance() public view virtual returns (uint256);
 
   /**
    * @notice Rebalance every connector according to its share in an array.
@@ -389,12 +357,12 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       if (s.subFromExpectedStakeAmount > 0) {
         _rebalancePoke(connectors[0], StakeStatus.EXCESS, s.subFromExpectedStakeAmount);
       } else {
-        _rebalancePoke(connectors[0], StakeStatus.SHORTAGE, piToken.getUnderlyingBalance());
+        _rebalancePoke(connectors[0], StakeStatus.SHORTAGE, getAssetsHolderUnderlyingBalance());
       }
       return;
     }
 
-    s.piTokenUnderlyingBalance = piToken.getUnderlyingBalance();
+    s.assetsHolderUnderlyingBalance = getAssetsHolderUnderlyingBalance();
     (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
@@ -406,7 +374,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       }
 
       (StakeStatus status, uint256 diff, bool shouldClaim, bool forceRebalance) = getStakeAndClaimStatus(
-        s.piTokenUnderlyingBalance,
+        s.assetsHolderUnderlyingBalance,
         totalStakedBalance,
         stakedBalanceList[i],
         s.subFromExpectedStakeAmount,
@@ -454,8 +422,8 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     }
     return
       _isSlasher
-        ? (lastRebalancedByPokerAt + _maxInterval < block.timestamp)
-        : (lastRebalancedByPokerAt + _minInterval < block.timestamp);
+        ? (lastRebalancedByPokerAt.add(_maxInterval) < block.timestamp)
+        : (lastRebalancedByPokerAt.add(_minInterval) < block.timestamp);
   }
 
   /**
@@ -587,11 +555,35 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       bool forceRebalance
     )
   {
-    return getStakeStatus(piToken.getUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, 0, _share);
+    return getStakeStatus(getAssetsHolderUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, 0, _share);
+  }
+
+  function getStakeAndClaimStatusByConnectorIndex(uint256 _connectorIndex, bool _claimAndDistributeRewards)
+    external
+    view
+    returns (
+      StakeStatus status,
+      uint256 diff,
+      bool shouldClaim,
+      bool forceRebalance
+    )
+  {
+    uint256 assetsHolderUnderlyingBalance = getAssetsHolderUnderlyingBalance();
+    (uint256[] memory stakedBalanceList, uint256 totalStakedBalance) = _getUnderlyingStakedList();
+
+    return
+      getStakeAndClaimStatus(
+        assetsHolderUnderlyingBalance,
+        totalStakedBalance,
+        stakedBalanceList[_connectorIndex],
+        0,
+        _claimAndDistributeRewards,
+        connectors[_connectorIndex]
+      );
   }
 
   function getStakeAndClaimStatus(
-    uint256 _leftOnPiTokenBalance,
+    uint256 _leftOnAssetsHolderBalance,
     uint256 _totalStakedBalance,
     uint256 _stakedBalance,
     uint256 _subFromExpectedStakeAmount,
@@ -608,7 +600,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     )
   {
     (status, diff, forceRebalance) = getStakeStatus(
-      _leftOnPiTokenBalance,
+      _leftOnAssetsHolderBalance,
       _totalStakedBalance,
       _stakedBalance,
       _subFromExpectedStakeAmount,
@@ -642,8 +634,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       bool forceRebalance
     )
   {
-    uint256 expectedStakeAmount;
-    (status, diff, expectedStakeAmount) = getStakeStatusPure(
+    (status, diff, ) = getStakeStatusPure(
       reserveRatio,
       _leftOnPiTokenBalance,
       _totalStakedBalance,
@@ -676,7 +667,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 underlyingStaked = 0;
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
-      underlyingStaked += connectors[i].connector.getUnderlyingStaked();
+      underlyingStaked = underlyingStaked.add(connectors[i].connector.getUnderlyingStaked());
     }
     return underlyingStaked;
   }
@@ -687,32 +678,19 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     for (uint256 i = 0; i < connectors.length; i++) {
       require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
       underlyingStakedList[i] = connectors[i].connector.getUnderlyingStaked();
-      total += underlyingStakedList[i];
+      total = total.add(underlyingStakedList[i]);
     }
     return (underlyingStakedList, total);
   }
 
-  function getUnderlyingReserve() public view returns (uint256) {
-    return underlying.balanceOf(address(piToken));
-  }
-
-  function calculateLockedProfit() public view returns (uint256) {
-    uint256 lockedProfit = 0;
-    for (uint256 i = 0; i < connectors.length; i++) {
-      require(address(connectors[i].connector) != address(0), "CONNECTOR_IS_NULL");
-      lockedProfit += connectors[i].connector.calculateLockedProfit(connectors[i].stakeData);
-    }
-    return lockedProfit;
-  }
-
-  function getUnderlyingAvailable() public view returns (uint256) {
-    // _getUnderlyingReserve + getUnderlyingStaked - _calculateLockedProfit
-    return getUnderlyingReserve().add(getUnderlyingStaked()).sub(calculateLockedProfit());
+  function getUnderlyingAvailable() public view virtual returns (uint256) {
+    // getAssetsHolderUnderlyingBalance + getUnderlyingStaked
+    return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked());
   }
 
   function getUnderlyingTotal() external view returns (uint256) {
-    // _getUnderlyingReserve + getUnderlyingStaked
-    return getUnderlyingReserve().add(getUnderlyingStaked());
+    // getAssetsHolderUnderlyingBalance + getUnderlyingStaked
+    return getAssetsHolderUnderlyingBalance().add(getUnderlyingStaked());
   }
 
   function getPiEquivalentForUnderlying(uint256 _underlyingAmount, uint256 _piTotalSupply)
@@ -785,7 +763,7 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
     uint256 _subFromExpectedStakeAmount
   )
     public
-    view
+    pure
     returns (
       StakeStatus status,
       uint256 diff,
@@ -851,5 +829,9 @@ contract PowerIndexRouter is PowerIndexRouterInterface, PowerIndexNaiveRouter {
       totalShare = totalShare.add(connectors[i].share);
     }
     require(totalShare == HUNDRED_PCT, "TOTAL_SHARE_IS_NOT_HUNDRED_PCT");
+  }
+
+  function sendEthToPerformanceFeeReceiver() public onlyOwner {
+    require(payable(performanceFeeReceiver).send(address(this).balance), "FAILED");
   }
 }

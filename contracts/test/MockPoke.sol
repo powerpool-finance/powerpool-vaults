@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 contract MockPoke {
   uint256 minInterval;
@@ -11,7 +11,7 @@ contract MockPoke {
 
   bool simpleImpl;
 
-  constructor(bool _simpleImpl) public {
+  constructor(bool _simpleImpl) {
     simpleImpl = _simpleImpl;
   }
 

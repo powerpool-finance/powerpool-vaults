@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./interfaces/PowerIndexNaiveRouterInterface.sol";
+import "./interfaces/PowerIndexVaultRouterInterface.sol";
 import "./interfaces/PowerIndexRouterInterface.sol";
 import "./interfaces/WrappedPiErc20Interface.sol";
 import "./interfaces/IERC20Permit.sol";
@@ -50,7 +50,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     address _router,
     string memory _name,
     string memory _symbol
-  ) public ERC20(_name, _symbol) {
+  ) ERC20(_name, _symbol) {
     underlying = IERC20Permit(_token);
     router = _router;
 
@@ -106,7 +106,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     emit Deposit(msg.sender, _depositAmount, mintAmount);
 
     if (routerCallbackEnabled) {
-      PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, 0);
+      PowerIndexVaultRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, 0);
     }
 
     return mintAmount;
@@ -127,7 +127,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     require(_withdrawAmount > 0, "ZERO_WITHDRAWAL");
 
     if (routerCallbackEnabled) {
-      PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, _withdrawAmount);
+      PowerIndexVaultRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, _withdrawAmount);
     }
 
     uint256 burnAmount = getPiEquivalentForUnderlying(_withdrawAmount);
@@ -159,7 +159,7 @@ contract WrappedPiErc20 is ERC20, ReentrancyGuard, WrappedPiErc20Interface {
     require(withdrawAmount > 0, "ZERO_UNDERLYING_TO_WITHDRAW");
 
     if (routerCallbackEnabled) {
-      PowerIndexNaiveRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, withdrawAmount);
+      PowerIndexVaultRouterInterface(router).piTokenCallback{ value: msg.value }(msg.sender, withdrawAmount);
     }
 
     _burn(msg.sender, _burnAmount);

@@ -1,4 +1,6 @@
-pragma solidity ^0.6.12;
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.7.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -25,7 +27,7 @@ contract TornGovernance {
     _;
   }
 
-  constructor(address _torn) public {
+  constructor(address _torn) {
     torn = IERC20(_torn);
   }
 

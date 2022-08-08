@@ -3,7 +3,7 @@ const { ether, artifactFromBytecode, latestBlockNumber } = require('./../helpers
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const BakeryChefPowerIndexConnector = artifacts.require('BakeryChefPowerIndexConnector');
-const PowerIndexRouter = artifacts.require('PowerIndexRouter');
+const PowerIndexVaultRouter = artifacts.require('PowerIndexVaultRouter');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
 const MockPoke = artifacts.require('MockPoke');
@@ -55,8 +55,9 @@ describe('BakeryMasterChefRouter Tests', () => {
     piBake = await WrappedPiErc20.new(bake.address, stub, 'Wrapped BAKE', 'piBAKE');
 
     poke = await MockPoke.new(true);
-    myRouter = await PowerIndexRouter.new(
+    myRouter = await PowerIndexVaultRouter.new(
       piBake.address,
+      bake.address,
       buildBasicRouterConfig(
         poolRestrictions.address,
         poke.address,
@@ -282,7 +283,7 @@ describe('BakeryMasterChefRouter Tests', () => {
         assert.equal(await bake.balanceOf(piBake.address), ether('2307.9365079364'));
 
         assert.equal(await myRouter.getUnderlyingStaked(), ether(8800));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether('2307.9365079364'));
+        assert.equal(await myRouter.getAssetsHolderUnderlyingBalance(), ether('2307.9365079364'));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether(11000));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('11107.9365079364'));
         assert.equal(await myRouter.calculateLockedProfit(), ether('107.9365079364'));

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 pragma experimental ABIEncoderV2;
 
@@ -28,6 +28,10 @@ interface IRouterConnector {
 
   function getUnderlyingStaked() external view returns (uint256);
 
+  function getUnderlyingReserve() external view returns (uint256);
+
+  function getUnderlyingTotal() external view returns (uint256);
+
   function isClaimAvailable(
     bytes calldata _claimParams,
     uint256 _lastClaimRewardsAt,
@@ -42,7 +46,7 @@ interface IRouterConnector {
     external
     returns (bytes calldata, bool claimed);
 
-  function calculateLockedProfit(bytes calldata _stakeData) external view returns (uint256);
+  function migrate(bytes calldata) external;
 
   function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData calldata _distributeData)
     external

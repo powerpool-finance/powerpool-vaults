@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity ^0.7.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IPoolRestrictions.sol";
@@ -52,7 +52,7 @@ contract MockPoolRestrictions is IPoolRestrictions, Ownable {
   /** @dev Public records of operators, who doesn't pay community fee */
   mapping(address => bool) public withoutFeeAddresses;
 
-  constructor() public Ownable() {}
+  constructor() Ownable() {}
 
   /* ==========  Configuration Actions  ========== */
 
