@@ -20,7 +20,7 @@ const TornStaking = artifacts.require('TornStaking');
 MockERC20.numberFormat = 'String';
 TornPowerIndexConnector.numberFormat = 'String';
 WrappedPiErc20.numberFormat = 'String';
-PowerIndexRouter.numberFormat = 'String';
+PowerIndexVaultRouter.numberFormat = 'String';
 TornGovernance.numberFormat = 'String';
 
 const { web3 } = MockERC20;
@@ -321,7 +321,7 @@ describe('TornConnector Tests', () => {
         assert.equal(await torn.balanceOf(governance.address), ether(64250));
         assert.equal(await governance.lockedBalance(piTorn.address), ether(22250));
         assert.equal(await myRouter.getUnderlyingStaked(), ether(22250));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether('0'));
+        assert.equal(await myRouter.getAssetsHolderUnderlyingBalance(), ether('0'));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether(18000));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('22250'));
         assert.equal(await myRouter.calculateLockedProfit(), ether('4250'));
@@ -444,7 +444,7 @@ describe('TornConnector Tests', () => {
         assert.equal(await torn.balanceOf(governance.address), ether(62025));
         assert.equal(await governance.lockedBalance(piTorn.address), ether(20025));
         assert.equal(await myRouter.getUnderlyingStaked(), ether(20025));
-        assert.equal(await myRouter.getUnderlyingReserve(), ether(1800));
+        assert.equal(await myRouter.getAssetsHolderUnderlyingBalance(), ether(1800));
         assert.equal(await myRouter.getUnderlyingAvailable(), ether(18000));
         assert.equal(await myRouter.getUnderlyingTotal(), ether('21825'));
         assert.equal(await myRouter.calculateLockedProfit(), ether('3825'));
