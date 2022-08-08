@@ -53,7 +53,6 @@ contract TornPowerIndexConnector is AbstractProfitDistributionConnector {
         UNDERLYING,
         receivedReward
       );
-      _approveToStaking(rewardsToReinvest);
       _stakeImpl(rewardsToReinvest);
       return stakeData;
     }

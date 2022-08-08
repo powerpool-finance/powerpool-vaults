@@ -477,14 +477,13 @@ function getFileContent(fileName) {
 }
 
 async function deployContractWithBytecode(name, web3, args) {
-  const CrvStackingContract = await TruffleContract({
+  const Contract = await TruffleContract({
     abi: getFileContent(name + 'Abi.json'),
     bytecode: '0x' + getFileContent(name, { encoding: 'utf8' }).replace(/(?:\r\n|\r|\n)/g, ''),
   });
 
-  CrvStackingContract.setProvider(web3.currentProvider);
-  console.log('name', name);
-  return CrvStackingContract.new.apply(CrvStackingContract, args);
+  Contract.setProvider(web3.currentProvider);
+  return Contract.new.apply(Contract, args);
 }
 
 module.exports = {
