@@ -3,27 +3,25 @@
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
-import "../interfaces/bprotocol/IBAMM.sol";
-import "../interfaces/balancerV3/IVault.sol";
-import "../interfaces/liquidity/IStabilityPool.sol";
-import "./AbstractConnector.sol";
-import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 
-contract BProtocolPowerIndexConnector is AbstractConnector {
+import "../interfaces/bprotocol/IBAMM.sol";
+import "../interfaces/liquidity/IStabilityPool.sol";
+import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
+import "./AbstractBalancerVaultConnector.sol";
+
+contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
+  using SafeERC20 for IERC20;
 
   event Stake(address indexed sender, uint256 amount, uint256 rewardReceived);
   event Redeem(address indexed sender, uint256 amount, uint256 rewardReceived);
 
-  address public immutable ASSET_MANAGER;
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
-  address public immutable VAULT;
   IERC20 public immutable REWARDS_TOKEN;
-  IERC20 public immutable UNDERLYING;
-  bytes32 public immutable PID;
 
   constructor(
     address _assetManager,
@@ -32,41 +30,39 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _vault,
     address _stabilityPool,
     address _rewardsToken,
-    bytes32 _pId
-  ) AbstractConnector() {
-    ASSET_MANAGER = _assetManager;
+    bytes32 _pId,
+    address _poolAddress
+  ) AbstractBalancerVaultConnector(_assetManager, _underlying, _vault, _pId, _poolAddress) {
     STAKING = _staking;
-    UNDERLYING = IERC20(_underlying);
-    VAULT = _vault;
     STABILITY_POOL = _stabilityPool;
     REWARDS_TOKEN = IERC20(_rewardsToken);
-    PID = _pId;
   }
 
   // solhint-disable-next-line
   function claimRewards(
     PowerIndexRouterInterface.StakeStatus, /*_status*/
-    DistributeData memory _distributeData
+    DistributeData memory _distributeData,
+    bytes memory
   ) external override returns (bytes memory stakeData) {
     uint256 pending = getPendingRewards();
     if (pending > 0) {
       _claimImpl();
     }
-    uint256 receivedReward = REWARDS_TOKEN.balanceOf(ASSET_MANAGER);
+    uint256 receivedReward = REWARDS_TOKEN.balanceOf(address(this));
     if (receivedReward > 0) {
       uint256 rewardsToReinvest;
       (, rewardsToReinvest, ) = _distributePerformanceFee(
         _distributeData.performanceFee,
         _distributeData.performanceFeeReceiver,
         0,
-        ASSET_MANAGER,
+        address(this),
         REWARDS_TOKEN,
         receivedReward
       );
 
       _swapRewardsToUnderlying(rewardsToReinvest);
 
-      _stakeImpl(IERC20(UNDERLYING).balanceOf(ASSET_MANAGER));
+      _stakeImpl(IERC20(UNDERLYING).balanceOf(address(this)));
       return stakeData;
     }
     // Otherwise the rewards are distributed each time deposit/withdraw methods are called,
@@ -88,7 +84,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     address _feeReceiver,
     uint256 _amount
   ) internal override {
-    _underlying.transfer(_feeReceiver, _amount);
+    _underlying.safeTransfer(_feeReceiver, _amount);
   }
 
   function getActualUnderlyingEarnedByStakeData(bytes calldata _stakeData) external view returns (uint256) {
@@ -112,7 +108,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   function stake(uint256 _amount, DistributeData memory _distributeData)
-    public
+    external
     override
     returns (bytes memory result, bool claimed)
   {
@@ -168,55 +164,12 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     // transfer fee to receiver
     if (amountToRedeem > _amount) {
       // send the rest UNDERLYING(fee amount)
-      IERC20(UNDERLYING).transfer(_distributeData.performanceFeeReceiver, UNDERLYING.balanceOf(address(this)));
+      IERC20(UNDERLYING).safeTransfer(_distributeData.performanceFeeReceiver, UNDERLYING.balanceOf(address(this)));
       underlyingEarned = 0;
     }
 
     result = packStakeData(assetsPerShare, underlyingEarned);
     claimed = true;
-  }
-
-  /**
-   * @dev Transfers capital into the asset manager, and then invests it
-   * @param _underlyingStaked - staked balance
-   * @param _amount - the amount of tokens being deposited
-   */
-  function _capitalIn(uint256 _underlyingStaked, uint256 _amount) private {
-    IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
-    // Update the vault with new managed balance accounting for returns
-    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
-    // Send funds back to the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.DEPOSIT, PID, UNDERLYING, _amount);
-
-    IVault(VAULT).managePoolBalance(ops);
-  }
-
-  /**
-   * @notice Divests capital back to the asset manager and then sends it to the vault
-   * @param _underlyingStaked - staked balance
-   * @param _amount - the amount of tokens to withdraw to the vault
-   */
-  function _capitalOut(uint256 _underlyingStaked, uint256 _amount) private {
-    IVault.PoolBalanceOp[] memory ops = new IVault.PoolBalanceOp[](2);
-    // Update the vault with new managed balance accounting for returns
-    ops[0] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.UPDATE, PID, UNDERLYING, _underlyingStaked);
-    // Pull funds from the vault
-    ops[1] = IVault.PoolBalanceOp(IVault.PoolBalanceOpKind.WITHDRAW, PID, UNDERLYING, _amount);
-
-    IVault(VAULT).managePoolBalance(ops);
-  }
-
-  function beforePoke(
-    bytes memory _pokeData,
-    DistributeData memory _distributeData,
-    bool _willClaimReward
-  ) external override {}
-
-  function afterPoke(
-    PowerIndexRouterInterface.StakeStatus, /*reserveStatus*/
-    bool /*_rewardClaimDone*/
-  ) external override returns (bytes memory) {
-    return new bytes(0);
   }
 
   function initRouter(bytes calldata) external override {
@@ -254,7 +207,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   /**
    * @notice Pack claim params to bytes.
    */
-  function packClaimParams(uint256 _minAmount) public pure returns (bytes memory) {
+  function packClaimParams(uint256 _minAmount) external pure returns (bytes memory) {
     return abi.encode(_minAmount);
   }
 
@@ -269,14 +222,18 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
   }
 
   /**
-   * @notice Pack claim params to bytes.
+   * @notice Pack stake params to bytes.
    */
-  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute) public pure returns (bytes memory) {
+  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute)
+    external
+    pure
+    returns (bytes memory)
+  {
     return abi.encode(_maxETHOnStaking, _minLUSDToDistribute);
   }
 
   /**
-   * @notice Unpack claim params from bytes to variables.
+   * @notice Unpack stake params from bytes to variables.
    */
   function unpackStakeParams(bytes memory _stakeParams)
     public
@@ -300,23 +257,6 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   function _redeemImpl(uint256 _amount, uint256 _assetsPerShare) internal {
     IBAMM(STAKING).withdraw(_amount.mul(1 ether).div(_assetsPerShare));
-  }
-
-  /**
-   * @dev Returns current amount of LUSD remaining in the Balancer Vault.
-   */
-  function getUnderlyingReserve() public view override returns (uint256) {
-    (uint256 poolCash, , , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
-    return poolCash;
-  }
-
-  /**
-   * @dev Returns the accounted amount of LUSD borrowed from the Balancer Vault by this Asset Manager contract.
-   *      managed = total - cash
-   */
-  function getUnderlyingManaged() external view returns (uint256) {
-    (, uint256 poolManaged, , ) = IVault(VAULT).getPoolTokenInfo(PID, UNDERLYING);
-    return poolManaged;
   }
 
   /**
@@ -381,7 +321,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
 
   uint256 internal constant RAY = 10**27;
 
-  function add(uint256 x, uint256 y) public pure returns (uint256 z) {
+  function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
     require((z = x + y) >= x, "ds-math-add-overflow");
   }
 
@@ -393,7 +333,7 @@ contract BProtocolPowerIndexConnector is AbstractConnector {
     z = mul(x, RAY) / y;
   }
 
-  function rmul(uint256 x, uint256 y) public pure returns (uint256 z) {
+  function rmul(uint256 x, uint256 y) internal pure returns (uint256 z) {
     z = mul(x, y) / RAY;
   }
 }

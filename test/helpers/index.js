@@ -215,6 +215,20 @@ async function impersonateAccount(ethers, adminAddress) {
   await ethers.provider.send('hardhat_impersonateAccount', [adminAddress]);
 }
 
+// async function forkPrepareBalancerAutorizer(ethers, network, deployer) {
+//   const IAuthorizer = await artifacts.require('contracts/interfaces/balancerV3/IAuthorizer.sol:IAuthorizer');
+//
+//   await network.provider.request({
+//     method: 'hardhat_reset',
+//     params: [{ forking: { jsonRpcUrl: process.env.RPC } }],
+//   });
+//   const daoMultisigAddress = '0x10a19e7ee7d7f8a52822f6817de8ea18204f2e4f';
+//   const roles = ['0x38850d48acdf7da1f77e6b4a1991447eb2c439554ba14cdfec945500fdc714a1'];
+//   const authorizer = await IAuthorizer.at('0xa331d84ec860bf466b4cdccfb4ac09a1b43f3ae6');
+//   await impersonateAccount(ethers, daoMultisigAddress);
+//   await authorizer.grantRoles(roles, deployer, { from: daoMultisigAddress });
+// }
+
 async function forkContractUpgrade(ethers, adminAddress, proxyAdminAddress, proxyAddress, implAddress) {
   const iface = new ethers.utils.Interface(['function upgrade(address proxy, address impl)']);
 

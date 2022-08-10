@@ -67,13 +67,13 @@ contract PowerIndexVaultRouter is AbstractPowerIndexRouter, PowerIndexVaultRoute
     address _piToken,
     address payable _newRouter,
     address[] memory _tokens
-  ) public virtual onlyOwner {
+  ) external virtual onlyOwner {
     super.migrateToNewRouter(_newRouter, _tokens);
 
     WrappedPiErc20Interface(_piToken).changeRouter(_newRouter);
   }
 
-  function enableRouterCallback(address _piToken, bool _enable) public override onlyOwner {
+  function enableRouterCallback(address _piToken, bool _enable) external override onlyOwner {
     WrappedPiErc20Interface(_piToken).enableRouterCallback(_enable);
   }
 

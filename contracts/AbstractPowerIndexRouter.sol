@@ -34,8 +34,9 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 indexed connectorIndex,
     bool indexed isNewConnector
   );
-  event SetConnectorClaimParams(address connector, bytes claimParams);
-  event SetConnectorStakeParams(address connector, bytes stakeParams);
+  event SetConnectorClaimParams(address indexed connector, bytes claimParams);
+  event SetConnectorStakeParams(address indexed connector, bytes stakeParams);
+  event SetAssetsHolder(address indexed assetsHolder);
 
   struct BasicConfig {
     address poolRestrictions;
@@ -525,7 +526,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
    */
   function _claimRewards(Connector storage c, StakeStatus _stakeStatus) internal {
     (bool success, bytes memory result) = address(c.connector).delegatecall(
-      abi.encodeWithSelector(IRouterConnector.claimRewards.selector, _stakeStatus, _getDistributeData(c))
+      abi.encodeWithSelector(IRouterConnector.claimRewards.selector, _stakeStatus, _getDistributeData(c), c.claimParams)
     );
     require(success, string(result));
     result = abi.decode(result, (bytes));
@@ -831,7 +832,12 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     require(totalShare == HUNDRED_PCT, "TOTAL_SHARE_IS_NOT_HUNDRED_PCT");
   }
 
-  function sendEthToPerformanceFeeReceiver() public onlyOwner {
+  function sendEthToPerformanceFeeReceiver() external onlyOwner {
     require(payable(performanceFeeReceiver).send(address(this).balance), "FAILED");
+  }
+
+  function setAssetsHolder(address _assetsHolder) external onlyOwner {
+    assetsHolder = _assetsHolder;
+    emit SetAssetsHolder(_assetsHolder);
   }
 }

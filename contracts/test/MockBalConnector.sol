@@ -3,10 +3,10 @@
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
-import "../connectors/BProtocolPowerIndexConnector.sol";
 import "./MockSwapper.sol";
+import "../connectors/BalPowerIndexConnector.sol";
 
-contract MockBProtocolConnector is BProtocolPowerIndexConnector {
+contract MockBalConnector is BalPowerIndexConnector {
   event MockWrapperCallback(uint256 withdrawAmount);
   event TestMigrate(bytes migrateData);
 
@@ -16,20 +16,20 @@ contract MockBProtocolConnector is BProtocolPowerIndexConnector {
     address _assetManager,
     address _staking,
     address _underlying,
-    address _vault,
-    address _stabilityPool,
     address _rewardsToken,
+    address _rewardsMinter,
+    address _vault,
     bytes32 _pId,
     address _poolAddress,
     address _swapper
   )
-    BProtocolPowerIndexConnector(
+    BalPowerIndexConnector(
       _assetManager,
       _staking,
       _underlying,
-      _vault,
-      _stabilityPool,
       _rewardsToken,
+      _rewardsMinter,
+      _vault,
       _pId,
       _poolAddress
     )

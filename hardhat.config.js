@@ -54,10 +54,13 @@ const config = {
       gas: 12000000,
       loggingEnabled: false,
       blockGasLimit: 12000000,
+      defaultBalanceEther: 2e9,
+      accountsBalance: 2e9,
     },
     ganache: {
       url: 'http://127.0.0.1:8945',
-      defaultBalanceEther: 1e9,
+      defaultBalanceEther: 2e9,
+      accountsBalance: 2e9,
       hardfork: 'muirGlacier',
     },
     mainnet: {
@@ -71,7 +74,7 @@ const config = {
       url: 'http://127.0.0.1:8545/',
       gasPrice: process.env.GAS_PRICE ? parseInt(process.env.GAS_PRICE) * 10 ** 9 : 120 * 10 ** 9,
       // accounts: getAccounts('mainnet'),
-      gasMultiplier: 1.2,
+      // gasMultiplier: 1.2,
       timeout: 2000000,
       blockGasLimit: 20000000,
       allowUnlimitedContractSize: true,

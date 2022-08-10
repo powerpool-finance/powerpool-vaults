@@ -41,12 +41,11 @@ abstract contract AbstractStakeRedeemConnector is AbstractProfitDistributionConn
 
   /*** PERMISSIONLESS REWARD CLAIMING AND DISTRIBUTION ***/
 
-  function claimRewards(PowerIndexRouterInterface.StakeStatus _status, DistributeData memory _distributeData)
-    external
-    virtual
-    override
-    returns (bytes memory stakeData)
-  {
+  function claimRewards(
+    PowerIndexRouterInterface.StakeStatus _status,
+    DistributeData memory _distributeData,
+    bytes memory
+  ) external virtual override returns (bytes memory stakeData) {
     if (_status == PowerIndexRouterInterface.StakeStatus.EQUILIBRIUM) {
       uint256 tokenBefore = UNDERLYING.balanceOf(address(PI_TOKEN));
       _claimImpl();
