@@ -17,6 +17,7 @@ interface PowerIndexRouterInterface {
     uint256 _reserveRatio,
     uint256 _reserveRatioLowerBound,
     uint256 _reserveRatioUpperBound,
+    uint256 _pokeInterval,
     uint256 _claimRewardsInterval
   ) external;
 

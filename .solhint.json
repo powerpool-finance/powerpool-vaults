@@ -3,7 +3,7 @@
   "plugins": ["prettier"],
   "rules": {
     "func-visibility": ["warn", { "ignoreConstructors": true }],
-    "code-complexity": ["error", 11],
+    "code-complexity": ["error", 12],
     "compiler-version": ["error", "^0.7.0"],
     "constructor-syntax": "error",
     "max-line-length": ["error", 120],

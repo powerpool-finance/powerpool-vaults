@@ -1,5 +1,5 @@
 const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
-const { ether, zeroAddress, maxUint256, deployContractWithBytecode } = require('./../helpers');
+const { ether, zeroAddress, maxUint256, deployContractWithBytecode, pokeFromReporter, advanceBlocks } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
@@ -9,7 +9,6 @@ const BalPowerIndexConnector = artifacts.require('MockBalConnector');
 const AssetManager = artifacts.require('AssetManager');
 const WrappedPiErc20 = artifacts.require('WrappedPiErc20');
 const MockPoolRestrictions = artifacts.require('MockPoolRestrictions');
-const MockPoke = artifacts.require('MockPoke');
 const StablePoolFactory = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePoolFactory');
 const StablePool = artifacts.require('@powerpool/balancer-v2-pool-stable/contracts/StablePool');
 const LiquidityGaugeMock = artifacts.require('LiquidityGaugeMock');
@@ -36,6 +35,7 @@ describe('BalAssetManager Tests', () => {
     bbausd,
     bal,
     weth,
+    cvp,
     authorizer,
     vault,
     stablePoolFactory,
@@ -61,6 +61,7 @@ describe('BalAssetManager Tests', () => {
   }
 
   beforeEach(async function () {
+    cvp = await MockERC20.new('CVP', 'CVP', 18, ether(10e6.toString()));
     weth = await MockWETH.new();
 
     // mainnet: 0xa331d84ec860bf466b4cdccfb4ac09a1b43f3ae6
@@ -124,7 +125,13 @@ describe('BalAssetManager Tests', () => {
 
     poolRestrictions = await MockPoolRestrictions.new();
 
-    poke = await MockPoke.new(true);
+    poke = await deployContractWithBytecode('ppagent/ppagent', web3, [
+      deployer, // owner_,
+      cvp.address, // cvp_,
+      ether(1e3), // minKeeperCvp_,
+      '60', // pendingWithdrawalTimeoutSeconds_
+    ]);
+
     assetManager = await AssetManager.new(
       vault.address,
       lusd.address,
@@ -136,7 +143,8 @@ describe('BalAssetManager Tests', () => {
         ether('0.2'),
         ether('0.02'),
         ether('0.3'),
-        0,
+        60 * 60,
+        2 * 60 * 60,
         pvp,
         ether('0.15'),
       ),
@@ -198,20 +206,49 @@ describe('BalAssetManager Tests', () => {
     assert.equal(await assetManager.owner(), piGov);
 
     await bbausd.transfer(alice, ether(1e6));
+
+    res = await poke.registerJob({
+      jobAddress: assetManager.address,
+      jobSelector: '0xbce0a8b3',
+      useJobOwnerCredits: false,
+      assertResolverSelector: true,
+      maxBaseFeeGwei: '10',
+      rewardPct: '10',
+      fixedReward: '1000',
+      jobMinCvp: ether(2000),
+      calldataSource: '2',
+      intervalSeconds: '0'
+    }, {
+      resolverAddress: assetManager.address,
+      resolverCalldata: '0x39e055aa' // agentResolver
+    }, '0x', {from: piGov});
+
+    await poke.depositJobCredits(res.logs[0].args.jobKey, {from: piGov, value: ether(10)});
+
+    await cvp.approve(poke.address, ether(2000), { from: deployer });
+    await poke.registerAsKeeper(deployer, ether(2000), {from: deployer});
   });
 
   describe('reserve management', () => {
-    beforeEach(async () => {
-      await poke.setMinMaxReportIntervals(time.duration.hours(1), time.duration.hours(2), { from: piGov });
-    });
-
     it('should claim rewards and reinvest', async () => {
       await assetManager.setClaimParams('0', await connector.packClaimParams(time.duration.minutes(60)), { from: piGov });
 
-      await assetManager.pokeFromReporter('1', false, '0x');
-      await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'INTERVAL_NOT_REACHED_OR_NOT_FORCE');
+      let stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', true);
+      assert.equal(stakeAndClaimStatus.status, '2');
+      assert.equal(stakeAndClaimStatus.diff, '1600000000000000000000000');
+
+      await pokeFromReporter(poke);
+
+      await advanceBlocks(2);
+
+      stakeAndClaimStatus = await assetManager.getStakeAndClaimStatusByConnectorIndex('0', true);
+      assert.equal(stakeAndClaimStatus.status, '0');
+      assert.equal(stakeAndClaimStatus.diff, '0');
+      assert.equal(stakeAndClaimStatus.forceRebalance, false);
+
+      await expectRevert(pokeFromReporter(poke), 'NOTHING_TO_DO');
       await time.increase(time.duration.minutes(60));
-      await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
+      await expectRevert(pokeFromReporter(poke), 'NOTHING_TO_DO');
 
       await bbausd.approve(staking.address, await bbausd.balanceOf(alice), { from: alice });
       await staking.deposit(ether(5000), alice, false, {from: alice});
@@ -235,23 +272,22 @@ describe('BalAssetManager Tests', () => {
       assert.equal(transfer.args.to, assetManager.address);
       approximatelyEqual(transfer.args.value, expectedReward);
 
-      await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
-      res = await assetManager.pokeFromReporter('1', true, '0x');
-      transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
+      res = await pokeFromReporter(poke);
+      transfer = MockERC20.decodeLogs(res.logs).filter(
         l => l.address === bal.address && l.event === 'Transfer',
       )[0];
       assert.equal(transfer.args.from, assetManager.address);
       assert.equal(transfer.args.to, pvp);
       approximatelyEqual(transfer.args.value, expectedFee);
 
-      transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
+      transfer = MockERC20.decodeLogs(res.logs).filter(
         l => l.address === bal.address && l.event === 'Transfer',
       )[1];
       assert.equal(transfer.args.from, assetManager.address);
       assert.equal(transfer.args.to, swapper.address);
       approximatelyEqual(transfer.args.value, toBN(expectedReward).sub(toBN(expectedFee)));
 
-      transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
+      transfer = MockERC20.decodeLogs(res.logs).filter(
         l => l.address === bbausd.address && l.event === 'Transfer',
       )[1];
       assert.equal(transfer.args.from, assetManager.address);
@@ -267,7 +303,7 @@ describe('BalAssetManager Tests', () => {
     it('should claim rewards twice and reinvest', async () => {
       await assetManager.setClaimParams('0', await connector.packClaimParams(time.duration.minutes(60)), { from: piGov });
 
-      await assetManager.pokeFromReporter('1', false, '0x');
+      await pokeFromReporter(poke);
       await time.increase(time.duration.minutes(60));
 
       await bbausd.approve(staking.address, await bbausd.balanceOf(alice), { from: alice });
@@ -291,10 +327,9 @@ describe('BalAssetManager Tests', () => {
       await time.increase(time.duration.minutes(60));
 
       const secondReward = ether('35.907788161993769470');
-      await expectRevert(assetManager.pokeFromReporter(0, false, '0x'), 'NOTHING_TO_DO');
-      res = await assetManager.pokeFromReporter('1', true, '0x');
+      res = await pokeFromReporter(poke);
 
-      transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
+      transfer = MockERC20.decodeLogs(res.logs).filter(
         l => l.address === bal.address && l.event === 'Transfer',
       )[0];
       assert.equal(transfer.args.from, zeroAddress);
@@ -304,19 +339,19 @@ describe('BalAssetManager Tests', () => {
 
       const totalReward = toBN(firstReward).add(toBN(secondReward));
       const fee = totalReward.mul(toBN(ether('0.15'))).div(toBN(ether(1)));
-      transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
+      transfer = MockERC20.decodeLogs(res.logs).filter(
         l => l.args.to === swapper.address && l.event === 'Transfer',
       )[0];
       assert.equal(transfer.args.from, assetManager.address);
       approximatelyEqual(transfer.args.value, totalReward.sub(fee));
 
-      transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
+      transfer = MockERC20.decodeLogs(res.logs).filter(
         l => l.args.to === pvp && l.event === 'Transfer',
       )[0];
       assert.equal(transfer.args.from, assetManager.address);
       approximatelyEqual(transfer.args.value, fee);
 
-      transfer = MockERC20.decodeLogs(res.receipt.rawLogs).filter(
+      transfer = MockERC20.decodeLogs(res.logs).filter(
         l => l.args.to === staking.address && l.event === 'Transfer',
       )[0];
       assert.equal(transfer.args.from, assetManager.address);

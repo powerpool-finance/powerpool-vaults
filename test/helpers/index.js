@@ -243,6 +243,7 @@ async function forkContractUpgrade(ethers, adminAddress, proxyAdminAddress, prox
 const { BN } = web3.utils;
 
 const increaseTime = buildEndpoint('evm_increaseTime');
+const mineBlock = buildEndpoint('evm_mine');
 
 async function latestBlockTimestamp() {
   const block = await web3.eth.getBlock('latest');
@@ -486,6 +487,31 @@ async function deployContractWithBytecode(name, web3, args) {
   return Contract.new.apply(Contract, args);
 }
 
+async function pokeFromReporter(agent, gasPrice) {
+  const [registerJob] = await agent.contract.getPastEvents('RegisterJob', {fromBlock: 0});
+  const [keeper] = await agent.contract.getPastEvents('RegisterAsKeeper', {fromBlock: 0});
+  const {jobAddress} = registerJob.returnValues;
+  const jobId = '000000';
+  const jobKey = await agent.getJobKey(jobAddress, jobId);
+  const job = await agent.getJob(jobKey);
+  const resolverRes = web3.eth.abi.decodeParameters(['bool', 'bytes'], await web3.eth.call({
+    to: job.resolver.resolverAddress, // contract address
+    data: job.resolver.resolverCalldata
+  }));
+  const options = {
+    from: keeper.returnValues.keeperWorker,
+    to: agent.address,
+    data: '0x00000000' + jobAddress.replace('0x', '') + jobId + '03' + '000001' + resolverRes[1].replace('0x', ''),
+    // '0x      00000000 1b48315d66ba5267aac8d0ab63c49038b56b1dbc 0000f1 03     00001a    402b2eed11'
+    // 'name    selector jobContractAddress                       jobId  config keeperId  calldata (optional)'
+    gas: '3000000'
+  };
+  if (gasPrice) {
+    options.gasPrice = gasPrice;
+  }
+  return web3.eth.sendTransaction(options);
+}
+
 module.exports = {
   deployProxied,
   createOrGetProxyAdmin,
@@ -510,6 +536,7 @@ module.exports = {
   deployAndSaveArgs,
   increaseTime,
   increaseTimeTo,
+  mineBlock,
   evmSetNextBlockTimestamp: buildEndpoint('evm_setNextBlockTimestamp'),
   impersonateAccount,
   callContract,
@@ -529,4 +556,5 @@ module.exports = {
   zeroAddress,
   maxUint256,
   deployContractWithBytecode,
+  pokeFromReporter
 };

@@ -25,7 +25,7 @@ contract MasterChefPowerIndexConnector is AbstractStakeRedeemConnector {
 
   /*** VIEWERS ***/
 
-  function getPendingRewards() external view returns (uint256 amount) {
+  function getPendingRewards() public view returns (uint256 amount) {
     return IMasterChefV1(STAKING).pending(MASTER_CHEF_PID, address(PI_TOKEN));
   }
 
@@ -49,5 +49,35 @@ contract MasterChefPowerIndexConnector is AbstractStakeRedeemConnector {
 
   function _redeemImpl(uint256 _amount) internal override {
     _callExternal(PI_TOKEN, STAKING, IMasterChefV1.withdraw.selector, abi.encode(MASTER_CHEF_PID, _amount));
+  }
+
+  /**
+   * @notice Pack claim params to bytes.
+   */
+  function packClaimParams(uint256 _minPending) external pure returns (bytes memory) {
+    return abi.encode(_minPending);
+  }
+
+  /**
+   * @notice Unpack claim params from bytes to variables.
+   */
+  function unpackClaimParams(bytes memory _claimParams) public pure returns (uint256 minPending) {
+    if (_claimParams.length == 0 || keccak256(_claimParams) == keccak256("")) {
+      return (0);
+    }
+    (minPending) = abi.decode(_claimParams, (uint256));
+  }
+
+  /**
+   * @notice Checking: is pending rewards enough to reinvest
+   * @param _claimParams Claim parameters, that stored in PowerIndexRouter
+   */
+  function isClaimAvailable(
+    bytes calldata _claimParams,
+    uint256,
+    uint256
+  ) external view virtual override returns (bool) {
+    uint256 minClaimAmount = unpackClaimParams(_claimParams);
+    return getPendingRewards() >= minClaimAmount;
   }
 }

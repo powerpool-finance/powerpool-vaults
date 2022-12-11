@@ -102,13 +102,26 @@ const config = {
     tests: './test',
   },
   solidity: {
-    settings: {
-      optimizer: {
-        enabled: !!process.env.ETHERSCAN_KEY || process.env.COMPILE_TARGET === 'release',
-        runs: 200,
+    compilers: [
+      {
+        settings: {
+          optimizer: {
+            enabled: !!process.env.ETHERSCAN_KEY || process.env.COMPILE_TARGET === 'release',
+            runs: 200,
+          },
+        },
+        version: '0.7.6',
       },
-    },
-    version: '0.7.6',
+      {
+        version: '0.8.15',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
+    ],
   },
   typechain: {
     outDir: 'typechain',

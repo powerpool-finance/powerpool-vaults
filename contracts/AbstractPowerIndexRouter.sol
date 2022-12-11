@@ -25,7 +25,13 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   uint256 internal constant COMPENSATION_PLAN_1_ID = 1;
   uint256 public constant HUNDRED_PCT = 1 ether;
 
-  event SetReserveConfig(uint256 ratio, uint256 ratioLowerBound, uint256 ratioUpperBound, uint256 claimRewardsInterval);
+  event SetReserveConfig(
+    uint256 ratio,
+    uint256 ratioLowerBound,
+    uint256 ratioUpperBound,
+    uint256 pokeInterval,
+    uint256 claimRewardsInterval
+  );
   event SetPerformanceFee(uint256 performanceFee);
   event SetConnector(
     address indexed connector,
@@ -44,6 +50,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 reserveRatio;
     uint256 reserveRatioLowerBound;
     uint256 reserveRatioUpperBound;
+    uint256 pokeInterval;
     uint256 claimRewardsInterval;
     address performanceFeeReceiver;
     uint256 performanceFee;
@@ -54,8 +61,9 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   address public performanceFeeReceiver;
 
   IPoolRestrictions public poolRestrictions;
-  IPowerPoke public powerPoke;
+  IPowerPoke public powerAgent;
   uint256 public reserveRatio;
+  uint256 public pokeInterval;
   uint256 public claimRewardsInterval;
   uint256 public lastRebalancedByPokerAt;
   uint256 public reserveRatioLowerBound;
@@ -107,18 +115,9 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     _;
   }
 
-  modifier onlyReporter(uint256 _reporterId, bytes calldata _rewardOpts) {
-    uint256 gasStart = gasleft();
-    powerPoke.authorizeReporter(_reporterId, msg.sender);
+  modifier onlyAgent() {
+    require(msg.sender == address(powerAgent), "ONLY_AGENT");
     _;
-    _reward(_reporterId, gasStart, COMPENSATION_PLAN_1_ID, _rewardOpts);
-  }
-
-  modifier onlyNonReporter(uint256 _reporterId, bytes calldata _rewardOpts) {
-    uint256 gasStart = gasleft();
-    powerPoke.authorizeNonReporter(_reporterId, msg.sender);
-    _;
-    _reward(_reporterId, gasStart, COMPENSATION_PLAN_1_ID, _rewardOpts);
   }
 
   constructor(
@@ -137,10 +136,11 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     assetsHolder = _assetsHolder;
     underlying = IERC20(_underlying);
     poolRestrictions = IPoolRestrictions(_basicConfig.poolRestrictions);
-    powerPoke = IPowerPoke(_basicConfig.powerPoke);
+    powerAgent = IPowerPoke(_basicConfig.powerPoke);
     reserveRatio = _basicConfig.reserveRatio;
     reserveRatioLowerBound = _basicConfig.reserveRatioLowerBound;
     reserveRatioUpperBound = _basicConfig.reserveRatioUpperBound;
+    pokeInterval = _basicConfig.pokeInterval;
     claimRewardsInterval = _basicConfig.claimRewardsInterval;
     performanceFeeReceiver = _basicConfig.performanceFeeReceiver;
     performanceFee = _basicConfig.performanceFee;
@@ -161,6 +161,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 _reserveRatio,
     uint256 _reserveRatioLowerBound,
     uint256 _reserveRatioUpperBound,
+    uint256 _pokeInterval,
     uint256 _claimRewardsInterval
   ) external virtual override onlyOwner {
     require(_reserveRatioUpperBound <= HUNDRED_PCT, "UPPER_RR_GREATER_THAN_100_PCT");
@@ -170,8 +171,15 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     reserveRatio = _reserveRatio;
     reserveRatioLowerBound = _reserveRatioLowerBound;
     reserveRatioUpperBound = _reserveRatioUpperBound;
+    pokeInterval = _pokeInterval;
     claimRewardsInterval = _claimRewardsInterval;
-    emit SetReserveConfig(_reserveRatio, _reserveRatioLowerBound, _reserveRatioUpperBound, _claimRewardsInterval);
+    emit SetReserveConfig(
+      _reserveRatio,
+      _reserveRatioLowerBound,
+      _reserveRatioUpperBound,
+      _pokeInterval,
+      _claimRewardsInterval
+    );
   }
 
   /**
@@ -270,30 +278,13 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
 
   /**
    * @notice Call poke by Reporter.
-   * @param _reporterId Reporter ID.
-   * @param _claimAndDistributeRewards Claim rewards only if interval reached.
-   * @param _rewardOpts To whom and how to reward Reporter.
    */
-  function pokeFromReporter(
-    uint256 _reporterId,
-    bool _claimAndDistributeRewards,
-    bytes calldata _rewardOpts
-  ) external onlyReporter(_reporterId, _rewardOpts) onlyEOA {
-    _pokeFrom(_claimAndDistributeRewards, false);
+  function pokeFromAgent(bool _claimAndDistributeRewards) external onlyAgent {
+    _pokeFrom(_claimAndDistributeRewards);
   }
 
-  /**
-   * @notice Call poke by Slasher.
-   * @param _reporterId Slasher ID.
-   * @param _claimAndDistributeRewards Claim rewards only if interval reached.
-   * @param _rewardOpts To whom and how reward Slasher.
-   */
-  function pokeFromSlasher(
-    uint256 _reporterId,
-    bool _claimAndDistributeRewards,
-    bytes calldata _rewardOpts
-  ) external onlyNonReporter(_reporterId, _rewardOpts) onlyEOA {
-    _pokeFrom(_claimAndDistributeRewards, true);
+  function agentResolver() external view returns (bool, bytes memory) {
+    return (isPokeReady(), abi.encodeWithSelector(AbstractPowerIndexRouter.pokeFromAgent.selector, true));
   }
 
   /**
@@ -333,27 +324,18 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
   /**
    * @notice Rebalance every connector according to its share in an array.
    * @param _claimAndDistributeRewards Need to claim and distribute rewards.
-   * @param _isSlasher Calling by Slasher.
    */
-  function _pokeFrom(bool _claimAndDistributeRewards, bool _isSlasher) internal {
+  function _pokeFrom(bool _claimAndDistributeRewards) internal {
     PokeFromState memory state = PokeFromState(0, 0, 0, 0, false, false);
-    (state.minInterval, state.maxInterval) = _getMinMaxReportInterval();
 
-    _rebalance(state, _claimAndDistributeRewards, _isSlasher);
+    _rebalance(state, _claimAndDistributeRewards);
 
-    require(
-      _canPoke(_isSlasher, state.atLeastOneForceRebalance, state.minInterval, state.maxInterval),
-      "INTERVAL_NOT_REACHED_OR_NOT_FORCE"
-    );
+    require(_canPoke(state.atLeastOneForceRebalance), "INTERVAL_NOT_REACHED_OR_NOT_FORCE");
 
     lastRebalancedByPokerAt = block.timestamp;
   }
 
-  function _rebalance(
-    PokeFromState memory s,
-    bool _claimAndDistributeRewards,
-    bool _isSlasher
-  ) internal {
+  function _rebalance(PokeFromState memory s, bool _claimAndDistributeRewards) internal {
     if (connectors.length == 1 && reserveRatio == 0 && !_claimAndDistributeRewards) {
       if (s.subFromExpectedStakeAmount > 0) {
         _rebalancePoke(connectors[0], StakeStatus.EXCESS, s.subFromExpectedStakeAmount);
@@ -368,6 +350,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
 
     RebalanceConfig[] memory configs = new RebalanceConfig[](connectors.length);
 
+    bool atLeastOneRebalance = false;
     // First cycle: connectors with EXCESS balance status on staking
     for (uint256 i = 0; i < connectors.length; i++) {
       if (connectors[i].share == 0) {
@@ -388,10 +371,11 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
 
       if (status == StakeStatus.EXCESS) {
         // Calling rebalance immediately if interval conditions reached
-        if (s.skipCanPokeCheck || _canPoke(_isSlasher, forceRebalance, s.minInterval, s.maxInterval)) {
+        if (s.skipCanPokeCheck || _canPoke(forceRebalance)) {
           _rebalancePokeByConf(RebalanceConfig(false, status, diff, shouldClaim, forceRebalance, i));
+          atLeastOneRebalance = true;
         }
-      } else {
+      } else if (status == StakeStatus.SHORTAGE || forceRebalance) {
         // Push config for second cycle
         configs[i] = RebalanceConfig(true, status, diff, shouldClaim, forceRebalance, i);
       }
@@ -403,28 +387,22 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
         continue;
       }
       // Calling rebalance if interval conditions reached
-      if (s.skipCanPokeCheck || _canPoke(_isSlasher, configs[i].forceRebalance, s.minInterval, s.maxInterval)) {
+      if (s.skipCanPokeCheck || _canPoke(configs[i].forceRebalance)) {
         _rebalancePokeByConf(configs[i]);
+        atLeastOneRebalance = true;
       }
     }
+    require(atLeastOneRebalance, "NOTHING_TO_DO");
   }
 
   /**
    * @notice Checking: if time interval reached or have `forceRebalance`.
    */
-  function _canPoke(
-    bool _isSlasher,
-    bool _forceRebalance,
-    uint256 _minInterval,
-    uint256 _maxInterval
-  ) internal view returns (bool) {
+  function _canPoke(bool _forceRebalance) internal view returns (bool) {
     if (_forceRebalance) {
       return true;
     }
-    return
-      _isSlasher
-        ? (lastRebalancedByPokerAt.add(_maxInterval) < block.timestamp)
-        : (lastRebalancedByPokerAt.add(_minInterval) < block.timestamp);
+    return lastRebalancedByPokerAt.add(pokeInterval) < block.timestamp;
   }
 
   /**
@@ -541,7 +519,7 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     uint256 _compensationPlan,
     bytes calldata _rewardOpts
   ) internal {
-    powerPoke.reward(_reporterId, _gasStart.sub(gasleft()), _compensationPlan, _rewardOpts);
+    powerAgent.reward(_reporterId, _gasStart.sub(gasleft()), _compensationPlan, _rewardOpts);
   }
 
   /*
@@ -559,8 +537,21 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     return getStakeStatus(getAssetsHolderUnderlyingBalance(), getUnderlyingStaked(), _stakedBalance, 0, _share);
   }
 
+  function isPokeReady() public view returns (bool) {
+    for (uint256 i = 0; i < connectors.length; i++) {
+      (StakeStatus status, , , bool forceRebalance) = getStakeAndClaimStatusByConnectorIndex(i, true);
+      if (
+        forceRebalance ||
+        (status != StakeStatus.EQUILIBRIUM && lastRebalancedByPokerAt + pokeInterval <= block.timestamp)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function getStakeAndClaimStatusByConnectorIndex(uint256 _connectorIndex, bool _claimAndDistributeRewards)
-    external
+    public
     view
     returns (
       StakeStatus status,
@@ -649,17 +640,14 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
     }
 
     uint256 denominator = _leftOnPiTokenBalance.add(_totalStakedBalance);
+    uint256 currentRatio = _leftOnPiTokenBalance.mul(HUNDRED_PCT).div(denominator);
 
     if (status == StakeStatus.EXCESS) {
-      uint256 numerator = _leftOnPiTokenBalance.add(diff).mul(HUNDRED_PCT);
-      uint256 currentRatio = numerator.div(denominator);
       forceRebalance = reserveRatioLowerBound >= currentRatio;
     } else if (status == StakeStatus.SHORTAGE) {
       if (diff > _leftOnPiTokenBalance) {
         return (status, diff, true);
       }
-      uint256 numerator = _leftOnPiTokenBalance.sub(diff).mul(HUNDRED_PCT);
-      uint256 currentRatio = numerator.div(denominator);
       forceRebalance = reserveRatioUpperBound <= currentRatio;
     }
   }
@@ -813,10 +801,6 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
       uint256(1 ether).sub(_reserveRatioPct).mul(_stakedBalance.add(_leftOnPiToken).mul(_share).div(HUNDRED_PCT)).div(
         HUNDRED_PCT
       );
-  }
-
-  function _getMinMaxReportInterval() internal view returns (uint256 min, uint256 max) {
-    return powerPoke.getMinMaxReportIntervals(address(this));
   }
 
   function _getDistributeData(Connector storage c) internal view returns (IRouterConnector.DistributeData memory) {
