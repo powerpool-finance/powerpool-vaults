@@ -1,5 +1,5 @@
 const { time, constants, expectRevert } = require('@openzeppelin/test-helpers');
-const { ether, zeroAddress, maxUint256, deployContractWithBytecode } = require('./../helpers');
+const { ether, zeroAddress, maxUint256, deployContractWithBytecode, weiUsed, addBN, subBN } = require('./../helpers');
 const { buildBasicRouterConfig } = require('./../helpers/builders');
 const assert = require('chai').assert;
 const MockERC20 = artifacts.require('MockERC20');
@@ -349,6 +349,7 @@ describe('LUSDAssetManager Tests', () => {
 
       await ethUsdPriceOracle.setLatestAnswer('190000000000');
       await troveManager.liquidateTroves(2);
+      console.log('getDepositorETHGain', await stabilityPool.getDepositorETHGain(staking.address).then(r => r.toString()));
       await lusd.approve(staking.address, await lusd.balanceOf(eve), { from: eve });
       // await staking.swap(ether(9000), 0, eve, {from: eve});
       await staking.swap(ether(19000), 0, eve, { from: eve });
@@ -430,7 +431,7 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(stakeParams.maxETHOnStaking, '0');
       assert.equal(stakeParams.minLUSDToDistribute, '0');
       await assetManager.setClaimParams('0', await connector.packClaimParams(ether('10')), {from: piGov});
-      await assetManager.setStakeParams('0', await connector.packStakeParams(ether('0.1'), ether('1000')), {from: piGov});
+      await assetManager.setStakeParams('0', await connector.packStakeParams(ether('0.1'), ether('1000'), '0'), {from: piGov});
 
       minClaimAmount = await connector.unpackClaimParams((await assetManager.connectors(0)).claimParams);
       stakeParams = await connector.unpackStakeParams((await assetManager.connectors(0)).stakeParams);
@@ -518,6 +519,37 @@ describe('LUSDAssetManager Tests', () => {
       const testMigrate = BProtocolPowerIndexConnector.decodeLogs(res.receipt.rawLogs).filter(l => l.event === 'TestMigrate')[0];
       assert.equal(testMigrate.args.migrateData, data);
     });
+  });
+
+  describe('emergency handling', () => {
+    beforeEach(async () => {
+      await lusd.approve(staking.address, ether(1), { from: alice });
+      await staking.deposit(ether(1), { from: alice });
+      await lusd.transfer(swapper.address, await lusd.balanceOf(alice), {from: alice});
+      await poke.setMinMaxReportIntervals(time.duration.hours(1), time.duration.hours(2), { from: piGov });
+
+      const res = await lusd.approve(vault.address, await ausd.balanceOf(deployer), { from: deployer });
+      await vault.swap(
+        {
+          poolId: pid,
+          kind: '0',
+          assetIn: ausd.address,
+          assetOut: lusd.address,
+          amount: ether(1030000),
+          userData: '0x',
+        },
+        {
+          sender: deployer,
+          fromInternalBalance: false,
+          recipient: deployer,
+          toInternalBalance: false,
+        },
+        '0',
+        (await web3.eth.getBlock(res.receipt.blockNumber)).timestamp + 100,
+      );
+
+      await lusd.transfer(eve, ether(20000), { from: deployer });
+    });
 
     it('emergencyWithdraw should work properly', async () => {
       assert.equal(await assetManager.getAssetsHolderUnderlyingBalance(),  ether('974070.046021699791322769'));
@@ -571,6 +603,7 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(stakeAndClaimStatus.forceRebalance, false);
 
       assert.equal(await lusd.balanceOf(bob), ether(250000));
+      assert.equal(await ausd.balanceOf(bob), '0');
       assert.equal(await pool.balanceOf(bob), '0');
       assert.equal(await pool.balanceOf(assetManager.address), ether('3747860.539036497267058411'));
 
@@ -582,5 +615,48 @@ describe('LUSDAssetManager Tests', () => {
       assert.equal(await pool.balanceOf(assetManager.address), '0');
       assert.equal(await pool.balanceOf(pvp), ether('3747860.539036497267058411'));
     });
-  });
+
+    it.only('emergencyWithdraw with low assets per share should work properly', async () => {
+      await assetManager.pokeFromReporter('1', false, '0x');
+      await time.increase(time.duration.minutes(60));
+      await ethUsdPriceOracle.setLatestAnswer('190000000000');
+      await troveManager.liquidateTroves(2);
+      assert.equal(await stabilityPool.getDepositorETHGain(staking.address).then(r => r.toString()),  ether('2.984999999999619005'));
+
+      await assetManager.setReserveConfig(ether('0.01'), ether('0.01'), ether('0.01'), 60 * 60, {from: piGov});
+      await expectRevert(assetManager.pokeFromReporter('1', false, '0x'), 'BAMM_ASSETS_PER_SHARE_TOO_LOW');
+
+      await assetManager.setEmergencyStakeParams('0', await connector.packStakeParams(ether('0.1'), ether('1000'), '0'), {from: piGov});
+
+      let poolBalance = ether('3999999.999999999999');
+      await pool.transfer(bob, poolBalance);
+      await pool.approve(assetManager.address, poolBalance, {from: bob});
+
+      await expectRevert(assetManager.emergencyWithdraw(ether(200000), poolBalance, true, {from: bob}), 'MAX_ETHER_ON_BAMM');
+
+      await assetManager.setEmergencyStakeParams('0', await connector.packStakeParams(ether('100000'), ether('1000'), '0'), {from: piGov});
+
+      await expectRevert(assetManager.emergencyWithdraw(ether(200000), poolBalance, true, {from: bob}), 'BAMM_ASSETS_PER_SHARE_TOO_LOW');
+
+      await assetManager.setEmergencyStakeParams('0', await connector.packStakeParams(ether('100000'), ether('1000'), '1'), {from: piGov});
+
+      await expectRevert(assetManager.emergencyWithdraw(ether(200000), poolBalance, true, {from: bob}), 'BAMM_ASSETS_PER_SHARE_TOO_LOW');
+
+      await assetManager.setEmergencyStakeParams('0', await connector.packStakeParams(ether('100000'), ether('1000'), '2'), {from: piGov});
+
+      assert.equal(await pool.balanceOf(assetManager.address), '0');
+      assert.equal(await lusd.balanceOf(bob), '0');
+
+      const bobBalanceBefore = await web3.eth.getBalance(bob);
+      const res = await assetManager.emergencyWithdraw(ether(200000), poolBalance, true, {from: bob});
+      const weiUsedByBob = await weiUsed(web3, res.receipt);
+
+      assert.equal(await lusd.balanceOf(bob), ether(200000));
+      assert.equal(await web3.eth.getBalance(assetManager.address), '0');
+      assert.equal(subBN(await web3.eth.getBalance(bob), subBN(bobBalanceBefore, weiUsedByBob)), ether('0.049700924450434201'));
+      assert.equal(await ausd.balanceOf(bob), '0');
+      assert.equal(await pool.balanceOf(bob), ether('202000.225827382216'));
+      assert.equal(await pool.balanceOf(assetManager.address), '0');//ether('3595999.548345235567')
+    });
+  })
 });

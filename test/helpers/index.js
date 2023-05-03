@@ -101,10 +101,12 @@ function getInitializerData(impl, args, initializer) {
 }
 
 async function ethUsed(web3, receipt) {
+  return fromEther(await weiUsed(web3, receipt));
+}
+
+async function weiUsed(web3, receipt) {
   const tx = await web3.eth.getTransaction(receipt.transactionHash);
-  return fromEther(
-    new BigNumber(receipt.gasUsed.toString()).multipliedBy(new BigNumber(tx.gasPrice.toString())).toString(),
-  );
+  return new BigNumber(receipt.gasUsed.toString()).multipliedBy(new BigNumber(tx.gasPrice.toString())).toString()
 }
 
 /**
@@ -501,6 +503,7 @@ module.exports = {
   ether,
   fromEther,
   ethUsed,
+  weiUsed,
   gwei,
   fromGwei,
   mwei,

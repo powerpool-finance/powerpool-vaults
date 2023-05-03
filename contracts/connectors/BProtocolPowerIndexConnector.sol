@@ -11,6 +11,7 @@ import "../interfaces/bprotocol/IBAMM.sol";
 import "../interfaces/liquidity/IStabilityPool.sol";
 import { UniswapV3OracleHelper } from "../libs/UniswapV3OracleHelper.sol";
 import "./AbstractBalancerVaultConnector.sol";
+import "hardhat/console.sol";
 
 contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   using SafeMath for uint256;
@@ -22,6 +23,14 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   address public immutable STAKING;
   address public immutable STABILITY_POOL;
   IERC20 public immutable REWARDS_TOKEN;
+
+  // ignore low assets per share
+  enum IgnoreLowAPS {
+    DO_NOT_IGNORE,
+    STAKE_IGNORE,
+    REDEEM_IGNORE,
+    ALL_IGNORE
+  }
 
   constructor(
     address _assetManager,
@@ -92,7 +101,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     (
       uint256 underlyingStaked,
       uint256 shares, /*uint256 assetsPerShare*/
-
+      ,
     ) = getUnderlyingStakedWithShares();
     return getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
   }
@@ -112,9 +121,13 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     override
     returns (bytes memory result, bool claimed)
   {
+    (uint256 underlyingStaked, uint256 shares, , uint256 assetsPerShare) = getUnderlyingStakedWithShares();
     (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
-    require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
+    {
+      (, , IgnoreLowAPS ignoreLowAPS) = unpackStakeParams(_distributeData.stakeParams);
+      bool skipApsCheck = ignoreLowAPS == IgnoreLowAPS.STAKE_IGNORE || ignoreLowAPS == IgnoreLowAPS.ALL_IGNORE;
+      require(skipApsCheck || assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
+    }
     _capitalOut(underlyingStaked, _amount);
     _stakeImpl(_amount);
     emit Stake(msg.sender, STAKING, address(UNDERLYING), _amount);
@@ -134,26 +147,48 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     override
     returns (bytes memory result, bool claimed)
   {
-    (uint256 underlyingStaked, uint256 shares, uint256 assetsPerShare) = getUnderlyingStakedWithShares();
-    uint256 minLUSDToDistribute;
-    {
-      uint256 maxETHOnStaking;
-      (maxETHOnStaking, minLUSDToDistribute) = unpackStakeParams(_distributeData.stakeParams);
-      uint256 ethBalanceOnBamm = ethBammBalance().mul(shares).div(1 ether);
-      require(ethBalanceOnBamm <= maxETHOnStaking, "MAX_ETHER_ON_BAMM");
-    }
-    (uint256 lastAssetsPerShare, uint256 underlyingEarned) = unpackStakeData(_distributeData.stakeData);
-    require(assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
+    console.log("redeem 1");
+    (
+      uint256 underlyingStaked,
+      uint256 shares,
+      uint256 totalShares,
+      uint256 assetsPerShare
+    ) = getUnderlyingStakedWithShares();
 
-    underlyingEarned = getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
+    uint256 minLUSDToDistribute;
+    IgnoreLowAPS ignoreLowAPS;
+    {
+      uint256 maxETHOnBamm;
+      (maxETHOnBamm, minLUSDToDistribute, ignoreLowAPS) = unpackStakeParams(_distributeData.stakeParams);
+      uint256 ethBalanceOnBamm = ethBammBalance().mul(shares).div(totalShares);
+      require(ethBalanceOnBamm <= maxETHOnBamm, "MAX_ETHER_ON_BAMM");
+    }
+    console.log("redeem 2");
+    uint256 underlyingEarned;
+    {
+      uint256 lastAssetsPerShare;
+      (lastAssetsPerShare, underlyingEarned) = unpackStakeData(_distributeData.stakeData);
+      bool skipApsCheck = ignoreLowAPS == IgnoreLowAPS.REDEEM_IGNORE || ignoreLowAPS == IgnoreLowAPS.ALL_IGNORE;
+      require(skipApsCheck || assetsPerShare >= lastAssetsPerShare, "BAMM_ASSETS_PER_SHARE_TOO_LOW");
+
+      if (assetsPerShare >= lastAssetsPerShare) {
+        underlyingEarned = getActualUnderlyingEarned(lastAssetsPerShare, underlyingEarned, underlyingStaked, shares);
+      }
+    }
+    console.log("redeem 3");
 
     // redeem with fee or without
     uint256 amountToRedeem = _amount;
-    uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
-    if (underlyingFee >= minLUSDToDistribute) {
-      amountToRedeem = amountToRedeem.add(underlyingFee);
-      underlyingEarned = 0;
+    {
+      if (underlyingEarned > 0) {
+        uint256 underlyingFee = underlyingEarned.mul(_distributeData.performanceFee).div(1 ether);
+        if (underlyingFee >= minLUSDToDistribute) {
+          amountToRedeem = amountToRedeem.add(underlyingFee);
+          underlyingEarned = 0;
+        }
+      }
     }
+    console.log("redeem 4");
     // redeem amount will be converted to shares
     _redeemImpl(amountToRedeem, assetsPerShare);
 
@@ -173,6 +208,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function initRouter(bytes calldata) external override {
+    POOL.approve(VAULT, uint256(-1));
     UNDERLYING.approve(STAKING, uint256(-1));
     UNDERLYING.approve(VAULT, uint256(-1));
     REWARDS_TOKEN.approve(getSwapperAddress(), uint256(-1));
@@ -224,12 +260,12 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   /**
    * @notice Pack stake params to bytes.
    */
-  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute)
+  function packStakeParams(uint256 _maxETHOnStaking, uint256 _minLUSDToDistribute, IgnoreLowAPS _ignoreLowAPS)
     external
     pure
     returns (bytes memory)
   {
-    return abi.encode(_maxETHOnStaking, _minLUSDToDistribute);
+    return abi.encode(_maxETHOnStaking, _minLUSDToDistribute, _ignoreLowAPS);
   }
 
   /**
@@ -238,12 +274,12 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   function unpackStakeParams(bytes memory _stakeParams)
     public
     pure
-    returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute)
+    returns (uint256 maxETHOnStaking, uint256 minLUSDToDistribute, IgnoreLowAPS ignoreLowAPS)
   {
     if (_stakeParams.length == 0 || keccak256(_stakeParams) == keccak256("")) {
-      return (0, 0);
+      return (0, 0, IgnoreLowAPS.DO_NOT_IGNORE);
     }
-    (maxETHOnStaking, minLUSDToDistribute) = abi.decode(_stakeParams, (uint256, uint256));
+    (maxETHOnStaking, minLUSDToDistribute, ignoreLowAPS) = abi.decode(_stakeParams, (uint256, uint256, IgnoreLowAPS));
   }
 
   /*** OVERRIDES ***/
@@ -256,6 +292,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
   }
 
   function _redeemImpl(uint256 _amount, uint256 _assetsPerShare) internal {
+    console.log("_redeemImpl", _amount.mul(1 ether).div(_assetsPerShare));
     IBAMM(STAKING).withdraw(_amount.mul(1 ether).div(_assetsPerShare));
   }
 
@@ -269,14 +306,15 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
     returns (
       uint256 staked,
       uint256 shares,
+      uint256 totalShares,
       uint256 assetsPerShare
     )
   {
     shares = IBAMM(STAKING).stake(ASSET_MANAGER);
-    uint256 totalShares = IBAMM(STAKING).total();
+    totalShares = IBAMM(STAKING).total();
     uint256 lusdValueTotal = IStabilityPool(STABILITY_POOL).getCompoundedLUSDDeposit(STAKING);
     if (totalShares == 0) {
-      return (0, 0, 0);
+      return (0, 0, 0, 0);
     }
     staked = (lusdValueTotal * shares) / totalShares;
     assetsPerShare = (lusdValueTotal * 1 ether) / totalShares;
@@ -287,7 +325,7 @@ contract BProtocolPowerIndexConnector is AbstractBalancerVaultConnector {
    *      staked = total - (cash + gain - loss)
    */
   function getUnderlyingStaked() public view override returns (uint256 staked) {
-    (staked, , ) = getUnderlyingStakedWithShares();
+    (staked, , , ) = getUnderlyingStakedWithShares();
   }
 
   function getUnderlyingTotal() external view override returns (uint256) {

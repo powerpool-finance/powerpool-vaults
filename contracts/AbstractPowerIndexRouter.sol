@@ -431,23 +431,25 @@ abstract contract AbstractPowerIndexRouter is PowerIndexRouterInterface, Ownable
    * @notice Call redeem in the connector with delegatecall, save result stakeData if not null.
    */
   function _redeem(Connector storage _c, uint256 _diff) internal {
-    _callStakeRedeem("redeem(uint256,(bytes,bytes,uint256,address))", _c, _diff);
+    _callStakeRedeem(IRouterConnector.redeem.selector, _c, _diff, _getDistributeData(_c));
   }
 
   /**
    * @notice Call stake in the connector with delegatecall, save result `stakeData` if not null.
    */
   function _stake(Connector storage _c, uint256 _diff) internal {
-    _callStakeRedeem("stake(uint256,(bytes,bytes,uint256,address))", _c, _diff);
+    _callStakeRedeem(IRouterConnector.stake.selector, _c, _diff, _getDistributeData(_c));
   }
 
   function _callStakeRedeem(
-    string memory _method,
+    bytes4 _selector,
     Connector storage _c,
-    uint256 _diff
+    uint256 _diff,
+    IRouterConnector.DistributeData memory _distributeData
   ) internal {
+
     (bool success, bytes memory result) = address(_c.connector).delegatecall(
-      abi.encodeWithSignature(_method, _diff, _getDistributeData(_c))
+      abi.encodeWithSelector(_selector, _diff, _distributeData)
     );
     require(success, string(result));
     bool claimed;

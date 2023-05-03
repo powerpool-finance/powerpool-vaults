@@ -11,6 +11,8 @@ contract AssetManager is AbstractPowerIndexRouter {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
+  event SetConnectorEmergencyStakeParams(uint256 connectorIndex, bytes stakeParams);
+
   enum BalancerV2JoinKind {
     INIT,
     EXACT_TOKENS_IN_FOR_BPT_OUT,
@@ -25,6 +27,8 @@ contract AssetManager is AbstractPowerIndexRouter {
   bytes32 public poolId;
   address public poolAddress;
 
+  mapping(uint256 => bytes) connectorEmergencyStakeParams;
+
   constructor(
     address _assetsHolder,
     address _underlying,
@@ -34,6 +38,11 @@ contract AssetManager is AbstractPowerIndexRouter {
   function setPoolInfo(bytes32 _poolId, address _poolAddress) external onlyOwner {
     poolId = _poolId;
     poolAddress = _poolAddress;
+  }
+
+  function setEmergencyStakeParams(uint256 _connectorIndex, bytes memory _stakeParams) external onlyOwner {
+    connectorEmergencyStakeParams[_connectorIndex] = _stakeParams;
+    emit SetConnectorEmergencyStakeParams(_connectorIndex, _stakeParams);
   }
 
   function getAssetsHolderUnderlyingBalance() public view override returns (uint256) {
@@ -72,7 +81,8 @@ contract AssetManager is AbstractPowerIndexRouter {
     bool _returnDiff
   ) external returns (uint256 poolBalanceDiff) {
     require(connectors.length == 1, "AVAILABLE_ONLY_FOR_ONE_CONNECTOR");
-    Connector storage c = connectors[0];
+    uint256 connectorIndex = 0;
+    Connector storage c = connectors[connectorIndex];
     (IAsset[] memory tokens, , ) = IVault(assetsHolder).getPoolTokens(poolId);
     uint256[] memory minAmountsOut = new uint256[](tokens.length);
 
@@ -88,23 +98,42 @@ contract AssetManager is AbstractPowerIndexRouter {
       getEmergencyExitUserData(_maxBPTAmountIn, minAmountsOut),
       false
     );
+    StakeStatus status;
+    uint256 diff;
 
-    uint256 underlyingReserve = c.connector.getUnderlyingReserve();
-    require(underlyingReserve < _underlyingAmount, "NOT_EMERGENCY");
-    uint256 underlyingStaked = c.connector.getUnderlyingStaked().sub(_underlyingAmount);
+    {
+      uint256 underlyingReserve = c.connector.getUnderlyingReserve();
+      require(underlyingReserve < _underlyingAmount, "NOT_EMERGENCY");
+      uint256 underlyingStaked = c.connector.getUnderlyingStaked().sub(_underlyingAmount);
 
-    (StakeStatus status, uint256 diff, ) = getStakeStatus(
-      underlyingReserve,
-      underlyingStaked,
-      underlyingStaked,
-      0,
-      c.share
-    );
+      (status, diff, ) = getStakeStatus(
+        underlyingReserve,
+        underlyingStaked,
+        underlyingStaked,
+        0,
+        c.share
+      );
+    }
 
-    if (status == StakeStatus.EXCESS) {
-      _redeem(c, _underlyingAmount.add(diff));
-    } else if (status == StakeStatus.SHORTAGE) {
-      _redeem(c, _underlyingAmount.sub(diff));
+    {
+      uint256 ethAmount = address(this).balance;
+      uint256 redeemSum;
+      if (status == StakeStatus.EXCESS) {
+        redeemSum = _underlyingAmount.add(diff);
+      } else if (status == StakeStatus.SHORTAGE) {
+        redeemSum = _underlyingAmount.sub(diff);
+      }
+
+      _emergencyRedeem(c, connectorIndex, redeemSum);
+
+      ethAmount = address(this).balance.sub(ethAmount);
+      if (ethAmount > 0) {
+        if (redeemSum > _underlyingAmount) {
+          msg.sender.transfer(ethAmount.mul(redeemSum).div(_underlyingAmount));
+        } else {
+          msg.sender.transfer(ethAmount);
+        }
+      }
     }
 
     IERC20(poolAddress).safeTransferFrom(msg.sender, address(this), _maxBPTAmountIn);
@@ -117,10 +146,17 @@ contract AssetManager is AbstractPowerIndexRouter {
     IVault(assetsHolder).exitPool(poolId, address(this), msg.sender, request);
 
     if (_returnDiff) {
-      uint256 poolBalanceAfter = IERC20(poolAddress).balanceOf(address(this));
-      poolBalanceDiff = poolBalanceBefore.sub(poolBalanceAfter);
+      poolBalanceDiff = poolBalanceBefore.sub(IERC20(poolAddress).balanceOf(address(this)));
       IERC20(poolAddress).safeTransfer(msg.sender, poolBalanceDiff);
     }
+  }
+
+  function _emergencyRedeem(Connector storage _c, uint256 _connectorIndex, uint256 _diff) internal {
+    _callStakeRedeem(IRouterConnector.redeem.selector, _c, _diff, _getEmergencyDistributeData(_c, _connectorIndex));
+  }
+
+  function _getEmergencyDistributeData(Connector storage c, uint256 _connectorIndex) internal view returns (IRouterConnector.DistributeData memory) {
+    return IRouterConnector.DistributeData(c.stakeData, connectorEmergencyStakeParams[_connectorIndex], performanceFee, performanceFeeReceiver);
   }
 
   function getEmergencyExitUserData(uint256 _maxBPTAmountIn, uint256[] memory _amountsOut)
